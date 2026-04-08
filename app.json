@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "C7 AI",
+    "slug": "c7ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.c7ai.posture",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "BLE 기기 연결을 위해 블루투스 권한이 필요합니다.",
+        "NSBluetoothPeripheralUsageDescription": "BLE 기기 연결을 위해 블루투스 권한이 필요합니다."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.c7ai.posture",
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-notifications"
+    ]
+  }
+}
