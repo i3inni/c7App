@@ -1,38 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { useStore } from '../../store';
-import Button from '../../components/common/Button';
-import Input from '../../components/common/Input';
-import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { useStore } from "../../store";
+import Button from "../../components/common/Button";
+import Input from "../../components/common/Input";
+import { COLORS, FONTS, SPACING, RADIUS } from "../../constants/theme";
 
 export default function LoginScreen() {
   const nav = useNavigation<any>();
-  const setUser = useStore(s => s.setUser);
-  const [id, setId] = useState('');
-  const [pw, setPw] = useState('');
+  const setUser = useStore((s) => s.setUser);
+  const [id, setId] = useState("");
+  const [pw, setPw] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!id || !pw) return;
     setLoading(true);
-    await new Promise(r => setTimeout(r, 800)); // Firebase auth 자리
+    await new Promise((r) => setTimeout(r, 800)); // Firebase auth 자리
     setUser({ id, nickname: id, isGuest: false });
-    nav.replace('MqttConnect');
+    nav.replace("MqttConnect");
     setLoading(false);
   };
 
   const handleGuest = () => {
-    setUser({ id: 'guest', nickname: '비회원', isGuest: true });
-    nav.replace('MqttConnect');
+    setUser({ id: "guest", nickname: "비회원", isGuest: true });
+    nav.replace("MqttConnect");
   };
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Logo */}
         <View style={styles.logoArea}>
           <View style={styles.iconCircle}>
@@ -44,12 +51,10 @@ export default function LoginScreen() {
 
         {/* Form */}
         <View style={styles.form}>
+          <Input value={id} onChangeText={setId} placeholder="아이디" />
           <Input
-            value={id} onChangeText={setId}
-            placeholder="아이디"
-          />
-          <Input
-            value={pw} onChangeText={setPw}
+            value={pw}
+            onChangeText={setPw}
             placeholder="비밀번호"
             secureTextEntry
             style={styles.inputGap}
@@ -61,8 +66,11 @@ export default function LoginScreen() {
             loading={loading}
             style={styles.loginBtn}
           />
-          <TouchableOpacity onPress={() => nav.navigate('SignUpStep1')} style={styles.signupBtn}>
-            <Text style={styles.signupText}>회원가입</Text>
+          <TouchableOpacity
+            onPress={() => nav.navigate("SignUpStep1")}
+            style={styles.signupBtn}
+          >
+            <Text style={styles.signupText}>회원가입하겠습니다.</Text>
           </TouchableOpacity>
         </View>
 
@@ -91,28 +99,58 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
-  scroll: { flexGrow: 1, paddingHorizontal: SPACING.xl, justifyContent: 'center' },
-  logoArea: { alignItems: 'center', marginBottom: SPACING['3xl'] },
+  safe: { flex: 1, backgroundColor: "#fff" },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: SPACING.xl,
+    justifyContent: "center",
+  },
+  logoArea: { alignItems: "center", marginBottom: SPACING["3xl"] },
   iconCircle: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: '#FFE8ED', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#FFE8ED",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
   },
   iconText: { fontSize: 32 },
-  appName: { fontSize: 28, fontWeight: '800', color: COLORS.text, fontStyle: 'italic' },
-  tagline: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, marginTop: 4 },
+  appName: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: COLORS.text,
+    fontStyle: "italic",
+  },
+  tagline: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
 
   form: { gap: 0 },
   inputGap: { marginTop: SPACING.sm },
   loginBtn: { marginTop: SPACING.base },
-  signupBtn: { alignSelf: 'center', marginTop: SPACING.base },
+  signupBtn: { alignSelf: "center", marginTop: SPACING.base },
   signupText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary },
 
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: SPACING.lg },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: SPACING.lg,
+  },
   line: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: { marginHorizontal: SPACING.sm, fontSize: FONTS.sizes.sm, color: COLORS.textMuted },
+  dividerText: {
+    marginHorizontal: SPACING.sm,
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.textMuted,
+  },
 
   kakaoBtn: {},
-  guestBtn: { alignSelf: 'center', marginTop: SPACING.base, paddingVertical: SPACING.sm },
+  guestBtn: {
+    alignSelf: "center",
+    marginTop: SPACING.base,
+    paddingVertical: SPACING.sm,
+  },
   guestText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary },
 });
