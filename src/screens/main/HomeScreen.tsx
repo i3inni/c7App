@@ -495,13 +495,13 @@ export default function HomeScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statKey}>CURRENT ANGLE</Text>
-            <Text style={[styles.statVal, { color: COLORS.text }]}>{currentAngle}°</Text>
+            <Text style={[styles.statVal, { color: COLORS.text }]}>{currentAngle.toFixed(1)}°</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.statBox}>
             <Text style={styles.statKey}>STATUS</Text>
             <Text style={[styles.statStatus, { color }]}>
-              ⚠ {levelLabel[currentLevel]}
+              {currentLevel === 'excellent' ? '✅' : currentLevel === 'good' ? '✅' : '⚠'} {levelLabel[currentLevel]}
             </Text>
           </View>
         </View>
