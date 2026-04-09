@@ -1,4 +1,4 @@
-# C7 AI — React Native 앱 (껍데기 만들기)
+# C7 AI — React Native 앱 (껍데기 만들기 test수정)
 
 > Smart Posture Intelligence · Firebase 연동 전 UI 전체 구현본
 
