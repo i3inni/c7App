@@ -318,7 +318,7 @@ export default function StatsScreen() {
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0);
 
-  const chartData = weeklyStats.map(w => ({ label: w.label, score: w.score }));
+  const chartData = weeklyStats.map(w => ({ label: w.weekLabel, score: w.score }));
 
   return (
     <SafeAreaView style={s.safe}>
