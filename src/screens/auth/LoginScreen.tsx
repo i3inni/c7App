@@ -66,11 +66,8 @@ export default function LoginScreen() {
             loading={loading}
             style={styles.loginBtn}
           />
-          <TouchableOpacity
-            onPress={() => nav.navigate("SignUpStep1")}
-            style={styles.signupBtn}
-          >
-            <Text style={styles.signupText}>회원가입하겠습니다.</Text>
+          <TouchableOpacity onPress={() => nav.navigate('SignUpStep1')} style={styles.signupBtn}>
+            <Text style={styles.signupText}>회원가입.</Text>
           </TouchableOpacity>
         </View>
 
