@@ -318,7 +318,7 @@ export default function StatsScreen() {
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0);
 
-  const chartData = weeklyStats.map(w => ({ label: w.label, score: w.score }));
+  const chartData = weeklyStats.map(w => ({ label: w.weekLabel, score: w.score }));
 
   return (
     <SafeAreaView style={s.safe}>
@@ -354,14 +354,22 @@ export default function StatsScreen() {
 
           <View style={s.todayMiniRow}>
             <View style={s.todayMiniBox}>
-              <Text style={s.miniIcon}>⚠️</Text>
-              <Text style={s.miniLabel}>불량 자세</Text>
-              <Text style={s.miniVal}>{todayStats?.badPostureCount ?? 0} <Text style={s.miniUnit}>회</Text></Text>
+              <View style={[s.miniIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                <Text style={s.miniIcon}>⚠️</Text>
+              </View>
+              <View>
+                <Text style={s.miniLabel}>불량 자세</Text>
+                <Text style={s.miniVal}>{todayStats?.badPostureCount ?? 0}<Text style={s.miniUnit}> 회</Text></Text>
+              </View>
             </View>
             <View style={s.todayMiniBox}>
-              <Text style={s.miniIcon}>⏰</Text>
-              <Text style={s.miniLabel}>교정 시간</Text>
-              <Text style={s.miniVal}>{todayStats?.correctionMin ?? 0} <Text style={s.miniUnit}>분</Text></Text>
+              <View style={[s.miniIconCircle, { backgroundColor: '#D1FAE5' }]}>
+                <Text style={s.miniIcon}>⏰</Text>
+              </View>
+              <View>
+                <Text style={s.miniLabel}>교정 시간</Text>
+                <Text style={s.miniVal}>{todayStats?.correctionMin ?? 0}<Text style={s.miniUnit}> 분</Text></Text>
+              </View>
             </View>
           </View>
 
@@ -430,7 +438,7 @@ export default function StatsScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
+  safe: { flex: 1, backgroundColor: '#F5F6F8' },
   topBar: {
     flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
     paddingHorizontal: SPACING.base, paddingVertical: SPACING.md,
@@ -460,17 +468,21 @@ const s = StyleSheet.create({
 
   todayMiniRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.sm },
   todayMiniBox: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACING.xs,
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
     backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md, padding: SPACING.sm,
   },
-  miniIcon: { fontSize: 18 },
-  miniLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
-  miniVal: { fontSize: FONTS.sizes.lg, fontWeight: '800', color: COLORS.text, marginLeft: 'auto' as any },
+  miniIconCircle: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  miniIcon: { fontSize: 16 },
+  miniLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginBottom: 2 },
+  miniVal: { fontSize: FONTS.sizes.lg, fontWeight: '800', color: COLORS.text },
   miniUnit: { fontSize: FONTS.sizes.sm, fontWeight: '400', color: COLORS.textSecondary },
 
-  moreBtn: { alignSelf: 'center' },
-  moreBtnText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary },
-  weekMoreBtn: { alignSelf: 'center', marginTop: SPACING.sm },
+  moreBtn: { alignSelf: 'center', paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm },
+  moreBtnText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  weekMoreBtn: { alignSelf: 'center', marginTop: SPACING.sm, paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm },
 
   chartCard: { backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: SPACING.base, ...SHADOWS.sm },
   tabRow: { flexDirection: 'row', backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.full, padding: 3 },
