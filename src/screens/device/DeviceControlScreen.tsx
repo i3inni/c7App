@@ -1,14 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  PanResponder,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import Svg, { Rect, Circle, Ellipse, Path } from "react-native-svg";
+import Svg, { Rect, Circle, Ellipse, Path, G } from "react-native-svg";
 import { useStore } from "../../store";
 import Toggle from "../../components/common/Toggle";
 import ConfirmModal from "../../components/common/ConfirmModal";
@@ -17,7 +18,13 @@ import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from "../../constants/theme";
 type Tab = "battery" | "power" | "sensor" | "vibration";
 
 // ── C7 기기 SVG 일러스트 ─────────────────────────────
-function DeviceIllustration({ highlight }: { highlight: Tab }) {
+function DeviceIllustration({
+  highlight,
+  onTabChange,
+}: {
+  highlight: Tab;
+  onTabChange: (tab: Tab) => void;
+}) {
   const hl = (tab: Tab) => (highlight === tab ? COLORS.primary : "#9CA3AF");
   const hlFill = (tab: Tab) =>
     highlight === tab ? COLORS.primaryLight : "#F3F4F6";
@@ -27,125 +34,45 @@ function DeviceIllustration({ highlight }: { highlight: Tab }) {
       <Svg width={160} height={200} viewBox="0 0 160 200">
         {/* 몸체 */}
         <Rect
-          x={30}
-          y={30}
-          width={100}
-          height={140}
-          rx={20}
-          fill="#F0F2F5"
-          stroke="#D1D5DB"
-          strokeWidth={1.5}
+          x={30} y={30} width={100} height={140} rx={20}
+          fill="#F0F2F5" stroke="#D1D5DB" strokeWidth={1.5}
         />
 
         {/* 안테나 */}
-        <Rect
-          x={50}
-          y={10}
-          width={6}
-          height={28}
-          rx={3}
-          fill="#D1D5DB"
-          transform="rotate(-15 53 24)"
-        />
-        <Rect
-          x={104}
-          y={10}
-          width={6}
-          height={28}
-          rx={3}
-          fill="#D1D5DB"
-          transform="rotate(15 107 24)"
-        />
+        <Rect x={50} y={10} width={6} height={28} rx={3} fill="#D1D5DB" transform="rotate(-15 53 24)" />
+        <Rect x={104} y={10} width={6} height={28} rx={3} fill="#D1D5DB" transform="rotate(15 107 24)" />
 
-        {/* 센서 (상단) */}
-        <Circle
-          cx={80}
-          cy={65}
-          r={12}
-          fill={highlight === "sensor" ? COLORS.warning : "#F59E0B"}
-          opacity={0.9}
-        />
-        <Circle
-          cx={80}
-          cy={65}
-          r={7}
-          fill={highlight === "sensor" ? "#fff" : "#FFFBEB"}
-        />
-        {highlight === "sensor" && (
-          <Text style={{ position: "absolute" }}>{/* label 별도 */}</Text>
-        )}
+        {/* 센서 (상단) — 클릭 시 sensor 탭 */}
+        <G onPress={() => onTabChange("sensor")}>
+          <Circle cx={80} cy={65} r={16} fill="transparent" />
+          <Circle cx={80} cy={65} r={12} fill={hl("sensor")} opacity={0.9} />
+          <Circle cx={80} cy={65} r={7} fill={hlFill("sensor")} />
+        </G>
 
-        {/* 진동 모듈 좌 */}
-        <Rect
-          x={38}
-          y={95}
-          width={30}
-          height={30}
-          rx={8}
-          fill={hlFill("vibration")}
-          stroke={hl("vibration")}
-          strokeWidth={1.5}
-        />
-        <Circle cx={53} cy={110} r={8} fill={hl("vibration")} opacity={0.3} />
-        <Circle cx={53} cy={110} r={5} fill={hl("vibration")} />
+        {/* 진동 모듈 좌 — 클릭 시 vibration 탭 */}
+        <G onPress={() => onTabChange("vibration")}>
+          <Rect x={34} y={91} width={38} height={38} rx={8} fill="transparent" />
+          <Rect x={38} y={95} width={30} height={30} rx={8} fill={hlFill("vibration")} stroke={hl("vibration")} strokeWidth={1.5} />
+          <Circle cx={53} cy={110} r={8} fill={hl("vibration")} opacity={0.3} />
+          <Circle cx={53} cy={110} r={5} fill={hl("vibration")} />
+        </G>
 
-        {/* 전원 버튼 우 */}
-        <Rect
-          x={92}
-          y={95}
-          width={30}
-          height={30}
-          rx={8}
-          fill={hlFill("power")}
-          stroke={hl("power")}
-          strokeWidth={1.5}
-        />
-        <Circle cx={107} cy={110} r={8} fill={hl("power")} opacity={0.3} />
-        <Circle cx={107} cy={110} r={5} fill={hl("power")} />
+        {/* 전원 버튼 우 — 클릭 시 power 탭 */}
+        <G onPress={() => onTabChange("power")}>
+          <Rect x={88} y={91} width={38} height={38} rx={8} fill="transparent" />
+          <Rect x={92} y={95} width={30} height={30} rx={8} fill={hlFill("power")} stroke={hl("power")} strokeWidth={1.5} />
+          <Circle cx={107} cy={110} r={8} fill={hl("power")} opacity={0.3} />
+          <Circle cx={107} cy={110} r={5} fill={hl("power")} />
+        </G>
 
-        {/* 배터리 하단 */}
-        <Rect
-          x={55}
-          y={138}
-          width={50}
-          height={26}
-          rx={7}
-          fill={hlFill("battery")}
-          stroke={hl("battery")}
-          strokeWidth={1.5}
-        />
-        <Rect
-          x={60}
-          y={143}
-          width={32}
-          height={16}
-          rx={4}
-          fill={hl("battery")}
-          opacity={0.2}
-        />
-        <Rect
-          x={60}
-          y={143}
-          width={highlight === "battery" ? 24 : 20}
-          height={16}
-          rx={4}
-          fill={hl("battery")}
-        />
+        {/* 배터리 하단 — 클릭 시 battery 탭 */}
+        <G onPress={() => onTabChange("battery")}>
+          <Rect x={50} y={134} width={60} height={34} rx={7} fill="transparent" />
+          <Rect x={55} y={138} width={50} height={26} rx={7} fill={hlFill("battery")} stroke={hl("battery")} strokeWidth={1.5} />
+          <Rect x={60} y={143} width={32} height={16} rx={4} fill={hl("battery")} opacity={0.2} />
+          <Rect x={60} y={143} width={highlight === "battery" ? 24 : 20} height={16} rx={4} fill={hl("battery")} />
+        </G>
       </Svg>
-
-      {/* 라벨 */}
-      {highlight === "battery" && (
-        <Text style={[illStyles.label, { top: 148, left: 110 }]}>배터리</Text>
-      )}
-      {highlight === "power" && (
-        <Text style={[illStyles.label, { top: 98, left: 110 }]}>전원</Text>
-      )}
-      {highlight === "sensor" && (
-        <Text style={[illStyles.label, { top: 58, left: 100 }]}>센서</Text>
-      )}
-      {highlight === "vibration" && (
-        <Text style={[illStyles.label, { top: 98, left: 14 }]}>진동</Text>
-      )}
 
       <Text style={illStyles.deviceLabel}>C7 DEVICE</Text>
       <View style={illStyles.shadow} />
@@ -155,12 +82,6 @@ function DeviceIllustration({ highlight }: { highlight: Tab }) {
 
 const illStyles = StyleSheet.create({
   wrap: { alignItems: "center", position: "relative", height: 220 },
-  label: {
-    position: "absolute",
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.accent,
-  },
   deviceLabel: {
     fontSize: FONTS.sizes.xs,
     color: COLORS.textMuted,
@@ -173,6 +94,80 @@ const illStyles = StyleSheet.create({
     borderRadius: 50,
     backgroundColor: "rgba(0,0,0,0.08)",
     marginTop: 4,
+  },
+});
+
+// ── 드래그 가능한 슬라이더 ────────────────────────────
+function DraggableSlider({
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  color = COLORS.primary,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  color?: string;
+}) {
+  const widthRef = useRef(0);
+  const ratio = Math.max(0, Math.min(1, (value - min) / (max - min)));
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        if (widthRef.current === 0) return;
+        const r = Math.max(0, Math.min(1, evt.nativeEvent.locationX / widthRef.current));
+        onChange(Math.round(min + r * (max - min)));
+      },
+      onPanResponderMove: (evt) => {
+        if (widthRef.current === 0) return;
+        const r = Math.max(0, Math.min(1, evt.nativeEvent.locationX / widthRef.current));
+        onChange(Math.round(min + r * (max - min)));
+      },
+    })
+  ).current;
+
+  return (
+    <View
+      onLayout={(e) => { widthRef.current = e.nativeEvent.layout.width; }}
+      style={dsStyles.track}
+      {...panResponder.panHandlers}
+    >
+      <View style={[dsStyles.fill, { width: `${ratio * 100}%` as any, backgroundColor: color }]} />
+      <View style={[dsStyles.thumb, { left: `${ratio * 100}%` as any, borderColor: color }]} />
+    </View>
+  );
+}
+
+const dsStyles = StyleSheet.create({
+  track: {
+    height: 8,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 4,
+    marginBottom: SPACING.lg,
+    position: "relative",
+  },
+  fill: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    height: 8,
+    borderRadius: 4,
+  },
+  thumb: {
+    position: "absolute",
+    top: -8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    borderWidth: 2.5,
+    marginLeft: -12,
+    ...SHADOWS.md,
   },
 });
 
@@ -324,14 +319,7 @@ export default function DeviceControlScreen() {
   ];
 
   const batteryColor =
-    device.battery > 50
-      ? COLORS.warning
-      : device.battery > 20
-        ? COLORS.warning
-        : COLORS.accent;
-
-  const batteryLabel =
-    device.battery > 60 ? "충분" : device.battery > 30 ? "보통" : "부족";
+    device.battery > 30 ? COLORS.warning : COLORS.accent;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -378,7 +366,7 @@ export default function DeviceControlScreen() {
           ))}
         </View>
         {/* 기기 일러스트 */}
-        <DeviceIllustration highlight={activeTab} />
+        <DeviceIllustration highlight={activeTab} onTabChange={setActiveTab} />
 
         {/* 탭 선택 (하단 스크롤 없이 탭별로 컨텐츠 전환) */}
         <View style={styles.contentCard}>
@@ -393,7 +381,7 @@ export default function DeviceControlScreen() {
                     {device.battery}%
                   </Text>
                   <Text style={[styles.batteryLabel, { color: batteryColor }]}>
-                    {batteryLabel}
+                    충전
                   </Text>
                 </View>
                 <View style={styles.batteryTrack}>
@@ -433,19 +421,13 @@ export default function DeviceControlScreen() {
                   activeColor="#3B82F6"
                 />
               </View>
-              {device.powerOn && (
-                <View style={styles.activeInfo}>
-                  <Text style={styles.activeInfoIcon}>✓</Text>
-                  <View>
-                    <Text style={styles.activeInfoTitle}>
-                      디바이스 활성화됨
-                    </Text>
-                    <Text style={styles.activeInfoSub}>
-                      모든 센서와 모듈이 정상 작동 중입니다
-                    </Text>
-                  </View>
-                </View>
-              )}
+              <View style={styles.powerNote}>
+                <Text style={styles.powerNoteText}>
+                  {device.powerOn
+                    ? '↓ 디바이스 셧다운 시 모든 센서와 모듈 동작이 종료됩니다'
+                    : '디바이스가 꺼진 상태입니다. 전원을 켜서 측정을 시작하세요.'}
+                </Text>
+              </View>
             </>
           )}
 
@@ -460,29 +442,46 @@ export default function DeviceControlScreen() {
                   {sensorAngle}°
                 </Text>
               </View>
-              <View style={styles.sliderTrack}>
-                <View
-                  style={[
-                    styles.sliderFill,
-                    { width: `${(sensorAngle / 90) * 100}%` },
-                  ]}
-                />
-                {/* 실제 슬라이더는 @react-native-community/slider 사용 권장 */}
-                <View style={styles.sliderThumb} />
-              </View>
-              <View style={styles.sliderBtns}>
+              <View style={styles.sliderRow}>
                 <TouchableOpacity
+                  style={styles.angleStepBtn}
                   onPress={() => setSensorAngle(Math.max(5, sensorAngle - 5))}
                 >
-                  <Text style={styles.sliderBtn}>−</Text>
+                  <Text style={styles.angleStepText}>−</Text>
                 </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                  <DraggableSlider
+                    value={sensorAngle}
+                    onChange={(v) => setSensorAngle(v)}
+                    min={5}
+                    max={90}
+                    color={COLORS.primary}
+                  />
+                </View>
                 <TouchableOpacity
+                  style={styles.angleStepBtn}
                   onPress={() => setSensorAngle(Math.min(90, sensorAngle + 5))}
                 >
-                  <Text style={styles.sliderBtn}>+</Text>
+                  <Text style={styles.angleStepText}>+</Text>
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity style={styles.calibBtn}>
+              <View style={styles.vibRow}>
+                {(["약", "중", "강"] as const).map((l, i) => {
+                  const v = [20, 30, 45][i];
+                  return (
+                    <TouchableOpacity
+                      key={l}
+                      style={[styles.vibBtn, sensorAngle === v && styles.sensorBtnActive]}
+                      onPress={() => setSensorAngle(v)}
+                    >
+                      <Text style={[styles.vibBtnText, sensorAngle === v && styles.sensorBtnTextActive]}>
+                        {l}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TouchableOpacity style={[styles.calibBtn, { marginTop: SPACING.lg }]}>
                 <Text style={styles.calibBtnText}>캘리브레이션 시작</Text>
               </TouchableOpacity>
             </>
@@ -507,14 +506,13 @@ export default function DeviceControlScreen() {
                   {vibIntensity}%
                 </Text>
               </View>
-              <View style={styles.sliderTrack}>
-                <View
-                  style={[
-                    styles.sliderFill,
-                    { width: `${vibIntensity}%`, backgroundColor: "#8B5CF6" },
-                  ]}
-                />
-              </View>
+              <DraggableSlider
+                value={vibIntensity}
+                onChange={(v) => setVibIntensity(v)}
+                min={0}
+                max={100}
+                color="#8B5CF6"
+              />
               <View style={styles.vibRow}>
                 {(["약", "중", "강"] as const).map((l, i) => {
                   const v = [33, 66, 100][i];
@@ -549,7 +547,15 @@ export default function DeviceControlScreen() {
 
       <ConfirmModal
         visible={showDisconnect}
-        icon="⤷"
+        icon={
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#FFE4E8', alignItems: 'center', justifyContent: 'center' }}>
+            <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
+              <Path d="M5 12H3m18 0h-2M12 5V3m0 18v-2" stroke={COLORS.accent} strokeWidth="2" strokeLinecap="round" />
+              <Circle cx="12" cy="12" r="5" stroke={COLORS.accent} strokeWidth="2" />
+              <Path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke={COLORS.accent} strokeWidth="2" strokeLinecap="round" />
+            </Svg>
+          </View>
+        }
         title="MQTT 연결 해제"
         message={
           "디바이스와의 연결을 해제하시겠습니까?\n실시간 자세 측정이 중단됩니다."
@@ -658,22 +664,17 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
 
-  activeInfo: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-    alignItems: "flex-start",
-    backgroundColor: "#EFF8FF",
+  powerNote: {
+    backgroundColor: COLORS.bgSecondary,
     borderRadius: RADIUS.md,
     padding: SPACING.md,
     marginTop: SPACING.sm,
   },
-  activeInfoIcon: { fontSize: 16, color: "#3B82F6", fontWeight: "700" },
-  activeInfoTitle: {
+  powerNoteText: {
     fontSize: FONTS.sizes.sm,
-    fontWeight: "700",
-    color: "#3B82F6",
+    color: COLORS.textSecondary,
+    lineHeight: 18,
   },
-  activeInfoSub: { fontSize: FONTS.sizes.xs, color: "#60A5FA", marginTop: 2 },
 
   angleRow: {
     flexDirection: "row",
@@ -682,35 +683,25 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   angleVal: { fontSize: FONTS.sizes.base, fontWeight: "800" },
-  sliderTrack: {
-    height: 8,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 4,
-    overflow: "hidden",
-    marginBottom: SPACING.sm,
-    position: "relative",
-  },
-  sliderFill: { height: 8, borderRadius: 4, backgroundColor: COLORS.primary },
-  sliderThumb: {
-    position: "absolute",
-    right: 0,
-    top: -4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: COLORS.primary,
-    ...SHADOWS.sm,
-  },
-  sliderBtns: {
+  sliderRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "center",
+    gap: SPACING.base,
     marginBottom: SPACING.base,
   },
-  sliderBtn: {
-    fontSize: 22,
+  angleStepBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  angleStepText: {
+    fontSize: 20,
     color: COLORS.primary,
     fontWeight: "700",
-    padding: SPACING.xs,
+    lineHeight: 22,
   },
   calibBtn: {
     backgroundColor: COLORS.primary,
@@ -745,6 +736,12 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   vibBtnTextActive: { color: "#8B5CF6" },
+  sensorBtnActive: {
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+  },
+  sensorBtnTextActive: { color: COLORS.primary },
 
   tabBar: {
     flexDirection: "row",

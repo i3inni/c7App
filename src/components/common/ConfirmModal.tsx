@@ -6,7 +6,7 @@ import { COLORS, FONTS, RADIUS, SPACING, SHADOWS } from '../../constants/theme';
 
 interface Props {
   visible: boolean;
-  icon?: string;
+  icon?: React.ReactNode;
   title: string;
   message: string;
   confirmLabel?: string;
@@ -31,9 +31,7 @@ export default function ConfirmModal({
       <View style={styles.overlay}>
         <View style={styles.box}>
           {icon ? (
-            <View style={styles.iconWrap}>
-              <Text style={styles.iconText}>{icon}</Text>
-            </View>
+            <View style={styles.iconWrap}>{icon}</View>
           ) : null}
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
@@ -62,11 +60,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', ...SHADOWS.lg,
   },
   iconWrap: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: COLORS.bgSecondary,
     alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.base,
   },
-  iconText: { fontSize: 24 },
   title: {
     fontSize: FONTS.sizes.lg, fontWeight: FONTS.weights.bold,
     color: COLORS.text, marginBottom: SPACING.sm, textAlign: 'center',
