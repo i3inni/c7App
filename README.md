@@ -1,10 +1,10 @@
-# C7 AI — React Native 앱 (껍데기)
+# C7 AI — React Native 앱 (껍데기 만들기)
 
 > Smart Posture Intelligence · Firebase 연동 전 UI 전체 구현본
 
 ---
 
-##  프로젝트 구조
+## 프로젝트 구조
 
 ```
 C7AI/
@@ -44,7 +44,7 @@ C7AI/
 
 ---
 
-##  실행
+## 실행
 
 ```bash
 npm install
@@ -53,49 +53,50 @@ npx expo start
 
 ---
 
-##  Firebase 연동 포인트
+## Firebase 연동 포인트
 
 파일 내 주석 `// Firebase XXX 자리` 위치에 연동:
 
-| 위치 | 할 일 |
-|------|--------|
-| `LoginScreen.tsx` | `signInWithEmailAndPassword` |
-| `SignUpScreens.tsx → SignUpStep3` | `createUserWithEmailAndPassword` |
-| `SignUpScreens.tsx → Step1 handleCheck` | Firestore 아이디 중복 확인 |
-| `ProfileScreens.tsx → ChangePassword` | `updatePassword` |
-| `ProfileScreens.tsx → Withdraw` | `deleteUser` |
-| `MqttConnectScreen.tsx` | MQTT broker 실 연결 (mqtt.js / paho) |
-| `store/index.ts` | mock 데이터 → Firestore 실시간 리스너 교체 |
+| 위치                                    | 할 일                                      |
+| --------------------------------------- | ------------------------------------------ |
+| `LoginScreen.tsx`                       | `signInWithEmailAndPassword`               |
+| `SignUpScreens.tsx → SignUpStep3`       | `createUserWithEmailAndPassword`           |
+| `SignUpScreens.tsx → Step1 handleCheck` | Firestore 아이디 중복 확인                 |
+| `ProfileScreens.tsx → ChangePassword`   | `updatePassword`                           |
+| `ProfileScreens.tsx → Withdraw`         | `deleteUser`                               |
+| `MqttConnectScreen.tsx`                 | MQTT broker 실 연결 (mqtt.js / paho)       |
+| `store/index.ts`                        | mock 데이터 → Firestore 실시간 리스너 교체 |
 
 ---
 
-##  주요 의존성
+## 주요 의존성
 
-| 패키지 | 용도 |
-|--------|------|
-| `@react-navigation` | Stack + BottomTab 네비게이션 |
-| `zustand` | 전역 상태 관리 |
-| `react-native-svg` | 게이지, 차트 SVG |
-| `react-native-reanimated` | Toggle 애니메이션 |
-| `expo-notifications` | 자세 알림 |
-| `@react-native-async-storage` | 로컬 저장 |
+| 패키지                        | 용도                         |
+| ----------------------------- | ---------------------------- |
+| `@react-navigation`           | Stack + BottomTab 네비게이션 |
+| `zustand`                     | 전역 상태 관리               |
+| `react-native-svg`            | 게이지, 차트 SVG             |
+| `react-native-reanimated`     | Toggle 애니메이션            |
+| `expo-notifications`          | 자세 알림                    |
+| `@react-native-async-storage` | 로컬 저장                    |
 
 ---
 
-##  디자인 시스템
+## 디자인 시스템
 
 `src/constants/theme.ts` 참고:
 
-- **Primary**: `#1DB38E` (민트그린)  
-- **Accent**: `#FF4B6E` (핑크레드)  
-- **Score 색상**: 우수(초록) → 주의(주황) → 위험(빨강) 그라디언트  
+- **Primary**: `#1DB38E` (민트그린)
+- **Accent**: `#FF4B6E` (핑크레드)
+- **Score 색상**: 우수(초록) → 주의(주황) → 위험(빨강) 그라디언트
 - **다크 카드**: `#1A1E2E` (MQTT/전원 카드)
 
 ---
 
-##  구현된 화면 목록 (43개 기준)
+## 구현된 화면 목록 (43개 기준)
 
 ### 인증
+
 - [x] 스플래시
 - [x] 로그인 (아이디/비번 + 카카오 + 비회원)
 - [x] 회원가입 Step1 (아이디 + 중복확인)
@@ -105,6 +106,7 @@ npx expo start
 - [x] MQTT Connect (ID 입력 → 연결 중 애니메이션 → 완료)
 
 ### 홈
+
 - [x] 게이지 계기판 (SVG, 0~100 점수)
 - [x] 현재 각도 + 상태
 - [x] 전원 관리 카드
@@ -112,17 +114,20 @@ npx expo start
 - [x] 목표 점수 설정 모달
 
 ### STATS
+
 - [x] 오늘 요약 카드 (점수, 불량자세, 교정시간)
 - [x] 오늘 상세 분석 모달 (시간대별, 불량자세 기록, 활동요약)
 - [x] 주간/월간 라인 차트
 - [x] 주간 상세 분석 모달 (요일별, 주간통계)
 
 ### AI
+
 - [x] 거북목 진단 결과 (각도, 정상범위, 개선율)
 - [x] 단계별 솔루션 탭 (1~3단계 운동)
 - [x] 주간 건강 리포트 카드
 
 ### CONFIG (디바이스)
+
 - [x] C7 기기 SVG 일러스트 (탭별 부위 하이라이트)
 - [x] 배터리 (퍼센트, 절전모드)
 - [x] 전원 관리 (on/off 토글)
@@ -131,6 +136,7 @@ npx expo start
 - [x] MQTT 연결 카드 + 연결 해제 모달
 
 ### 내 정보
+
 - [x] 프로필 카드
 - [x] 신체 정보 (키/체중 바텀시트)
 - [x] 알림 설정 토글
