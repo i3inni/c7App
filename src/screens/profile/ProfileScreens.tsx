@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
@@ -45,6 +45,7 @@ export function MyInfoScreen() {
   const { user, updateUser, updateSettings, settings, logout, clearRecords } = useStore();
   const [showLogout, setShowLogout] = useState(false);
   const [showClearRecords, setShowClearRecords] = useState(false);
+  const [showResetZero, setShowResetZero] = useState(false);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -118,6 +119,29 @@ export function MyInfoScreen() {
           </View>
         </View>
 
+        {/* 자세 */}
+        <View style={styles.section}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>자세</Text>
+            <TouchableOpacity style={styles.rowItem} onPress={() => setShowResetZero(true)}>
+              <View style={styles.dangerRow}>
+                <View style={styles.resetIconBox}>
+                  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                    <Path d="M7 7a7 7 0 1 1-1.5 7" stroke="#6D5DFB" strokeWidth={2} strokeLinecap="round" />
+                    <Path d="M7 7V3M7 7H3" stroke="#6D5DFB" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                    <Circle cx="12" cy="12" r="2.2" stroke="#6D5DFB" strokeWidth={2} />
+                  </Svg>
+                </View>
+                <View>
+                  <Text style={styles.resetLabel}>영점 설정</Text>
+                  <Text style={styles.resetSub}>현재 자세를 기준으로 재설정</Text>
+                </View>
+              </View>
+              <Text style={[styles.rowArrow, { color: '#6D5DFB' }]}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* 데이터 */}
         <View style={styles.section}>
           <View style={styles.card}>
@@ -181,6 +205,24 @@ export function MyInfoScreen() {
         confirmVariant="danger"
         onConfirm={() => { clearRecords(); setShowClearRecords(false); }}
         onCancel={() => setShowClearRecords(false)}
+      />
+      <ConfirmModal
+        visible={showResetZero}
+        iconNode={
+          <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+            <Path d="M7 7a7 7 0 1 1-1.5 7" stroke="#6D5DFB" strokeWidth={2} strokeLinecap="round" />
+            <Path d="M7 7V3M7 7H3" stroke="#6D5DFB" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <Circle cx="12" cy="12" r="2.2" stroke="#6D5DFB" strokeWidth={2} />
+          </Svg>
+        }
+        iconBg="#F1EFFF"
+        title="영점을 재설정 하시겠습니까?"
+        message="영점을 재설정 합니다."
+        confirmLabel="재설정"
+        cancelLabel="취소"
+        confirmColor="#6D5DFB"
+        onConfirm={() => setShowResetZero(false)}
+        onCancel={() => setShowResetZero(false)}
       />
     </SafeAreaView>
   );
@@ -484,7 +526,7 @@ const styles = StyleSheet.create({
 
   separator: { height: 1, backgroundColor: COLORS.bgSecondary, marginHorizontal: SPACING.lg },
 
-  dangerRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  dangerRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
   dangerIconBox: {
     width: 44,
     height: 44,
@@ -492,10 +534,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: SPACING.sm,
   },
   dangerLabel: { fontSize: FONTS.sizes.md, color: COLORS.accent, fontWeight: '800' },
   dangerSub: { fontSize: FONTS.sizes.xs, color: COLORS.accent, fontWeight: '600', marginTop: 2, opacity: 0.7 },
+  resetIconBox: {
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: '#F1EFFF',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  resetLabel: { fontSize: FONTS.sizes.md, color: '#6D5DFB', fontWeight: '800' },
+  resetSub: { fontSize: FONTS.sizes.xs, color: '#6D5DFB', fontWeight: '600', marginTop: 2, opacity: 0.7 },
 
   logoutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,

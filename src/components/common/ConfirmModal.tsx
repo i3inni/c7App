@@ -2,36 +2,46 @@ import React from 'react';
 import {
   Modal, View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
+import type { ReactNode } from 'react';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOWS } from '../../constants/theme';
 
 interface Props {
   visible: boolean;
   icon?: string;
+  iconNode?: ReactNode;
+  iconBg?: string;
   title: string;
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
   confirmVariant?: 'danger' | 'primary' | 'dark';
+  confirmColor?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
 export default function ConfirmModal({
-  visible, icon, title, message,
+  visible, icon, iconNode, iconBg,
+  title, message,
   confirmLabel = '확인', cancelLabel = '취소',
-  confirmVariant = 'primary',
+  confirmVariant = 'primary', confirmColor,
   onConfirm, onCancel,
 }: Props) {
-  const confirmBg =
+  const confirmBg = confirmColor ?? (
     confirmVariant === 'danger' ? COLORS.accent :
-    confirmVariant === 'dark' ? COLORS.bgDark : COLORS.primary;
+    confirmVariant === 'dark' ? COLORS.bgDark : COLORS.primary
+  );
 
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.box}>
-          {icon ? (
-            <View style={styles.iconWrap}>
+          {iconNode ? (
+            <View style={[styles.iconWrap, iconBg ? { backgroundColor: iconBg } : undefined]}>
+              {iconNode}
+            </View>
+          ) : icon ? (
+            <View style={[styles.iconWrap, iconBg ? { backgroundColor: iconBg } : undefined]}>
               <Text style={styles.iconText}>{icon}</Text>
             </View>
           ) : null}
