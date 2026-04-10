@@ -124,10 +124,16 @@ export function MyInfoScreen() {
             <Text style={styles.cardTitle}>데이터</Text>
             <TouchableOpacity style={styles.rowItem} onPress={() => setShowClearRecords(true)}>
               <View style={styles.dangerRow}>
-                <Text style={styles.dangerIcon}>🗄️</Text>
+                <View style={styles.dangerIconBox}>
+                  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                    <Path d="M12 2C8.13 2 5 3.34 5 5v14c0 1.66 3.13 3 7 3s7-1.34 7-3V5c0-1.66-3.13-3-7-3z" stroke={COLORS.accent} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M5 5c0 1.66 3.13 3 7 3s7-1.34 7-3" stroke={COLORS.accent} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M5 12c0 1.66 3.13 3 7 3s7-1.34 7-3" stroke={COLORS.accent} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                </View>
                 <View>
                   <Text style={styles.dangerLabel}>기록 초기화</Text>
-                  <Text style={styles.rowSub}>모든 자세 기록 삭제</Text>
+                  <Text style={styles.dangerSub}>모든 자세 기록 삭제</Text>
                 </View>
               </View>
               <Text style={[styles.rowArrow, { color: COLORS.accent }]}>›</Text>
@@ -479,8 +485,17 @@ const styles = StyleSheet.create({
   separator: { height: 1, backgroundColor: COLORS.bgSecondary, marginHorizontal: SPACING.lg },
 
   dangerRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  dangerIcon: { fontSize: 20 },
-  dangerLabel: { fontSize: FONTS.sizes.base, color: COLORS.accent, fontWeight: '600' },
+  dangerIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: COLORS.accentLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.sm,
+  },
+  dangerLabel: { fontSize: FONTS.sizes.md, color: COLORS.accent, fontWeight: '800' },
+  dangerSub: { fontSize: FONTS.sizes.xs, color: COLORS.accent, fontWeight: '600', marginTop: 2, opacity: 0.7 },
 
   logoutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
