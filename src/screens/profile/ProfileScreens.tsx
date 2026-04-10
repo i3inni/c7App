@@ -70,8 +70,8 @@ export function MyInfoScreen() {
 
         {/* 신체 정보 */}
         <View style={styles.section}>
-          <Text style={styles.groupTitle}>신체 정보</Text>
           <View style={styles.card}>
+            <Text style={styles.cardTitle}>신체 정보</Text>
             <TouchableOpacity style={styles.rowItem} onPress={() => nav.navigate('BodyInfo')}>
               <Text style={styles.rowLabel}>키</Text>
               <View style={styles.rowRight}>
@@ -92,8 +92,8 @@ export function MyInfoScreen() {
 
         {/* 알림 */}
         <View style={styles.section}>
-          <Text style={styles.groupTitle}>알림</Text>
           <View style={styles.card}>
+            <Text style={styles.cardTitle}>알림</Text>
             <View style={styles.rowItem}>
               <View>
                 <Text style={styles.rowLabel}>자세 알림</Text>
@@ -120,8 +120,8 @@ export function MyInfoScreen() {
 
         {/* 데이터 */}
         <View style={styles.section}>
-          <Text style={styles.groupTitle}>데이터</Text>
           <View style={styles.card}>
+            <Text style={styles.cardTitle}>데이터</Text>
             <TouchableOpacity style={styles.rowItem} onPress={() => setShowClearRecords(true)}>
               <View style={styles.dangerRow}>
                 <Text style={styles.dangerIcon}>🗄️</Text>
@@ -136,7 +136,7 @@ export function MyInfoScreen() {
         </View>
 
         {/* 로그아웃 */}
-        <View style={{ paddingHorizontal: SPACING.base, marginTop: SPACING.sm }}>
+        <View style={{ paddingHorizontal: SPACING.base, marginTop: SPACING.lg }}>
           <TouchableOpacity style={styles.logoutBtn} onPress={() => setShowLogout(true)}>
             <Text style={styles.logoutIcon}>⤷</Text>
             <Text style={styles.logoutText}>로그아웃</Text>
@@ -439,8 +439,16 @@ const wdStyles = StyleSheet.create({
 // ── 공통 스타일 ───────────────────────────────────────
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F5F6F8' },
-  section: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.sm },
+  section: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.base },
   groupTitle: { fontSize: FONTS.sizes.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: SPACING.xs, marginLeft: 4 },
+  cardTitle: {
+    fontSize: FONTS.sizes.base,
+    fontWeight: '800',
+    color: COLORS.text,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.sm,
+  },
   card: { backgroundColor: '#fff', borderRadius: 24, ...SHADOWS.md, overflow: 'hidden' },
   profileCard: {
     flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
