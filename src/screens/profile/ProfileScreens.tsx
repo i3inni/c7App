@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
@@ -17,7 +18,10 @@ function PageHeader({ title }: { title: string }) {
   return (
     <View style={hStyles.wrap}>
       <TouchableOpacity onPress={() => nav.goBack()} style={hStyles.back}>
-        <Text style={hStyles.backIcon}>‹</Text>
+        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+          <Path d="M19 12H5" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M12 19l-7-7 7-7" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
       </TouchableOpacity>
       <Text style={hStyles.title}>{title}</Text>
       <View style={{ width: 36 }} />
@@ -26,8 +30,12 @@ function PageHeader({ title }: { title: string }) {
 }
 const hStyles = StyleSheet.create({
   wrap: { flexDirection: 'row', alignItems: 'center', padding: SPACING.base },
-  back: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.bgSecondary, alignItems: 'center', justifyContent: 'center' },
-  backIcon: { fontSize: 22, color: COLORS.text },
+  back: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+    ...SHADOWS.sm,
+  },
   title: { flex: 1, textAlign: 'center', fontSize: FONTS.sizes.lg, fontWeight: '700', color: COLORS.text },
 });
 
@@ -431,12 +439,12 @@ const wdStyles = StyleSheet.create({
 // ── 공통 스타일 ───────────────────────────────────────
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F5F6F8' },
-  section: { paddingHorizontal: SPACING.base, marginBottom: SPACING.sm },
+  section: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.sm },
   groupTitle: { fontSize: FONTS.sizes.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: SPACING.xs, marginLeft: 4 },
-  card: { backgroundColor: '#fff', borderRadius: RADIUS.xl, ...SHADOWS.sm, overflow: 'hidden' },
+  card: { backgroundColor: '#fff', borderRadius: 24, ...SHADOWS.md, overflow: 'hidden' },
   profileCard: {
     flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
-    backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: SPACING.base, ...SHADOWS.sm,
+    backgroundColor: '#fff', borderRadius: 24, padding: SPACING.lg, ...SHADOWS.md,
   },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
   avatarIcon: { fontSize: 24, color: '#fff' },
@@ -447,7 +455,7 @@ const styles = StyleSheet.create({
   connText: { fontSize: FONTS.sizes.xs, fontWeight: '700', color: COLORS.primary, letterSpacing: 0.5 },
   arrow: { fontSize: 20, color: COLORS.textMuted },
 
-  rowItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.base },
+  rowItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.lg },
   rowLabel: { fontSize: FONTS.sizes.base, color: COLORS.text, fontWeight: '500' },
   rowSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginTop: 2 },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
@@ -457,7 +465,7 @@ const styles = StyleSheet.create({
   iconLabel: { flexDirection: 'row', alignItems: 'center' },
   rowSubLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
 
-  separator: { height: 1, backgroundColor: COLORS.bgSecondary, marginHorizontal: SPACING.base },
+  separator: { height: 1, backgroundColor: COLORS.bgSecondary, marginHorizontal: SPACING.lg },
 
   dangerRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   dangerIcon: { fontSize: 20 },
