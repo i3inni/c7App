@@ -168,7 +168,11 @@ export function MyInfoScreen() {
         {/* 로그아웃 */}
         <View style={{ paddingHorizontal: SPACING.base, marginTop: SPACING.lg }}>
           <TouchableOpacity style={styles.logoutBtn} onPress={() => setShowLogout(true)}>
-            <Text style={styles.logoutIcon}>⤷</Text>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+              <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M16 17l5-5-5-5" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M21 12H9" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
             <Text style={styles.logoutText}>로그아웃</Text>
           </TouchableOpacity>
         </View>
@@ -186,7 +190,13 @@ export function MyInfoScreen() {
 
       <ConfirmModal
         visible={showLogout}
-        icon="⤷"
+        iconNode={
+          <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+            <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M16 17l5-5-5-5" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M21 12H9" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        }
         title="로그아웃 하시겠습니까?"
         message="다시 로그인하여 사용하실 수 있습니다."
         confirmLabel="로그아웃"
@@ -550,7 +560,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bgDark, borderRadius: RADIUS.full,
     height: 52,
   },
-  logoutIcon: { fontSize: 18, color: '#fff' },
   logoutText: { fontSize: FONTS.sizes.base, fontWeight: '700', color: '#fff' },
 
   withdrawBtn: { alignSelf: 'center', marginTop: SPACING.base },
