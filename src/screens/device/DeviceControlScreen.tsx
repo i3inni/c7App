@@ -304,7 +304,7 @@ const mqStyles = StyleSheet.create({
 
 // ── 메인 ──────────────────────────────────────────────
 export default function DeviceControlScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const { device, setDevice, disconnectMqtt } = useStore();
   const [activeTab, setActiveTab] = useState<Tab>("battery");
   const [showDisconnect, setShowDisconnect] = useState(false);

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect, Line, G } from 'react-native-svg';
@@ -66,51 +66,87 @@ const batteryStyles = StyleSheet.create({
 // ── 게이지 컴포넌트 ──────────────────────────────────
 // viewBox "0 0 200 100", 반원: M 20 90 A 80 80 0 0 0 180 90
 // strokeDashoffset 방식으로 채움
-function PostureGauge({ score }: { score: number }) {
-  // 반원 둘레 = π * R = π * 80 ≈ 251.2
-  const ARC_LEN = Math.PI * 80;
-  const ratio = Math.min(Math.max(score / 100, 0), 1);
-  const dashOffset = ARC_LEN * (1 - ratio);
+const AnimatedSvgPath = Animated.createAnimatedComponent(Path);
 
-  // 니들 위치: 왼쪽 180° → 오른쪽 0°, counterclockwise
+function PostureGauge({ score }: { score: number }) {
+  const ARC_LEN = Math.PI * 80;
+
+  const animScore = useRef(new Animated.Value(score)).current;
+  const pulseScale = useRef(new Animated.Value(1)).current;
+  const isExcellent = score >= 90;
+
+  // 점수 변화 시 게이지 부드럽게 전환 (0.8초)
+  useEffect(() => {
+    Animated.timing(animScore, {
+      toValue: score,
+      duration: 800,
+      useNativeDriver: false,
+    }).start();
+  }, [score]);
+
+  // 90점 이상일 때 미세 펄스 애니메이션
+  useEffect(() => {
+    if (isExcellent) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseScale, { toValue: 1.025, duration: 700, useNativeDriver: true }),
+          Animated.timing(pulseScale, { toValue: 1, duration: 700, useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    } else {
+      pulseScale.setValue(1);
+    }
+  }, [isExcellent]);
+
+  const dashOffset = animScore.interpolate({
+    inputRange: [0, 100],
+    outputRange: [ARC_LEN, 0],
+  });
+
+  // 니들 위치 (score 기준 정적 계산)
+  const ratio = Math.min(Math.max(score / 100, 0), 1);
   const angleDeg = 180 - ratio * 180;
   const angleRad = (angleDeg * Math.PI) / 180;
   const needleX = 100 + 80 * Math.cos(angleRad);
   const needleY = 90 - 80 * Math.sin(angleRad);
+  const needleInnerColor = isExcellent ? COLORS.scoreExcellent : '#fff';
 
   return (
-    // viewBox비율 200:100 → 실제 260×130
-    <Svg width={260} height={130} viewBox="0 0 200 100">
-      <Defs>
-        <LinearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <Stop offset="0%" stopColor={COLORS.gaugeGreen} />
-          <Stop offset="50%" stopColor={COLORS.gaugeYellow} />
-          <Stop offset="100%" stopColor={COLORS.gaugeRed} />
-        </LinearGradient>
-      </Defs>
+    <Animated.View style={{ transform: [{ scale: pulseScale }] }}>
+      <Svg width={260} height={130} viewBox="0 0 200 100">
+        <Defs>
+          <LinearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <Stop offset="0%" stopColor={COLORS.gaugeGreen} />
+            <Stop offset="50%" stopColor={COLORS.gaugeYellow} />
+            <Stop offset="100%" stopColor={COLORS.gaugeRed} />
+          </LinearGradient>
+        </Defs>
 
-      {/* 배경 반원 (회색) */}
-      <Path
-        d="M 20 90 A 80 80 0 0 0 180 90"
-        fill="none"
-        stroke="#E5E7EB"
-        strokeWidth="14"
-        strokeLinecap="round"
-      />
-      {/* 점수 반원 (그라디언트, dashOffset으로 채움) */}
-      <Path
-        d="M 20 90 A 80 80 0 0 0 180 90"
-        fill="none"
-        stroke="url(#gaugeGrad)"
-        strokeWidth="14"
-        strokeLinecap="round"
-        strokeDasharray={ARC_LEN}
-        strokeDashoffset={dashOffset}
-      />
-      {/* 니들 핸들 */}
-      <Circle cx={String(needleX)} cy={String(needleY)} r="8" fill="#D1D5DB" />
-      <Circle cx={String(needleX)} cy={String(needleY)} r="4" fill="#fff" />
-    </Svg>
+        {/* 배경 반원 (회색) */}
+        <Path
+          d="M 20 90 A 80 80 0 0 0 180 90"
+          fill="none"
+          stroke="#E5E7EB"
+          strokeWidth="14"
+          strokeLinecap="round"
+        />
+        {/* 점수 반원 (그라디언트, 애니메이션) */}
+        <AnimatedSvgPath
+          d="M 20 90 A 80 80 0 0 0 180 90"
+          fill="none"
+          stroke="url(#gaugeGrad)"
+          strokeWidth="14"
+          strokeLinecap="round"
+          strokeDasharray={ARC_LEN}
+          strokeDashoffset={dashOffset}
+        />
+        {/* 니들 핸들 */}
+        <Circle cx={String(needleX)} cy={String(needleY)} r="8" fill="#D1D5DB" />
+        <Circle cx={String(needleX)} cy={String(needleY)} r="4" fill={needleInnerColor} />
+      </Svg>
+    </Animated.View>
   );
 }
 
@@ -410,7 +446,7 @@ const nStyles = StyleSheet.create({
 
 // ── 메인 홈 ──────────────────────────────────────────
 export default function HomeScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const { user, device, currentScore, currentAngle, currentLevel, settings, setDevice, notifications } = useStore();
   const [showGoal, setShowGoal] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
