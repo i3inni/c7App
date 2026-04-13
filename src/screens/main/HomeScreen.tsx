@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect, Line, G } from 'react-native-svg';
@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
 import Toggle from '../../components/common/Toggle';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
+import type { AppNotification } from '../../constants/types';
 
 // ── SVG 아이콘 ────────────────────────────────────────
 function PersonIcon({ size = 22, color = COLORS.text }: { size?: number; color?: string }) {
@@ -433,9 +434,54 @@ const nIconStyles = StyleSheet.create({
   circleGreen: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#EDFAF5', alignItems: 'center', justifyContent: 'center' },
 });
 
+// ── 스와이프 삭제 알림 아이템 ─────────────────────────
+function SwipeableNotifItem({ n, onRemove }: { n: AppNotification; onRemove: (id: string) => void }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy),
+      onPanResponderMove: (_, gs) => {
+        if (gs.dx < 0) translateX.setValue(gs.dx);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx < -80) {
+          Animated.timing(translateX, {
+            toValue: -500,
+            duration: 180,
+            useNativeDriver: true,
+          }).start(() => onRemove(n.id));
+        } else {
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  return (
+    <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+      <View style={nStyles.item}>
+        <NotifIcon category={n.category} />
+        <View style={nStyles.itemContent}>
+          <View style={nStyles.itemHeader}>
+            <Text style={nStyles.itemTitle} numberOfLines={1}>{n.title}</Text>
+            <Text style={nStyles.timeAgo}>{n.timeAgo}</Text>
+          </View>
+          <Text style={nStyles.itemBody}>{n.body}</Text>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
 // ── 알림 드로어 ──────────────────────────────────────
 function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { notifications, clearNotifications } = useStore();
+  const { notifications, removeNotification, clearNotifications } = useStore();
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -463,16 +509,11 @@ function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: (
             style={{ flex: 1 }}
           >
             {notifications.map((n) => (
-              <View key={n.id} style={nStyles.item}>
-                <NotifIcon category={n.category} />
-                <View style={nStyles.itemContent}>
-                  <View style={nStyles.itemHeader}>
-                    <Text style={nStyles.itemTitle} numberOfLines={1}>{n.title}</Text>
-                    <Text style={nStyles.timeAgo}>{n.timeAgo}</Text>
-                  </View>
-                  <Text style={nStyles.itemBody}>{n.body}</Text>
-                </View>
-              </View>
+              <SwipeableNotifItem
+                key={n.id}
+                n={n}
+                onRemove={removeNotification}
+              />
             ))}
           </ScrollView>
         )}

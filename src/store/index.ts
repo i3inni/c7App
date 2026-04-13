@@ -53,6 +53,7 @@ interface AppState {
   addSnapshot: (snapshot: PostureSnapshot) => void;
 
   addNotification: (n: AppNotification) => void;
+  removeNotification: (id: string) => void;
   clearNotifications: () => void;
 
   updateSettings: (partial: Partial<AppSettings>) => void;
@@ -167,6 +168,8 @@ export const useStore = create<AppState>()(
       // Notifications
       addNotification: (n) =>
         set((s) => ({ notifications: [n, ...s.notifications] })),
+      removeNotification: (id) =>
+        set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
       clearNotifications: () => set({ notifications: [] }),
 
       // Settings
