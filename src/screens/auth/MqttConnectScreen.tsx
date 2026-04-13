@@ -9,15 +9,18 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
-type Step = 'input' | 'connecting' | 'connected';
+type Step = 'input' | 'connecting' | 'error';
+type ErrorType = 'timeout' | 'auth' | 'network';
+
+const CONNECT_TIMEOUT_MS = 10000;
 
 export default function MqttConnectScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const { connectMqtt, setDevice } = useStore();
   const [deviceId, setDeviceId] = useState('');
   const [step, setStep] = useState<Step>('input');
+  const [errorType, setErrorType] = useState<ErrorType | null>(null);
 
-  // Dot animation
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
 
@@ -36,21 +39,82 @@ export default function MqttConnectScreen() {
     );
     anim.start();
 
-    // 2초 후 연결 완료 시뮬레이션 (실제는 MQTT broker 연결)
+    // 실제 MQTT 연결 타임아웃 (10초)
+    // TODO: 실제 연결 시 mqtt.js 또는 paho-mqtt 라이브러리로 교체
     const t = setTimeout(() => {
       anim.stop();
+      setDevice({ mqttStatus: 'error' });
+      setErrorType('timeout');
+      setStep('error');
+    }, CONNECT_TIMEOUT_MS);
+
+    // 개발용 시뮬레이션: 2초 후 성공 처리 (실제 연결 구현 시 제거)
+    const sim = setTimeout(() => {
+      clearTimeout(t);
+      anim.stop();
       setDevice({ mqttStatus: 'connected', deviceId });
-      nav.replace('MainTabs');
+      (nav as any).replace('MainTabs');
     }, 2000);
 
-    return () => { anim.stop(); clearTimeout(t); };
+    return () => { anim.stop(); clearTimeout(t); clearTimeout(sim); };
   }, [step]);
 
   const handleConnect = () => {
-    if (!deviceId) return;
+    if (!deviceId.trim()) return;
     connectMqtt(deviceId);
     setStep('connecting');
   };
+
+  const handleRetry = () => {
+    dot1.setValue(0);
+    dot2.setValue(0);
+    setErrorType(null);
+    connectMqtt(deviceId);
+    setStep('connecting');
+  };
+
+  const handleBackToInput = () => {
+    setErrorType(null);
+    setDevice({ mqttStatus: 'idle' });
+    setStep('input');
+  };
+
+  const errorMessage: Record<ErrorType, string> = {
+    timeout: '연결 시간이 초과되었습니다.\n기기가 켜져 있는지 확인해주세요.',
+    auth: '기기 ID가 올바르지 않습니다.\nC7 기기 뒷면의 ID를 확인해주세요.',
+    network: '네트워크 연결을 확인해주세요.\nWi-Fi 또는 데이터가 필요합니다.',
+  };
+
+  if (step === 'error') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.header}>
+          <Text style={styles.mainTitle}>MQTT CONNECT</Text>
+          <Text style={styles.subTitle}>ENTER DEVICE ID TO JOIN CHANNEL</Text>
+        </View>
+        <View style={styles.centerArea}>
+          <View style={[styles.outerCircle, { borderColor: COLORS.accent }]}>
+            <View style={styles.cloudCard}>
+              <Text style={styles.cloudIcon}>⚠️</Text>
+              <Text style={[styles.syncLabel, { color: COLORS.accent }]}>ERROR</Text>
+            </View>
+          </View>
+          <Text style={[styles.connectingTitle, { color: COLORS.accent }]}>연결 실패</Text>
+          <Text style={[styles.connectingSub, { textAlign: 'center', lineHeight: 22 }]}>
+            {errorMessage[errorType ?? 'timeout']}
+          </Text>
+          <Button
+            label="다시 시도  →"
+            onPress={handleRetry}
+            style={{ width: '100%', marginTop: SPACING.xl }}
+          />
+        </View>
+        <TouchableOpacity style={styles.backToAuth} onPress={handleBackToInput}>
+          <Text style={styles.backToAuthText}>‹  기기 ID 재입력</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   if (step === 'connecting') {
     return (
@@ -60,7 +124,6 @@ export default function MqttConnectScreen() {
           <Text style={styles.subTitle}>ENTER DEVICE ID TO JOIN CHANNEL</Text>
         </View>
         <View style={styles.centerArea}>
-          {/* Animated circle */}
           <View style={styles.outerCircle}>
             <Animated.View style={[styles.dot, styles.dot1, {
               opacity: dot1, transform: [{ scale: dot1.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }]
@@ -115,10 +178,10 @@ export default function MqttConnectScreen() {
         <Button
           label={`CONNECT TO BROKER  →`}
           onPress={handleConnect}
-          disabled={!deviceId}
-          variant={deviceId ? 'dark' : 'secondary'}
+          disabled={!deviceId.trim()}
+          variant={deviceId.trim() ? 'dark' : 'secondary'}
           style={styles.connectBtn}
-          textStyle={deviceId ? undefined : { color: COLORS.textMuted }}
+          textStyle={deviceId.trim() ? undefined : { color: COLORS.textMuted }}
         />
       </View>
 

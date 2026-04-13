@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS } from '../../constants/theme';
 
 export default function SplashScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const scale = new Animated.Value(0.8);
   const opacity = new Animated.Value(0);
 

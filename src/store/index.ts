@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   User, DeviceState, PostureSnapshot, DayStats,
   WeekStats, AppNotification, AppSettings, PostureLevel,
@@ -48,15 +50,17 @@ interface AppState {
   updatePosture: (score: number, angle: number) => void;
   setTodayStats: (stats: DayStats) => void;
   setWeeklyStats: (stats: WeekStats[]) => void;
+  addSnapshot: (snapshot: PostureSnapshot) => void;
 
   addNotification: (n: AppNotification) => void;
+  removeNotification: (id: string) => void;
   clearNotifications: () => void;
 
   updateSettings: (partial: Partial<AppSettings>) => void;
   clearRecords: () => void;
 }
 
-// ── Mock 초기 데이터 ────────────────────────────────
+// ── Mock 초기 데이터 (AsyncStorage에 데이터 없을 때만 사용) ──
 const MOCK_WEEKLY: WeekStats[] = [
   { weekLabel: '1주', score: 73 },
   { weekLabel: '2주', score: 71 },
@@ -102,71 +106,91 @@ const MOCK_NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
-// ── Store ───────────────────────────────────────────
-export const useStore = create<AppState>((set, get) => ({
-  user: null,
-  isLoggedIn: false,
+// ── Store (persist로 앱 재시작 후에도 데이터 유지) ──────
+export const useStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      isLoggedIn: false,
 
-  device: {
-    deviceId: null,
-    mqttStatus: 'idle',
-    battery: 75,
-    powerOn: true,
-    vibrationEnabled: true,
-    vibrationIntensity: 66,
-    sensorAngle: 30,
-    powerSaveMode: false,
-  },
+      device: {
+        deviceId: null,
+        mqttStatus: 'idle',
+        battery: 75,
+        powerOn: true,
+        vibrationEnabled: true,
+        vibrationIntensity: 66,
+        sensorAngle: 30,
+        powerSaveMode: false,
+      },
 
-  currentScore: 84,
-  currentAngle: 18.5,
-  currentLevel: 'good',
-  todayStats: MOCK_TODAY,
-  weeklyStats: MOCK_WEEKLY,
-  snapshots: [],
+      currentScore: 84,
+      currentAngle: 18.5,
+      currentLevel: 'good',
+      todayStats: MOCK_TODAY,
+      weeklyStats: MOCK_WEEKLY,
+      snapshots: [],
 
-  notifications: MOCK_NOTIFICATIONS,
+      notifications: MOCK_NOTIFICATIONS,
 
-  settings: {
-    postureAlertEnabled: true,
-    reportAlertEnabled: true,
-    targetScore: 85,
-  },
+      settings: {
+        postureAlertEnabled: true,
+        reportAlertEnabled: true,
+        targetScore: 85,
+      },
 
-  // Auth
-  setUser: (user) => set({ user, isLoggedIn: !!user }),
-  logout: () => set({ user: null, isLoggedIn: false }),
-  updateUser: (partial) =>
-    set((s) => ({ user: s.user ? { ...s.user, ...partial } : null })),
+      // Auth
+      setUser: (user) => set({ user, isLoggedIn: !!user }),
+      logout: () => set({ user: null, isLoggedIn: false }),
+      updateUser: (partial) =>
+        set((s) => ({ user: s.user ? { ...s.user, ...partial } : null })),
 
-  // Device
-  setDevice: (partial) =>
-    set((s) => ({ device: { ...s.device, ...partial } })),
-  connectMqtt: (deviceId) =>
-    set((s) => ({
-      device: { ...s.device, deviceId, mqttStatus: 'connecting' },
-    })),
-  disconnectMqtt: () =>
-    set((s) => ({
-      device: { ...s.device, deviceId: null, mqttStatus: 'disconnected' },
-    })),
+      // Device
+      setDevice: (partial) =>
+        set((s) => ({ device: { ...s.device, ...partial } })),
+      connectMqtt: (deviceId) =>
+        set((s) => ({
+          device: { ...s.device, deviceId, mqttStatus: 'connecting' },
+        })),
+      disconnectMqtt: () =>
+        set((s) => ({
+          device: { ...s.device, deviceId: null, mqttStatus: 'disconnected' },
+        })),
 
-  // Posture
-  updatePosture: (score, angle) =>
-    set({ currentScore: score, currentAngle: angle, currentLevel: scoreToLevel(score) }),
-  setTodayStats: (stats) => set({ todayStats: stats }),
-  setWeeklyStats: (stats) => set({ weeklyStats: stats }),
+      // Posture
+      updatePosture: (score, angle) =>
+        set({ currentScore: score, currentAngle: angle, currentLevel: scoreToLevel(score) }),
+      setTodayStats: (stats) => set({ todayStats: stats }),
+      setWeeklyStats: (stats) => set({ weeklyStats: stats }),
+      addSnapshot: (snapshot) =>
+        set((s) => ({ snapshots: [snapshot, ...s.snapshots].slice(0, 500) })),
 
-  // Notifications
-  addNotification: (n) =>
-    set((s) => ({ notifications: [n, ...s.notifications] })),
-  clearNotifications: () => set({ notifications: [] }),
+      // Notifications
+      addNotification: (n) =>
+        set((s) => ({ notifications: [n, ...s.notifications] })),
+      removeNotification: (id) =>
+        set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
+      clearNotifications: () => set({ notifications: [] }),
 
-  // Settings
-  updateSettings: (partial) =>
-    set((s) => ({ settings: { ...s.settings, ...partial } })),
+      // Settings
+      updateSettings: (partial) =>
+        set((s) => ({ settings: { ...s.settings, ...partial } })),
 
-  // Data
-  clearRecords: () =>
-    set({ snapshots: [], todayStats: null, weeklyStats: [] }),
-}));
+      // Data
+      clearRecords: () =>
+        set({ snapshots: [], todayStats: null, weeklyStats: [] }),
+    }),
+    {
+      name: 'c7-app-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+      // 앱 재시작 후 유지할 항목만 선택 (인증/실시간 데이터 제외)
+      partialize: (state) => ({
+        todayStats: state.todayStats,
+        weeklyStats: state.weeklyStats,
+        snapshots: state.snapshots,
+        notifications: state.notifications,
+        settings: state.settings,
+      }),
+    }
+  )
+);

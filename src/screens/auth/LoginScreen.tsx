@@ -14,7 +14,7 @@ import Input from "../../components/common/Input";
 import { COLORS, FONTS, SPACING, RADIUS } from "../../constants/theme";
 
 export default function LoginScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const setUser = useStore((s) => s.setUser);
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
