@@ -26,12 +26,12 @@ function BellIcon({ size = 22, color = COLORS.text }: { size?: number; color?: s
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
-        d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
-        stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+        d="M18 8a6 6 0 0 0-12 0c0 6.5-2.5 8.5-2.5 8.5h17s-2.5-2-2.5-8.5"
+        stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
       />
       <Path
         d="M13.73 21a2 2 0 0 1-3.46 0"
-        stroke={color} strokeWidth="1.5" strokeLinecap="round"
+        stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
       />
     </Svg>
   );
@@ -49,9 +49,9 @@ function BatteryIndicator({ level }: { level: number }) {
       <Svg width={W + 6} height={H + 2}>
         {/* 배터리 본체 */}
         <Rect x="0" y="1" width={String(W)} height={String(H)} rx="3" ry="3"
-          stroke={fillColor} strokeWidth="1.5" fill="none" />
+          stroke="#C0C8D0" strokeWidth="1.5" fill="none" />
         {/* 배터리 캡 */}
-        <Rect x={String(W + 0.5)} y={String((H + 2) / 2 - 3)} width="4" height="6" rx="1.5" fill={fillColor} />
+        <Rect x={String(W + 0.5)} y={String((H + 2) / 2 - 3)} width="4" height="6" rx="1.5" fill="#C0C8D0" />
         {/* 채우기 */}
         <Rect x="2.5" y="3.5" width={String(fillW)} height={String(H - 5)} rx="1.5" fill={fillColor} />
       </Svg>
@@ -558,9 +558,19 @@ const styles = StyleSheet.create({
   connRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   connDot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
   connText: { fontSize: FONTS.sizes.xs, fontWeight: '700', letterSpacing: 0.5 },
-  bellBtn: { padding: SPACING.sm, position: 'relative' },
+  bellBtn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
   badge: {
-    position: 'absolute', top: 6, right: 6,
+    position: 'absolute', top: -4, right: -4,
     width: 16, height: 16, borderRadius: 8,
     backgroundColor: COLORS.accent, alignItems: 'center', justifyContent: 'center',
   },
@@ -571,7 +581,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SPACING.base,
     marginBottom: SPACING.xs,
-    marginTop: SPACING.xs,
+    marginTop: SPACING.base,
   },
   realDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.accent, marginRight: 6 },
   realtimeLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, fontWeight: '600', flex: 1, letterSpacing: 0.5 },
