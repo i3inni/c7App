@@ -55,7 +55,10 @@ export function MyInfoScreen() {
         <View style={styles.section}>
           <TouchableOpacity style={styles.profileCard} onPress={() => nav.navigate('LoginSecurity')}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarIcon}>👤</Text>
+              <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+                <Circle cx="12" cy="8" r="4" stroke="#fff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#fff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.profileName}>{user?.nickname ?? '사용자'} 님</Text>
@@ -352,7 +355,12 @@ export function LoginSecurityScreen() {
         <View style={styles.card}>
           <View style={styles.rowItem}>
             <View style={styles.iconLabel}>
-              <Text style={styles.rowIcon}>✉️</Text>
+              <View style={secStyles.mintIconBox}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <Path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke="#0ABFBC" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M22 6l-10 7L2 6" stroke="#0ABFBC" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
               <View>
                 <Text style={styles.rowSubLabel}>기본 이메일</Text>
                 <Text style={styles.rowVal}>{user?.email ?? 'user@example.com'}</Text>
@@ -362,7 +370,12 @@ export function LoginSecurityScreen() {
           <View style={styles.separator} />
           <TouchableOpacity style={styles.rowItem} onPress={() => nav.navigate('ChangePassword')}>
             <View style={styles.iconLabel}>
-              <Text style={styles.rowIcon}>🔒</Text>
+              <View style={secStyles.slateIconBox}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z" stroke="#3D4F6B" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#3D4F6B" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
               <Text style={styles.rowLabel}>비밀번호 변경</Text>
             </View>
             <Text style={styles.rowArrow}>›</Text>
@@ -372,6 +385,21 @@ export function LoginSecurityScreen() {
     </SafeAreaView>
   );
 }
+
+const secStyles = StyleSheet.create({
+  mintIconBox: {
+    width: 42, height: 42, borderRadius: 13,
+    backgroundColor: '#E6F9F9',
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: SPACING.sm,
+  },
+  slateIconBox: {
+    width: 42, height: 42, borderRadius: 13,
+    backgroundColor: '#EDF0F5',
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: SPACING.sm,
+  },
+});
 
 // ── 비밀번호 변경 ─────────────────────────────────────
 export function ChangePasswordScreen() {
@@ -388,28 +416,26 @@ export function ChangePasswordScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <PageHeader title="비밀번호 변경" />
-      <ScrollView contentContainerStyle={{ padding: SPACING.base }}>
-        <View style={[styles.card, { marginBottom: SPACING.base }]}>
+      <ScrollView contentContainerStyle={{ padding: SPACING.lg }}>
+        <View style={pwStyles.hintCard}>
           <Text style={pwStyles.hint}>
             계정 보안을 위해 정기적으로 비밀번호를 변경하는 것을 권장합니다.
           </Text>
         </View>
-        <View style={styles.card}>
-          <View style={styles.rowItem}>
-            <Text style={pwStyles.fieldLabel}>현재 비밀번호</Text>
-          </View>
+        <View style={[styles.card, { padding: SPACING.lg }]}>
+          <Text style={pwStyles.fieldLabel}>현재 비밀번호</Text>
           <Input
             value={cur} onChangeText={setCur}
             placeholder="현재 비밀번호를 입력하세요"
             secureTextEntry
-            style={{ marginBottom: SPACING.base }}
+            style={{ marginBottom: SPACING.lg }}
           />
           <Text style={pwStyles.fieldLabel}>새 비밀번호</Text>
           <Input
             value={next} onChangeText={setNext}
             placeholder="새 비밀번호를 입력하세요"
             secureTextEntry
-            style={{ marginBottom: SPACING.sm }}
+            style={{ marginBottom: SPACING.lg }}
           />
           <Text style={pwStyles.fieldLabel}>새 비밀번호 확인</Text>
           <Input
@@ -429,8 +455,16 @@ export function ChangePasswordScreen() {
   );
 }
 const pwStyles = StyleSheet.create({
-  hint: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, lineHeight: 20 },
-  fieldLabel: { fontSize: FONTS.sizes.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: SPACING.xs },
+  hintCard: {
+    backgroundColor: '#F0FAFA',
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: '#C8EDED',
+    padding: SPACING.base,
+    marginBottom: SPACING.base,
+  },
+  hint: { fontSize: FONTS.sizes.sm, color: '#2A7A7A', lineHeight: 22 },
+  fieldLabel: { fontSize: FONTS.sizes.sm, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.sm },
 });
 
 // ── 회원 탈퇴 ──────────────────────────────────────────
@@ -533,8 +567,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
     backgroundColor: '#fff', borderRadius: 24, padding: SPACING.lg, ...SHADOWS.md,
   },
-  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
-  avatarIcon: { fontSize: 24, color: '#fff' },
+  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#5DBD8A', alignItems: 'center', justifyContent: 'center' },
   profileName: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
   profileEmail: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, marginTop: 1 },
   connRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
