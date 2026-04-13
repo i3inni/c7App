@@ -207,7 +207,14 @@ export function MyInfoScreen() {
       />
       <ConfirmModal
         visible={showClearRecords}
-        icon="🗄️"
+        iconNode={
+          <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+            <Path d="M12 2C8.13 2 5 3.34 5 5v14c0 1.66 3.13 3 7 3s7-1.34 7-3V5c0-1.66-3.13-3-7-3z" stroke={COLORS.accent} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M5 5c0 1.66 3.13 3 7 3s7-1.34 7-3" stroke={COLORS.accent} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M5 12c0 1.66 3.13 3 7 3s7-1.34 7-3" stroke={COLORS.accent} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        }
+        iconBg={COLORS.accentLight}
         title="기록을 초기화하시겠습니까?"
         message={'모든 자세 기록이 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.'}
         confirmLabel="삭제"
@@ -445,12 +452,20 @@ export function WithdrawScreen() {
         {/* 경고 */}
         <View style={wdStyles.warnCard}>
           <View style={wdStyles.warnHeader}>
-            <Text style={wdStyles.warnIcon}>⚠️</Text>
-            <Text style={wdStyles.warnTitle}>탈퇴 전에 확인해주세요</Text>
+            <View style={wdStyles.warnIconBox}>
+              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                <Path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke={COLORS.accent} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M12 9v4" stroke={COLORS.accent} strokeWidth={2} strokeLinecap="round" />
+                <Circle cx="12" cy="17" r="1" fill={COLORS.accent} />
+              </Svg>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={wdStyles.warnTitle}>탈퇴 전에 확인해주세요</Text>
+              <Text style={wdStyles.warnDesc}>
+                회원 탈퇴 시 모든 데이터가 영구적으로 삭제되며 복구할 수 없습니다.
+              </Text>
+            </View>
           </View>
-          <Text style={wdStyles.warnDesc}>
-            회원 탈퇴 시 모든 데이터가 영구적으로 삭제되며 복구할 수 없습니다.
-          </Text>
           {items.map((item, i) => (
             <View key={i} style={wdStyles.itemRow}>
               <View style={wdStyles.bullet} />
@@ -461,8 +476,7 @@ export function WithdrawScreen() {
 
         {/* 힌트 */}
         <View style={wdStyles.hintCard}>
-          <Text style={wdStyles.hintText}>
-            💡 잠깐만요!{'\n'}
+          <Text style={wdStyles.hintText}>💡 잠깐만요!{'\n'}
             <Text style={wdStyles.hintLink}>일시적으로 사용을 중단하고 싶으시다면 로그아웃 후 다시 돌아오실 수 있습니다.</Text>
           </Text>
         </View>
@@ -481,17 +495,21 @@ export function WithdrawScreen() {
   );
 }
 const wdStyles = StyleSheet.create({
-  warnCard: { backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: SPACING.base, marginBottom: SPACING.base, ...SHADOWS.sm },
+  warnCard: { backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: SPACING.lg, marginBottom: SPACING.base, ...SHADOWS.md },
   warnHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm },
-  warnIcon: { fontSize: 20 },
+  warnIconBox: {
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: COLORS.accentLight,
+    alignItems: 'center', justifyContent: 'center',
+  },
   warnTitle: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
   warnDesc: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, marginBottom: SPACING.base, lineHeight: 20 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs },
-  bullet: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: COLORS.accent },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm },
+  bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.accent },
   itemText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary },
-  hintCard: { backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.lg, padding: SPACING.base, marginBottom: SPACING.base },
-  hintText: { fontSize: FONTS.sizes.sm, color: COLORS.primary, lineHeight: 20 },
-  hintLink: { color: COLORS.primary },
+  hintCard: { backgroundColor: '#F0FAF4', borderRadius: RADIUS.lg, padding: SPACING.base, marginBottom: SPACING.base },
+  hintText: { fontSize: FONTS.sizes.sm, color: '#2D6A4F', fontWeight: '600', lineHeight: 20 },
+  hintLink: { color: '#2D6A4F', fontWeight: '400' },
 });
 
 // ── 공통 스타일 ───────────────────────────────────────
