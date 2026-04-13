@@ -40,7 +40,7 @@ const EXERCISES: Record<Step, {
 };
 
 export default function AIScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const { currentAngle, currentScore } = useStore();
   const [activeStep, setActiveStep] = useState<Step>(1);
 

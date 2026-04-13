@@ -25,6 +25,8 @@ import {
 } from '../screens/profile/ProfileScreens';
 
 import { COLORS, FONTS, SPACING } from '../constants/theme';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import '../navigation/types'; // 전역 RootParamList 등록
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -71,10 +73,10 @@ function TabIcon({ name, color, size = 22 }: { name: string; color: string; size
   }
 }
 
-function TabBar({ state, descriptors, navigation }: any) {
+function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   return (
     <View style={tabStyles.container}>
-      {state.routes.map((route: any, index: number) => {
+      {state.routes.map((route, index: number) => {
         const focused = state.index === index;
         const color = focused ? COLORS.accent : COLORS.textMuted;
 

@@ -14,7 +14,7 @@ import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 // ── 공통 헤더 ────────────────────────────────────────
 function PageHeader({ title }: { title: string }) {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   return (
     <View style={hStyles.wrap}>
       <TouchableOpacity onPress={() => nav.goBack()} style={hStyles.back}>
@@ -41,7 +41,7 @@ const hStyles = StyleSheet.create({
 
 // ── 내 정보 ──────────────────────────────────────────
 export function MyInfoScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const { user, updateUser, updateSettings, settings, logout, clearRecords } = useStore();
   const [showLogout, setShowLogout] = useState(false);
   const [showClearRecords, setShowClearRecords] = useState(false);
@@ -250,7 +250,7 @@ export function MyInfoScreen() {
 
 // ── 신체 정보 ──────────────────────────────────────
 export function BodyInfoScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const { user, updateUser } = useStore();
   const [showHeight, setShowHeight] = useState(false);
   const [showWeight, setShowWeight] = useState(false);
@@ -345,7 +345,7 @@ const bsStyles = StyleSheet.create({
 
 // ── 로그인 및 보안 ────────────────────────────────────
 export function LoginSecurityScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const { user } = useStore();
   return (
     <SafeAreaView style={styles.safe}>
@@ -403,7 +403,7 @@ const secStyles = StyleSheet.create({
 
 // ── 비밀번호 변경 ─────────────────────────────────────
 export function ChangePasswordScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const [cur, setCur] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -469,7 +469,7 @@ const pwStyles = StyleSheet.create({
 
 // ── 회원 탈퇴 ──────────────────────────────────────────
 export function WithdrawScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const { logout } = useStore();
 
   const items = [
