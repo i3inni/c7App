@@ -1,10 +1,14 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
-import Button from "../../components/common/Button";
-import Input from "../../components/common/Input";
-import { COLORS, FONTS, SPACING, RADIUS } from "../../constants/theme";
+import React, { useState } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { RootStackParamList } from '../../navigation/types';
+import Button from '../../components/common/Button';
+import Input from '../../components/common/Input';
+import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 
 // ── 공용 레이아웃 ───────────────────────────────────
 function SignUpLayout({
@@ -43,8 +47,8 @@ function SignUpLayout({
 
 // ── Step 1: 아이디 ──────────────────────────────────
 export function SignUpStep1() {
-  const nav = useNavigation<any>();
-  const [id, setId] = useState("");
+  const nav = useNavigation();
+  const [id, setId] = useState('');
   const [checked, setChecked] = useState(false);
   const [available, setAvailable] = useState<boolean | null>(null);
 
@@ -112,9 +116,9 @@ export function SignUpStep1() {
 }
 
 // ── Step 2: 비밀번호 ────────────────────────────────
-export function SignUpStep2({ route }: any) {
-  const nav = useNavigation<any>();
-  const [pw, setPw] = useState("");
+export function SignUpStep2({ route }: { route: RouteProp<RootStackParamList, 'SignUpStep2'> }) {
+  const nav = useNavigation();
+  const [pw, setPw] = useState('');
 
   const strength: null | "weak" | "normal" | "strong" =
     pw.length === 0
@@ -190,9 +194,9 @@ export function SignUpStep2({ route }: any) {
 }
 
 // ── Step 3: 닉네임 ──────────────────────────────────
-export function SignUpStep3({ route }: any) {
-  const nav = useNavigation<any>();
-  const [nickname, setNickname] = useState("");
+export function SignUpStep3({ route }: { route: RouteProp<RootStackParamList, 'SignUpStep3'> }) {
+  const nav = useNavigation();
+  const [nickname, setNickname] = useState('');
 
   const handleComplete = async () => {
     // Firebase createUser 자리
@@ -231,8 +235,8 @@ export function SignUpStep3({ route }: any) {
 }
 
 // ── 완료 화면 ────────────────────────────────────────
-export function SignUpComplete({ route }: any) {
-  const nav = useNavigation<any>();
+export function SignUpComplete({ route }: { route: RouteProp<RootStackParamList, 'SignUpComplete'> }) {
+  const nav = useNavigation();
   const { userId, nickname } = route.params ?? {};
 
   return (
@@ -324,20 +328,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   icon: { fontSize: 28 },
-  stageTitle: {
-    fontSize: FONTS.sizes.xl,
-    fontWeight: "700",
-    color: COLORS.text,
-    textAlign: "center",
-  },
-  stageSub: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-    marginTop: SPACING.xs,
-    lineHeight: 20,
-  },
-  nextBtn: { marginTop: "auto" as any, marginBottom: SPACING.base },
+  stageTitle: { fontSize: FONTS.sizes.xl, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
+  stageSub: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, textAlign: 'center', marginTop: SPACING.xs, lineHeight: 20 },
+  nextBtn: { marginTop: 'auto' as const, marginBottom: SPACING.base },
   checkBtn: {
     marginTop: SPACING.sm,
     height: 44,

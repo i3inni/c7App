@@ -304,7 +304,7 @@ const mqStyles = StyleSheet.create({
 
 // ── 메인 ──────────────────────────────────────────────
 export default function DeviceControlScreen() {
-  const nav = useNavigation<any>();
+  const nav = useNavigation();
   const { device, setDevice, disconnectMqtt } = useStore();
   const [activeTab, setActiveTab] = useState<Tab>("battery");
   const [showDisconnect, setShowDisconnect] = useState(false);
@@ -445,14 +445,14 @@ export default function DeviceControlScreen() {
               <View style={styles.sliderRow}>
                 <TouchableOpacity
                   style={styles.angleStepBtn}
-                  onPress={() => setSensorAngle(Math.max(5, sensorAngle - 5))}
+                  onPress={() => { const v = Math.max(5, sensorAngle - 5); setSensorAngle(v); setDevice({ sensorAngle: v }); }}
                 >
                   <Text style={styles.angleStepText}>−</Text>
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
                   <DraggableSlider
                     value={sensorAngle}
-                    onChange={(v) => setSensorAngle(v)}
+                    onChange={(v) => { setSensorAngle(v); setDevice({ sensorAngle: v }); }}
                     min={5}
                     max={90}
                     color={COLORS.primary}
@@ -460,7 +460,7 @@ export default function DeviceControlScreen() {
                 </View>
                 <TouchableOpacity
                   style={styles.angleStepBtn}
-                  onPress={() => setSensorAngle(Math.min(90, sensorAngle + 5))}
+                  onPress={() => { const v = Math.min(90, sensorAngle + 5); setSensorAngle(v); setDevice({ sensorAngle: v }); }}
                 >
                   <Text style={styles.angleStepText}>+</Text>
                 </TouchableOpacity>
@@ -472,7 +472,7 @@ export default function DeviceControlScreen() {
                     <TouchableOpacity
                       key={l}
                       style={[styles.vibBtn, sensorAngle === v && styles.sensorBtnActive]}
-                      onPress={() => setSensorAngle(v)}
+                      onPress={() => { setSensorAngle(v); setDevice({ sensorAngle: v }); }}
                     >
                       <Text style={[styles.vibBtnText, sensorAngle === v && styles.sensorBtnTextActive]}>
                         {l}
@@ -508,7 +508,7 @@ export default function DeviceControlScreen() {
               </View>
               <DraggableSlider
                 value={vibIntensity}
-                onChange={(v) => setVibIntensity(v)}
+                onChange={(v) => { setVibIntensity(v); setDevice({ vibrationIntensity: v }); }}
                 min={0}
                 max={100}
                 color="#8B5CF6"
@@ -523,7 +523,7 @@ export default function DeviceControlScreen() {
                         styles.vibBtn,
                         vibIntensity === v && styles.vibBtnActive,
                       ]}
-                      onPress={() => setVibIntensity(v)}
+                      onPress={() => { setVibIntensity(v); setDevice({ vibrationIntensity: v }); }}
                     >
                       <Text
                         style={[
