@@ -539,11 +539,12 @@ export default function HomeScreen() {
         {/* ── 전원 관리 ── */}
         <View style={styles.powerCard}>
           <View style={styles.powerLeft}>
-            <View style={styles.powerIconBox}>
+            <View style={[styles.powerIconBox, device.powerOn && styles.powerIconBoxOn]}>
               <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <Path
                   d="M12 2v10M6.3 5.3A8 8 0 1 0 17.7 5.3"
-                  stroke="#fff" strokeWidth="2" strokeLinecap="round"
+                  stroke={device.powerOn ? COLORS.primary : '#fff'}
+                  strokeWidth="2" strokeLinecap="round"
                 />
               </Svg>
             </View>
@@ -648,6 +649,9 @@ const styles = StyleSheet.create({
     width: 38, height: 38, borderRadius: 19,
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
+  },
+  powerIconBoxOn: {
+    backgroundColor: 'rgba(29,179,142,0.2)',
   },
   powerTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: '#fff' },
   powerSub: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
