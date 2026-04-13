@@ -18,7 +18,12 @@ GoogleService-Info.plist
 
 # Native builds
 ios/
-android/
+
+# Android - 생성 파일만 제외 (build.gradle 등 커스텀 설정은 포함)
+android/.gradle/
+android/build/
+android/app/build/
+android/app/google-services.json
 
 # Misc
 .DS_Store
