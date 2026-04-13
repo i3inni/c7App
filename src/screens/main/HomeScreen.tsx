@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect, Line, G } from 'react-native-svg';
@@ -26,12 +26,12 @@ function BellIcon({ size = 22, color = COLORS.text }: { size?: number; color?: s
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
-        d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
-        stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+        d="M18 8a6 6 0 0 0-12 0c0 6.5-2.5 8.5-2.5 8.5h17s-2.5-2-2.5-8.5"
+        stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
       />
       <Path
         d="M13.73 21a2 2 0 0 1-3.46 0"
-        stroke={color} strokeWidth="1.5" strokeLinecap="round"
+        stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
       />
     </Svg>
   );
@@ -49,9 +49,9 @@ function BatteryIndicator({ level }: { level: number }) {
       <Svg width={W + 6} height={H + 2}>
         {/* 배터리 본체 */}
         <Rect x="0" y="1" width={String(W)} height={String(H)} rx="3" ry="3"
-          stroke={fillColor} strokeWidth="1.5" fill="none" />
+          stroke="#C0C8D0" strokeWidth="1.5" fill="none" />
         {/* 배터리 캡 */}
-        <Rect x={String(W + 0.5)} y={String((H + 2) / 2 - 3)} width="4" height="6" rx="1.5" fill={fillColor} />
+        <Rect x={String(W + 0.5)} y={String((H + 2) / 2 - 3)} width="4" height="6" rx="1.5" fill="#C0C8D0" />
         {/* 채우기 */}
         <Rect x="2.5" y="3.5" width={String(fillW)} height={String(H - 5)} rx="1.5" fill={fillColor} />
       </Svg>
@@ -64,52 +64,82 @@ const batteryStyles = StyleSheet.create({
 });
 
 // ── 게이지 컴포넌트 ──────────────────────────────────
-// viewBox "0 0 200 100", 반원: M 20 90 A 80 80 0 0 0 180 90
-// strokeDashoffset 방식으로 채움
-function PostureGauge({ score }: { score: number }) {
-  // 반원 둘레 = π * R = π * 80 ≈ 251.2
-  const ARC_LEN = Math.PI * 80;
-  const ratio = Math.min(Math.max(score / 100, 0), 1);
-  const dashOffset = ARC_LEN * (1 - ratio);
+// SVG arc(A) 명령을 완전히 사용하지 않음 — sweep/large-arc 렌더링 버그 우회
+// 삼각함수로 상단 반원 좌표를 직접 계산한 뒤 L(lineto)로 연결
+function PostureGauge({ score, targetScore = 85 }: { score: number; targetScore?: number }) {
+  const R = 76, CX = 100, CY = 90, SW = 15, STEPS = 180;
 
-  // 니들 위치: 왼쪽 180° → 오른쪽 0°, counterclockwise
-  const angleDeg = 180 - ratio * 180;
-  const angleRad = (angleDeg * Math.PI) / 180;
-  const needleX = 100 + 80 * Math.cos(angleRad);
-  const needleY = 90 - 80 * Math.sin(angleRad);
+  const ratio  = Math.min(Math.max(score / 100, 0), 1);
+  const tRatio = Math.min(Math.max(targetScore / 100, 0), 1);
+
+  // 상단 반원 좌표: i=0 → 왼쪽(π), i=STEPS → 오른쪽(0)
+  // angle = π * (1 - t), x = CX + R*cos(angle), y = CY - R*sin(angle)
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i <= STEPS; i++) {
+    const angle = Math.PI * (1 - i / STEPS);
+    pts.push({
+      x: parseFloat((CX + R * Math.cos(angle)).toFixed(2)),
+      y: parseFloat((CY - R * Math.sin(angle)).toFixed(2)),
+    });
+  }
+
+  const mkPath = (ps: { x: number; y: number }[]) =>
+    `M ${ps[0].x} ${ps[0].y}` + ps.slice(1).map(p => ` L ${p.x} ${p.y}`).join('');
+
+  const scoreIdx  = Math.min(Math.round(ratio  * STEPS), STEPS);
+  const targetIdx = Math.min(Math.round(tRatio * STEPS), STEPS);
+  const S = pts[Math.max(scoreIdx, 0)];
+  const T = pts[targetIdx];
 
   return (
-    // viewBox비율 200:100 → 실제 260×130
-    <Svg width={260} height={130} viewBox="0 0 200 100">
+    <Svg width={260} height={128} viewBox="0 0 200 100">
       <Defs>
-        <LinearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <Stop offset="0%" stopColor={COLORS.gaugeGreen} />
-          <Stop offset="50%" stopColor={COLORS.gaugeYellow} />
+        <LinearGradient
+          id="gGrad"
+          gradientUnits="userSpaceOnUse"
+          x1={String(pts[0].x)} y1="0"
+          x2={String(pts[STEPS].x)} y2="0"
+        >
+          <Stop offset="0%"   stopColor={COLORS.gaugeGreen} />
+          <Stop offset="50%"  stopColor={COLORS.gaugeYellow} />
           <Stop offset="100%" stopColor={COLORS.gaugeRed} />
         </LinearGradient>
       </Defs>
 
       {/* 배경 반원 (회색) */}
       <Path
-        d="M 20 90 A 80 80 0 0 0 180 90"
+        d={mkPath(pts)}
         fill="none"
-        stroke="#E5E7EB"
-        strokeWidth="14"
+        stroke="#EAECF0"
+        strokeWidth={SW}
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
-      {/* 점수 반원 (그라디언트, dashOffset으로 채움) */}
-      <Path
-        d="M 20 90 A 80 80 0 0 0 180 90"
-        fill="none"
-        stroke="url(#gaugeGrad)"
-        strokeWidth="14"
-        strokeLinecap="round"
-        strokeDasharray={ARC_LEN}
-        strokeDashoffset={dashOffset}
-      />
-      {/* 니들 핸들 */}
-      <Circle cx={String(needleX)} cy={String(needleY)} r="8" fill="#D1D5DB" />
-      <Circle cx={String(needleX)} cy={String(needleY)} r="4" fill="#fff" />
+
+      {/* 점수 아크 (그라디언트) */}
+      {scoreIdx > 0 && (
+        <Path
+          d={mkPath(pts.slice(0, scoreIdx + 1))}
+          fill="none"
+          stroke="url(#gGrad)"
+          strokeWidth={SW}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+
+      {/* 목표 마커 */}
+      <Circle cx={T.x} cy={T.y} r="5.5" fill="#fff" />
+      <Circle cx={T.x} cy={T.y} r="3.2" fill={COLORS.gaugeGreen} />
+
+      {/* 점수 마커 */}
+      {scoreIdx > 2 && (
+        <>
+          <Circle cx={S.x} cy={S.y} r="10"  fill="rgba(255,255,255,0.9)" />
+          <Circle cx={S.x} cy={S.y} r="6.5" fill="#D1D5DB" />
+          <Circle cx={S.x} cy={S.y} r="3.5" fill="#fff" />
+        </>
+      )}
     </Svg>
   );
 }
@@ -165,9 +195,31 @@ function PostureFigure({ angle }: { angle: number }) {
 }
 
 // ── 목표 점수 모달 ───────────────────────────────────
+const GOAL_MIN = 60;
+const GOAL_MAX = 95;
+
 function GoalModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { settings, updateSettings } = useStore();
   const [val, setVal] = useState(settings.targetScore);
+  const trackWidthRef = useRef(1);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        const r = Math.min(Math.max(e.nativeEvent.locationX / trackWidthRef.current, 0), 1);
+        setVal(Math.round(GOAL_MIN + r * (GOAL_MAX - GOAL_MIN)));
+      },
+      onPanResponderMove: (e) => {
+        const r = Math.min(Math.max(e.nativeEvent.locationX / trackWidthRef.current, 0), 1);
+        setVal(Math.round(GOAL_MIN + r * (GOAL_MAX - GOAL_MIN)));
+      },
+    })
+  ).current;
+
+  const ratio = (val - GOAL_MIN) / (GOAL_MAX - GOAL_MIN);
+
   const presets = [
     { label: '쉬움', score: 75 },
     { label: '보통', score: 85 },
@@ -175,17 +227,48 @@ function GoalModal({ visible, onClose }: { visible: boolean; onClose: () => void
   ];
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="fade">
       <View style={modalStyles.overlay}>
-        <View style={modalStyles.sheet}>
+        <View style={modalStyles.card}>
+          {/* 헤더 */}
           <View style={modalStyles.header}>
             <Text style={modalStyles.title}>목표 점수 설정</Text>
-            <TouchableOpacity onPress={onClose}><Text style={modalStyles.close}>✕</Text></TouchableOpacity>
+            <TouchableOpacity onPress={onClose} style={modalStyles.closeBtn}>
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                <Path d="M18 6L6 18M6 6l12 12" stroke={COLORS.text} strokeWidth="2.5" strokeLinecap="round" />
+              </Svg>
+            </TouchableOpacity>
           </View>
+
           <Text style={modalStyles.desc}>하루 평균 자세 점수 목표를 설정하세요</Text>
 
-          <Text style={modalStyles.bigScore}>{val} <Text style={modalStyles.unit}>점</Text></Text>
+          {/* 큰 점수 */}
+          <Text style={modalStyles.bigScore}>
+            {val}<Text style={modalStyles.unit}> 점</Text>
+          </Text>
 
+          {/* 슬라이더 */}
+          <View
+            style={modalStyles.sliderOuter}
+            onLayout={e => { trackWidthRef.current = e.nativeEvent.layout.width; }}
+            {...panResponder.panHandlers}
+          >
+            {/* 트랙 배경 */}
+            <View style={modalStyles.sliderTrack}>
+              <View style={[modalStyles.sliderFill, { width: `${ratio * 100}%` as any }]} />
+            </View>
+            {/* 썸 */}
+            <View style={[
+              modalStyles.sliderThumb,
+              { left: `${ratio * 100}%` as any, transform: [{ translateX: -12 }] },
+            ]} />
+          </View>
+          <View style={modalStyles.sliderLabels}>
+            <Text style={modalStyles.sliderMin}>{GOAL_MIN}</Text>
+            <Text style={modalStyles.sliderMax}>{GOAL_MAX}</Text>
+          </View>
+
+          {/* 프리셋 버튼 */}
           <View style={modalStyles.presetRow}>
             {presets.map(p => (
               <TouchableOpacity
@@ -203,12 +286,14 @@ function GoalModal({ visible, onClose }: { visible: boolean; onClose: () => void
             ))}
           </View>
 
+          {/* 힌트 */}
           <View style={modalStyles.hint}>
             <Text style={modalStyles.hintText}>
               💡 목표 점수는 홈 화면의 게이지 마커에 반영되며, 통계 그래프에도 표시됩니다.
             </Text>
           </View>
 
+          {/* 확인 버튼 */}
           <TouchableOpacity
             style={modalStyles.confirmBtn}
             onPress={() => { updateSettings({ targetScore: val }); onClose(); }}
@@ -222,28 +307,84 @@ function GoalModal({ visible, onClose }: { visible: boolean; onClose: () => void
 }
 
 const modalStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: '#fff', borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
-    padding: SPACING.xl, paddingBottom: SPACING['3xl'],
+  overlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },
+  card: {
+    width: '100%', backgroundColor: '#fff',
+    borderRadius: 24, padding: SPACING.xl,
+  },
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
   title: { fontSize: FONTS.sizes.lg, fontWeight: '700', color: COLORS.text },
-  close: { fontSize: 18, color: COLORS.textSecondary },
+  closeBtn: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: COLORS.bgSecondary,
+    alignItems: 'center', justifyContent: 'center',
+  },
   desc: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, marginBottom: SPACING.lg },
-  bigScore: { fontSize: FONTS.sizes['4xl'], fontWeight: '800', color: COLORS.primary, textAlign: 'center' },
+  bigScore: {
+    fontSize: FONTS.sizes['4xl'], fontWeight: '800',
+    color: COLORS.primary, textAlign: 'center',
+    marginBottom: SPACING.xl,
+  },
   unit: { fontSize: FONTS.sizes.xl, color: COLORS.textSecondary },
-  presetRow: { flexDirection: 'row', gap: SPACING.sm, marginVertical: SPACING.lg },
+
+  // 슬라이더
+  sliderOuter: {
+    height: 30, justifyContent: 'center',
+    marginBottom: SPACING.xs,
+  },
+  sliderTrack: {
+    height: 6, backgroundColor: COLORS.bgSecondary,
+    borderRadius: 3, overflow: 'hidden',
+  },
+  sliderFill: {
+    height: 6, backgroundColor: COLORS.primary, borderRadius: 3,
+  },
+  sliderThumb: {
+    position: 'absolute',
+    top: 3,                     // (30 - 24) / 2
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: 2.5, borderColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  sliderLabels: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    marginBottom: SPACING.lg,
+  },
+  sliderMin: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted },
+  sliderMax: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted },
+
+  // 프리셋
+  presetRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.lg },
   presetBtn: {
-    flex: 1, padding: SPACING.md, borderRadius: RADIUS.md,
+    flex: 1, paddingVertical: SPACING.md, borderRadius: RADIUS.md,
     backgroundColor: COLORS.bgSecondary, alignItems: 'center',
   },
   presetActive: { backgroundColor: COLORS.primaryLight, borderWidth: 1.5, borderColor: COLORS.primary },
   presetLabel: { fontSize: FONTS.sizes.sm, fontWeight: '600', color: COLORS.textSecondary },
   presetLabelActive: { color: COLORS.primary },
   presetScore: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted, marginTop: 2 },
-  hint: { backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.md, padding: SPACING.md, marginBottom: SPACING.lg },
+
+  // 힌트
+  hint: {
+    backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: 'rgba(29,179,142,0.25)',
+    padding: SPACING.md, marginBottom: SPACING.lg,
+  },
   hintText: { fontSize: FONTS.sizes.xs, color: COLORS.primary, lineHeight: 18 },
+
+  // 확인 버튼
   confirmBtn: {
     backgroundColor: COLORS.primary, borderRadius: RADIUS.full,
     height: 52, alignItems: 'center', justifyContent: 'center',
@@ -256,13 +397,13 @@ function NotifIcon({ category }: { category: string }) {
   if (category === 'posture') {
     return (
       <View style={nIconStyles.circleRed}>
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
           <Path
             d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
             stroke="#FF4B6E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
           />
           <Path d="M12 9v4" stroke="#FF4B6E" strokeWidth="2" strokeLinecap="round" />
-          <Circle cx="12" cy="17" r="0.8" fill="#FF4B6E" />
+          <Circle cx="12" cy="17" r="1" fill="#FF4B6E" />
         </Svg>
       </View>
     );
@@ -270,38 +411,27 @@ function NotifIcon({ category }: { category: string }) {
   if (category === 'report') {
     return (
       <View style={nIconStyles.circleBlue}>
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-          <Path d="M12 2v20M2 12h20" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" />
-          <Path d="M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" />
+        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+          <Path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#3B82F6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="#3B82F6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       </View>
     );
   }
   return (
     <View style={nIconStyles.circleGreen}>
-      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-        <Path
-          d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
-          stroke="#1DB38E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-        />
+      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+        <Path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="#1DB38E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M22 4L12 14.01l-3-3" stroke="#1DB38E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       </Svg>
     </View>
   );
 }
 
 const nIconStyles = StyleSheet.create({
-  circleRed: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: '#FFF0F2', alignItems: 'center', justifyContent: 'center',
-  },
-  circleBlue: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center',
-  },
-  circleGreen: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
-  },
+  circleRed:   { width: 46, height: 46, borderRadius: 23, backgroundColor: '#FFF0F2', alignItems: 'center', justifyContent: 'center' },
+  circleBlue:  { width: 46, height: 46, borderRadius: 23, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+  circleGreen: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#EDFAF5', alignItems: 'center', justifyContent: 'center' },
 });
 
 // ── 알림 드로어 ──────────────────────────────────────
@@ -311,80 +441,92 @@ function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: (
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={nStyles.overlay}>
-        <TouchableOpacity style={nStyles.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={nStyles.sheet}>
-          <View style={nStyles.topRow}>
-            <Text style={nStyles.sheetTitle}>알림</Text>
-            <TouchableOpacity onPress={onClose} style={nStyles.closeBtn}>
-              <Text style={nStyles.closeText}>✕</Text>
+        {/* 헤더 */}
+        <View style={nStyles.topRow}>
+          <Text style={nStyles.sheetTitle}>알림</Text>
+          <TouchableOpacity onPress={onClose} style={nStyles.closeBtn}>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <Path d="M18 6L6 18M6 6l12 12" stroke={COLORS.text} strokeWidth="2.2" strokeLinecap="round" />
+            </Svg>
+          </TouchableOpacity>
+        </View>
+
+        {/* 알림 리스트 */}
+        {notifications.length === 0 ? (
+          <View style={nStyles.empty}>
+            <BellIcon size={48} color={COLORS.border} />
+            <Text style={nStyles.emptyText}>알림이 없습니다</Text>
+          </View>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: SPACING.base }}
+            style={{ flex: 1 }}
+          >
+            {notifications.map((n) => (
+              <View key={n.id} style={nStyles.item}>
+                <NotifIcon category={n.category} />
+                <View style={nStyles.itemContent}>
+                  <View style={nStyles.itemHeader}>
+                    <Text style={nStyles.itemTitle} numberOfLines={1}>{n.title}</Text>
+                    <Text style={nStyles.timeAgo}>{n.timeAgo}</Text>
+                  </View>
+                  <Text style={nStyles.itemBody}>{n.body}</Text>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+
+        {/* 하단 버튼 */}
+        {notifications.length > 0 && (
+          <View style={nStyles.footer}>
+            <TouchableOpacity style={nStyles.clearBtn} onPress={clearNotifications}>
+              <Text style={nStyles.clearText}>모두 지우기</Text>
             </TouchableOpacity>
           </View>
-
-          {notifications.length === 0 ? (
-            <View style={nStyles.empty}>
-              <BellIcon size={52} color={COLORS.border} />
-              <Text style={nStyles.emptyText}>알림이 없습니다</Text>
-            </View>
-          ) : (
-            <>
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {notifications.map(n => (
-                  <View key={n.id} style={nStyles.item}>
-                    <NotifIcon category={n.category} />
-                    <View style={nStyles.itemContent}>
-                      <View style={nStyles.itemHeader}>
-                        <Text style={nStyles.itemTitle} numberOfLines={1}>{n.title}</Text>
-                        <Text style={nStyles.timeAgo}>{n.timeAgo}</Text>
-                      </View>
-                      <Text style={nStyles.itemBody}>{n.body}</Text>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-              <TouchableOpacity style={nStyles.clearBtn} onPress={clearNotifications}>
-                <Text style={nStyles.clearText}>모두 지우기</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+        )}
       </View>
     </Modal>
   );
 }
 
 const nStyles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  backdrop: { ...StyleSheet.absoluteFillObject },
-  sheet: {
-    backgroundColor: COLORS.bg,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '80%',
-    paddingTop: SPACING.xl,
-    paddingHorizontal: SPACING.base,
-    paddingBottom: SPACING.xl,
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(245,246,248,0.92)',
+    paddingTop: 56,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.lg,
   },
   topRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.xl,
   },
   sheetTitle: { fontSize: FONTS.sizes['2xl'], fontWeight: '800', color: COLORS.text },
   closeBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: COLORS.bgSecondary,
+    width: 38, height: 38, borderRadius: 12,
+    backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  closeText: { fontSize: 15, color: COLORS.text, fontWeight: '600' },
   item: {
     flexDirection: 'row',
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.lg,
+    backgroundColor: '#fff',
+    borderRadius: 20,
     padding: SPACING.base,
     marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     gap: SPACING.sm,
     alignItems: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   itemContent: { flex: 1 },
   itemHeader: {
@@ -392,20 +534,24 @@ const nStyles = StyleSheet.create({
     alignItems: 'center', marginBottom: 4,
   },
   itemTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text, flex: 1 },
-  timeAgo: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted, marginLeft: 8 },
+  timeAgo: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted },
   itemBody: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, lineHeight: 18 },
-  empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: SPACING['4xl'] },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: { fontSize: FONTS.sizes.base, color: COLORS.textMuted, marginTop: SPACING.base },
+  footer: { paddingTop: SPACING.sm },
   clearBtn: {
-    marginTop: SPACING.sm,
     height: 52,
     borderRadius: RADIUS.full,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  clearText: { fontSize: FONTS.sizes.base, color: COLORS.textSecondary, fontWeight: '600' },
+  clearText: { fontSize: FONTS.sizes.base, color: COLORS.textSecondary, fontWeight: '700' },
 });
 
 // ── 메인 홈 ──────────────────────────────────────────
@@ -473,7 +619,7 @@ export default function HomeScreen() {
         {/* ── 게이지 섹션 ── */}
         <View style={styles.gaugeSection}>
           <TouchableOpacity onPress={() => setShowGoal(true)} activeOpacity={0.9}>
-            <PostureGauge score={currentScore} />
+            <PostureGauge score={currentScore} targetScore={settings.targetScore} />
           </TouchableOpacity>
 
           {/* 점수 오버레이 */}
@@ -509,11 +655,12 @@ export default function HomeScreen() {
         {/* ── 전원 관리 ── */}
         <View style={styles.powerCard}>
           <View style={styles.powerLeft}>
-            <View style={styles.powerIconBox}>
+            <View style={[styles.powerIconBox, device.powerOn && styles.powerIconBoxOn]}>
               <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <Path
                   d="M12 2v10M6.3 5.3A8 8 0 1 0 17.7 5.3"
-                  stroke="#fff" strokeWidth="2" strokeLinecap="round"
+                  stroke={device.powerOn ? COLORS.primary : '#fff'}
+                  strokeWidth="2" strokeLinecap="round"
                 />
               </Svg>
             </View>
@@ -558,9 +705,19 @@ const styles = StyleSheet.create({
   connRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   connDot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
   connText: { fontSize: FONTS.sizes.xs, fontWeight: '700', letterSpacing: 0.5 },
-  bellBtn: { padding: SPACING.sm, position: 'relative' },
+  bellBtn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
   badge: {
-    position: 'absolute', top: 6, right: 6,
+    position: 'absolute', top: -4, right: -4,
     width: 16, height: 16, borderRadius: 8,
     backgroundColor: COLORS.accent, alignItems: 'center', justifyContent: 'center',
   },
@@ -571,7 +728,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SPACING.base,
     marginBottom: SPACING.xs,
-    marginTop: SPACING.xs,
+    marginTop: SPACING.base,
   },
   realDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.accent, marginRight: 6 },
   realtimeLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, fontWeight: '600', flex: 1, letterSpacing: 0.5 },
@@ -608,6 +765,9 @@ const styles = StyleSheet.create({
     width: 38, height: 38, borderRadius: 19,
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
+  },
+  powerIconBoxOn: {
+    backgroundColor: 'rgba(29,179,142,0.2)',
   },
   powerTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: '#fff' },
   powerSub: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
