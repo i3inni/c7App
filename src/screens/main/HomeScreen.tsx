@@ -251,42 +251,89 @@ const modalStyles = StyleSheet.create({
   confirmText: { color: '#fff', fontSize: FONTS.sizes.base, fontWeight: '700' },
 });
 
+// ── 알림 카테고리 아이콘 ──────────────────────────────
+function NotifIcon({ category }: { category: string }) {
+  if (category === 'posture') {
+    return (
+      <View style={nIconStyles.circleRed}>
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <Path
+            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+            stroke="#FF4B6E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+          />
+          <Path d="M12 9v4" stroke="#FF4B6E" strokeWidth="2" strokeLinecap="round" />
+          <Circle cx="12" cy="17" r="0.8" fill="#FF4B6E" />
+        </Svg>
+      </View>
+    );
+  }
+  if (category === 'report') {
+    return (
+      <View style={nIconStyles.circleBlue}>
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <Path d="M12 2v20M2 12h20" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" />
+          <Path d="M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" />
+        </Svg>
+      </View>
+    );
+  }
+  return (
+    <View style={nIconStyles.circleGreen}>
+      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
+          stroke="#1DB38E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+        />
+      </Svg>
+    </View>
+  );
+}
+
+const nIconStyles = StyleSheet.create({
+  circleRed: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: '#FFF0F2', alignItems: 'center', justifyContent: 'center',
+  },
+  circleBlue: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center',
+  },
+  circleGreen: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+  },
+});
+
 // ── 알림 드로어 ──────────────────────────────────────
 function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { notifications, clearNotifications } = useStore();
 
-  const iconMap: Record<string, string> = {
-    posture: '🔴',
-    report: '✨',
-    device: '📈',
-  };
-
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={nStyles.overlay}>
+        <TouchableOpacity style={nStyles.backdrop} activeOpacity={1} onPress={onClose} />
         <View style={nStyles.sheet}>
+          <View style={nStyles.topRow}>
+            <Text style={nStyles.sheetTitle}>알림</Text>
+            <TouchableOpacity onPress={onClose} style={nStyles.closeBtn}>
+              <Text style={nStyles.closeText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
           {notifications.length === 0 ? (
             <View style={nStyles.empty}>
-              <Text style={nStyles.emptyIcon}>🔔</Text>
+              <BellIcon size={52} color={COLORS.border} />
               <Text style={nStyles.emptyText}>알림이 없습니다</Text>
             </View>
           ) : (
             <>
-              <View style={nStyles.topRow}>
-                <Text style={nStyles.sheetTitle}>알림</Text>
-                <TouchableOpacity onPress={onClose}>
-                  <Text style={nStyles.close}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <ScrollView>
+              <ScrollView showsVerticalScrollIndicator={false}>
                 {notifications.map(n => (
                   <View key={n.id} style={nStyles.item}>
-                    <View style={nStyles.iconBox}>
-                      <Text>{iconMap[n.category] ?? '📢'}</Text>
-                    </View>
+                    <NotifIcon category={n.category} />
                     <View style={nStyles.itemContent}>
                       <View style={nStyles.itemHeader}>
-                        <Text style={nStyles.itemTitle}>{n.title}</Text>
+                        <Text style={nStyles.itemTitle} numberOfLines={1}>{n.title}</Text>
                         <Text style={nStyles.timeAgo}>{n.timeAgo}</Text>
                       </View>
                       <Text style={nStyles.itemBody}>{n.body}</Text>
@@ -306,38 +353,59 @@ function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: (
 }
 
 const nStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: '#3A3A3A' },
-  sheet: { flex: 1, paddingTop: SPACING['4xl'], paddingHorizontal: SPACING.base },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.lg },
-  sheetTitle: { fontSize: FONTS.sizes['2xl'], fontWeight: '800', color: '#fff' },
-  close: {
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  backdrop: { ...StyleSheet.absoluteFillObject },
+  sheet: {
+    backgroundColor: COLORS.bg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+    paddingTop: SPACING.xl,
+    paddingHorizontal: SPACING.base,
+    paddingBottom: SPACING.xl,
+  },
+  topRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  sheetTitle: { fontSize: FONTS.sizes['2xl'], fontWeight: '800', color: COLORS.text },
+  closeBtn: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    textAlign: 'center', lineHeight: 36, color: '#fff', fontSize: 18,
-  },
-  item: {
-    flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: RADIUS.lg, padding: SPACING.base, marginBottom: SPACING.sm,
-  },
-  iconBox: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center', marginRight: SPACING.sm,
-  },
-  itemContent: { flex: 1 },
-  itemHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  itemTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: '#fff' },
-  timeAgo: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.5)' },
-  itemBody: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.7)', marginTop: 4, lineHeight: 18 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyIcon: { fontSize: 48, marginBottom: SPACING.base },
-  emptyText: { fontSize: FONTS.sizes.base, color: 'rgba(255,255,255,0.5)' },
-  clearBtn: {
-    margin: SPACING.base, height: 52, borderRadius: RADIUS.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: COLORS.bgSecondary,
     alignItems: 'center', justifyContent: 'center',
   },
-  clearText: { fontSize: FONTS.sizes.base, color: '#fff', fontWeight: '600' },
+  closeText: { fontSize: 15, color: COLORS.text, fontWeight: '600' },
+  item: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.bgCard,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.base,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: SPACING.sm,
+    alignItems: 'flex-start',
+  },
+  itemContent: { flex: 1 },
+  itemHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 4,
+  },
+  itemTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text, flex: 1 },
+  timeAgo: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted, marginLeft: 8 },
+  itemBody: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, lineHeight: 18 },
+  empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: SPACING['4xl'] },
+  emptyText: { fontSize: FONTS.sizes.base, color: COLORS.textMuted, marginTop: SPACING.base },
+  clearBtn: {
+    marginTop: SPACING.sm,
+    height: 52,
+    borderRadius: RADIUS.full,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearText: { fontSize: FONTS.sizes.base, color: COLORS.textSecondary, fontWeight: '600' },
 });
 
 // ── 메인 홈 ──────────────────────────────────────────

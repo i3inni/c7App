@@ -70,6 +70,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F7F8FA',
     borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     paddingHorizontal: SPACING.base,
     height: 52,
     borderWidth: 1,

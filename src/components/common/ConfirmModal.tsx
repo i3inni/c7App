@@ -36,15 +36,15 @@ export default function ConfirmModal({
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.box}>
-          {iconNode ? (
-            <View style={[styles.iconWrap, iconBg ? { backgroundColor: iconBg } : undefined]}>
-              {iconNode}
-            </View>
-          ) : icon ? (
-            <View style={[styles.iconWrap, iconBg ? { backgroundColor: iconBg } : undefined]}>
-              <Text style={styles.iconText}>{icon}</Text>
-            </View>
-          ) : null}
+        {iconNode ? (
+          <View style={[styles.iconWrap, iconBg ? { backgroundColor: iconBg } : undefined]}>
+            {iconNode}
+          </View>
+        ) : icon ? (
+          <View style={[styles.iconWrap, iconBg ? { backgroundColor: iconBg } : undefined]}>
+            <Text style={styles.iconText}>{icon}</Text>
+          </View>
+        ) : null}
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
           <View style={styles.row}>
@@ -72,11 +72,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', ...SHADOWS.lg,
   },
   iconWrap: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: COLORS.bgSecondary,
     alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.base,
   },
-  iconText: { fontSize: 24 },
   title: {
     fontSize: FONTS.sizes.lg, fontWeight: FONTS.weights.bold,
     color: COLORS.text, marginBottom: SPACING.sm, textAlign: 'center',

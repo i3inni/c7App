@@ -1,0 +1,26 @@
+feature:
+  - head-branch: ["^feature/", "feature/"]
+
+fix:
+  - head-branch: ["^fix/", "fix/"]
+
+refactor:
+  - head-branch: ["^refactor/", "refactor/"]
+
+UI:
+  - changed-files:
+    - any-glob-to-any-file: "src/screens/**"
+    - any-glob-to-any-file: "src/components/**"
+
+store:
+  - changed-files:
+    - any-glob-to-any-file: "src/store/**"
+
+auth:
+  - changed-files:
+    - any-glob-to-any-file: "src/screens/auth/**"
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file: "package.json"
+    - any-glob-to-any-file: "package-lock.json"
