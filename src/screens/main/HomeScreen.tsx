@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated, PanResponder,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect, Line, G } from 'react-native-svg';
@@ -64,89 +64,82 @@ const batteryStyles = StyleSheet.create({
 });
 
 // ── 게이지 컴포넌트 ──────────────────────────────────
-// viewBox "0 0 200 100", 반원: M 20 90 A 80 80 0 0 0 180 90
-// strokeDashoffset 방식으로 채움
-const AnimatedSvgPath = Animated.createAnimatedComponent(Path);
+// SVG arc(A) 명령을 완전히 사용하지 않음 — sweep/large-arc 렌더링 버그 우회
+// 삼각함수로 상단 반원 좌표를 직접 계산한 뒤 L(lineto)로 연결
+function PostureGauge({ score, targetScore = 85 }: { score: number; targetScore?: number }) {
+  const R = 76, CX = 100, CY = 90, SW = 15, STEPS = 180;
 
-function PostureGauge({ score }: { score: number }) {
-  const ARC_LEN = Math.PI * 80;
+  const ratio  = Math.min(Math.max(score / 100, 0), 1);
+  const tRatio = Math.min(Math.max(targetScore / 100, 0), 1);
 
-  const animScore = useRef(new Animated.Value(score)).current;
-  const pulseScale = useRef(new Animated.Value(1)).current;
-  const isExcellent = score >= 90;
+  // 상단 반원 좌표: i=0 → 왼쪽(π), i=STEPS → 오른쪽(0)
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i <= STEPS; i++) {
+    const angle = Math.PI * (1 - i / STEPS);
+    pts.push({
+      x: parseFloat((CX + R * Math.cos(angle)).toFixed(2)),
+      y: parseFloat((CY - R * Math.sin(angle)).toFixed(2)),
+    });
+  }
 
-  // 점수 변화 시 게이지 부드럽게 전환 (0.8초)
-  useEffect(() => {
-    Animated.timing(animScore, {
-      toValue: score,
-      duration: 800,
-      useNativeDriver: false,
-    }).start();
-  }, [score]);
+  const mkPath = (ps: { x: number; y: number }[]) =>
+    `M ${ps[0].x} ${ps[0].y}` + ps.slice(1).map(p => ` L ${p.x} ${p.y}`).join('');
 
-  // 90점 이상일 때 미세 펄스 애니메이션
-  useEffect(() => {
-    if (isExcellent) {
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseScale, { toValue: 1.025, duration: 700, useNativeDriver: true }),
-          Animated.timing(pulseScale, { toValue: 1, duration: 700, useNativeDriver: true }),
-        ])
-      );
-      pulse.start();
-      return () => pulse.stop();
-    } else {
-      pulseScale.setValue(1);
-    }
-  }, [isExcellent]);
-
-  const dashOffset = animScore.interpolate({
-    inputRange: [0, 100],
-    outputRange: [ARC_LEN, 0],
-  });
-
-  // 니들 위치 (score 기준 정적 계산)
-  const ratio = Math.min(Math.max(score / 100, 0), 1);
-  const angleDeg = 180 - ratio * 180;
-  const angleRad = (angleDeg * Math.PI) / 180;
-  const needleX = 100 + 80 * Math.cos(angleRad);
-  const needleY = 90 - 80 * Math.sin(angleRad);
-  const needleInnerColor = isExcellent ? COLORS.scoreExcellent : '#fff';
+  const scoreIdx  = Math.min(Math.round(ratio  * STEPS), STEPS);
+  const targetIdx = Math.min(Math.round(tRatio * STEPS), STEPS);
+  const S = pts[Math.max(scoreIdx, 0)];
+  const T = pts[targetIdx];
 
   return (
-    <Animated.View style={{ transform: [{ scale: pulseScale }] }}>
-      <Svg width={260} height={130} viewBox="0 0 200 100">
-        <Defs>
-          <LinearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <Stop offset="0%" stopColor={COLORS.gaugeGreen} />
-            <Stop offset="50%" stopColor={COLORS.gaugeYellow} />
-            <Stop offset="100%" stopColor={COLORS.gaugeRed} />
-          </LinearGradient>
-        </Defs>
+    <Svg width={260} height={128} viewBox="0 0 200 100">
+      <Defs>
+        <LinearGradient
+          id="gGrad"
+          gradientUnits="userSpaceOnUse"
+          x1={String(pts[0].x)} y1="0"
+          x2={String(pts[STEPS].x)} y2="0"
+        >
+          <Stop offset="0%"   stopColor={COLORS.gaugeGreen} />
+          <Stop offset="50%"  stopColor={COLORS.gaugeYellow} />
+          <Stop offset="100%" stopColor={COLORS.gaugeRed} />
+        </LinearGradient>
+      </Defs>
 
-        {/* 배경 반원 (회색) */}
+      {/* 배경 반원 (회색) */}
+      <Path
+        d={mkPath(pts)}
+        fill="none"
+        stroke="#EAECF0"
+        strokeWidth={SW}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* 점수 아크 (그라디언트) */}
+      {scoreIdx > 0 && (
         <Path
-          d="M 20 90 A 80 80 0 0 0 180 90"
+          d={mkPath(pts.slice(0, scoreIdx + 1))}
           fill="none"
-          stroke="#E5E7EB"
-          strokeWidth="14"
+          stroke="url(#gGrad)"
+          strokeWidth={SW}
           strokeLinecap="round"
+          strokeLinejoin="round"
         />
-        {/* 점수 반원 (그라디언트, 애니메이션) */}
-        <AnimatedSvgPath
-          d="M 20 90 A 80 80 0 0 0 180 90"
-          fill="none"
-          stroke="url(#gaugeGrad)"
-          strokeWidth="14"
-          strokeLinecap="round"
-          strokeDasharray={ARC_LEN}
-          strokeDashoffset={dashOffset}
-        />
-        {/* 니들 핸들 */}
-        <Circle cx={String(needleX)} cy={String(needleY)} r="8" fill="#D1D5DB" />
-        <Circle cx={String(needleX)} cy={String(needleY)} r="4" fill={needleInnerColor} />
-      </Svg>
-    </Animated.View>
+      )}
+
+      {/* 목표 마커 */}
+      <Circle cx={T.x} cy={T.y} r="5.5" fill="#fff" />
+      <Circle cx={T.x} cy={T.y} r="3.2" fill={COLORS.gaugeGreen} />
+
+      {/* 점수 마커 */}
+      {scoreIdx > 2 && (
+        <>
+          <Circle cx={S.x} cy={S.y} r="10"  fill="rgba(255,255,255,0.9)" />
+          <Circle cx={S.x} cy={S.y} r="6.5" fill="#D1D5DB" />
+          <Circle cx={S.x} cy={S.y} r="3.5" fill="#fff" />
+        </>
+      )}
+    </Svg>
   );
 }
 
@@ -653,7 +646,7 @@ export default function HomeScreen() {
           <View style={styles.statBox}>
             <Text style={styles.statKey}>STATUS</Text>
             <Text style={[styles.statStatus, { color }]}>
-              {currentLevel === 'excellent' ? '✅' : currentLevel === 'good' ? '✅' : '⚠'} {levelLabel[currentLevel]}
+              ⚠ {levelLabel[currentLevel]}
             </Text>
           </View>
         </View>
