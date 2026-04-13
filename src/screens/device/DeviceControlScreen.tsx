@@ -332,9 +332,7 @@ export default function DeviceControlScreen() {
           <Text style={styles.headerTitle}>디바이스 제어</Text>
           <Text style={styles.headerSub}>C7 Hardware Interface</Text>
         </View>
-        <TouchableOpacity style={styles.infoBtn}>
-          <Text style={styles.infoIcon}>ⓘ</Text>
-        </TouchableOpacity>
+        <View style={{ width: 36 }} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -680,7 +678,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.md,
   },
   angleVal: { fontSize: FONTS.sizes.base, fontWeight: "800" },
   sliderRow: {
