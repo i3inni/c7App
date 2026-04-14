@@ -52,8 +52,7 @@ export const loginWithGoogle = async () => {
   GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
   await GoogleSignin.hasPlayServices();
   const response = await GoogleSignin.signIn();
-  console.log('Google response:', JSON.stringify(response));
-  console.log('webClientId:', GOOGLE_WEB_CLIENT_ID);
+
 
   if (response.type !== 'success') throw new Error('Google 로그인 취소됨');
   const idToken = response.data?.idToken;
