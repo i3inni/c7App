@@ -5,13 +5,15 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useStore } from "../../store";
 import Button from "../../components/common/Button";
 import Input from "../../components/common/Input";
-import { COLORS, FONTS, SPACING, RADIUS } from "../../constants/theme";
+import { COLORS, FONTS, SPACING } from "../../constants/theme";
+import { login, loginWithGoogle } from "../../services/authService";
 
 export default function LoginScreen() {
   const nav = useNavigation();
@@ -19,19 +21,48 @@ export default function LoginScreen() {
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
+  // 이메일/비밀번호 로그인
   const handleLogin = async () => {
     if (!id || !pw) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 800)); // Firebase auth 자리
-    setUser({ id, nickname: id, isGuest: false });
-    nav.replace("MqttConnect");
-    setLoading(false);
+    try {
+      const user = await login(id, pw);
+      setUser({ id: user.uid, nickname: user.email ?? id, isGuest: false });
+      (nav as any).replace("MqttConnect");
+    } catch (e: any) {
+      Alert.alert("로그인 실패", firebaseErrorMessage(e.code));
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // 구글 로그인
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    try {
+      const user = await loginWithGoogle();
+      setUser({
+        id: user.uid,
+        nickname: user.displayName ?? "사용자",
+        email: user.email ?? undefined,
+        isGuest: false,
+      });
+      (nav as any).replace("MqttConnect");
+    } catch (e: any) {
+      if (e.message !== "Google 로그인 취소됨") {
+        Alert.alert("구글 로그인 실패", e.message);
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  // 비회원
   const handleGuest = () => {
     setUser({ id: "guest", nickname: "비회원", isGuest: true });
-    nav.replace("MqttConnect");
+    (nav as any).replace("MqttConnect");
   };
 
   return (
@@ -51,7 +82,7 @@ export default function LoginScreen() {
 
         {/* Form */}
         <View style={styles.form}>
-          <Input value={id} onChangeText={setId} placeholder="아이디" />
+          <Input value={id} onChangeText={setId} placeholder="이메일" keyboardType="email-address" />
           <Input
             value={pw}
             onChangeText={setPw}
@@ -67,7 +98,7 @@ export default function LoginScreen() {
             style={styles.loginBtn}
           />
           <TouchableOpacity
-            onPress={() => nav.navigate("SignUpStep1")}
+            onPress={() => (nav as any).navigate("SignUpStep1")}
             style={styles.signupBtn}
           >
             <Text style={styles.signupText}>회원가입</Text>
@@ -81,12 +112,13 @@ export default function LoginScreen() {
           <View style={styles.line} />
         </View>
 
-        {/* Kakao */}
+        {/* 구글 로그인 */}
         <Button
-          label="💬  카카오 로그인"
-          onPress={() => {}} // 카카오 SDK 연동 자리
-          variant="kakao"
-          style={styles.kakaoBtn}
+          label="🔵  Google로 로그인"
+          onPress={handleGoogleLogin}
+          loading={googleLoading}
+          variant="secondary"
+          style={styles.googleBtn}
         />
 
         {/* Guest */}
@@ -97,6 +129,18 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
+
+// Firebase 에러 코드 → 한국어 메시지 변환
+const firebaseErrorMessage = (code: string): string => {
+  switch (code) {
+    case "auth/user-not-found":     return "존재하지 않는 계정입니다.";
+    case "auth/wrong-password":     return "비밀번호가 틀렸습니다.";
+    case "auth/invalid-email":      return "이메일 형식이 올바르지 않습니다.";
+    case "auth/too-many-requests":  return "잠시 후 다시 시도해주세요.";
+    case "auth/network-request-failed": return "네트워크 연결을 확인해주세요.";
+    default:                        return "로그인 중 오류가 발생했습니다.";
+  }
+};
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#fff" },
@@ -146,7 +190,7 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
 
-  kakaoBtn: {},
+  googleBtn: {},
   guestBtn: {
     alignSelf: "center",
     marginTop: SPACING.base,
