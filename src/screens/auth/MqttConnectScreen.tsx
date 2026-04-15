@@ -16,7 +16,8 @@ const CONNECT_TIMEOUT_MS = 10000;
 
 export default function MqttConnectScreen() {
   const nav = useNavigation();
-  const { connectMqtt, setDevice } = useStore();
+  const { connectMqtt, setDevice, user } = useStore();
+  const isGuest = user?.isGuest ?? false;
   const [deviceId, setDeviceId] = useState('');
   const [step, setStep] = useState<Step>('input');
   const [errorType, setErrorType] = useState<ErrorType | null>(null);
@@ -53,7 +54,7 @@ export default function MqttConnectScreen() {
       clearTimeout(t);
       anim.stop();
       setDevice({ mqttStatus: 'connected', deviceId });
-      (nav as any).replace('MainTabs');
+      (nav as any).replace(isGuest ? 'GuestDevice' : 'MainTabs');
     }, 2000);
 
     return () => { anim.stop(); clearTimeout(t); clearTimeout(sim); };

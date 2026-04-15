@@ -305,7 +305,8 @@ const mqStyles = StyleSheet.create({
 // ── 메인 ──────────────────────────────────────────────
 export default function DeviceControlScreen() {
   const nav = useNavigation();
-  const { device, setDevice, disconnectMqtt } = useStore();
+  const { device, setDevice, disconnectMqtt, user } = useStore();
+  const isGuest = user?.isGuest ?? false;
   const [activeTab, setActiveTab] = useState<Tab>("battery");
   const [showDisconnect, setShowDisconnect] = useState(false);
   const [sensorAngle, setSensorAngle] = useState(device.sensorAngle);
@@ -325,9 +326,11 @@ export default function DeviceControlScreen() {
     <SafeAreaView style={styles.safe}>
       {/* 헤더 */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
-          <Text style={styles.backIcon}>‹</Text>
-        </TouchableOpacity>
+        {!isGuest && (
+          <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
+            <Text style={styles.backIcon}>‹</Text>
+          </TouchableOpacity>
+        )}
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>디바이스 제어</Text>
           <Text style={styles.headerSub}>C7 Hardware Interface</Text>
