@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder, Animated,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect, Line, G } from 'react-native-svg';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect, G } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
 import Toggle from '../../components/common/Toggle';
@@ -69,7 +69,7 @@ const batteryStyles = StyleSheet.create({
 // strokeDashoffset 방식으로 채움
 const AnimatedSvgPath = Animated.createAnimatedComponent(Path);
 
-function PostureGauge({ score }: { score: number }) {
+function PostureGauge({ score, targetScore }: { score: number; targetScore?: number }) {
   const ARC_LEN = Math.PI * 80;
 
   const animScore = useRef(new Animated.Value(score)).current;
@@ -442,47 +442,40 @@ const nIconStyles = StyleSheet.create({
 });
 
 // ── 스와이프 삭제 알림 아이템 ─────────────────────────
-function SwipeableNotifItem({ n, onRemove }: { n: AppNotification; onRemove: (id: string) => void }) {
-  const translateX = useRef(new Animated.Value(0)).current;
+const SCREEN_W = Dimensions.get('window').width;
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy),
-      onPanResponderMove: (_, gs) => {
-        if (gs.dx < 0) translateX.setValue(gs.dx);
-      },
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dx < -80) {
-          Animated.timing(translateX, {
-            toValue: -500,
-            duration: 180,
-            useNativeDriver: true,
-          }).start(() => onRemove(n.id));
-        } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 4,
-          }).start();
-        }
-      },
-    })
-  ).current;
+function SwipeableNotifItem({ n, onRemove }: { n: AppNotification; onRemove: (id: string) => void }) {
+  // 오버레이 좌우 패딩(SPACING.lg=20) 제외한 아이템 너비
+  const itemWidth = SCREEN_W - SPACING.lg * 2;
 
   return (
-    <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
-      <View style={nStyles.item}>
-        <NotifIcon category={n.category} />
-        <View style={nStyles.itemContent}>
-          <View style={nStyles.itemHeader}>
-            <Text style={nStyles.itemTitle} numberOfLines={1}>{n.title}</Text>
-            <Text style={nStyles.timeAgo}>{n.timeAgo}</Text>
+    <View style={{ marginBottom: SPACING.sm }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        decelerationRate="fast"
+        snapToOffsets={[0, 80]}
+        snapToEnd={false}
+      >
+        {/* 알림 내용 */}
+        <View style={[nStyles.item, { width: itemWidth, marginBottom: 0 }]}>
+          <NotifIcon category={n.category} />
+          <View style={nStyles.itemContent}>
+            <View style={nStyles.itemHeader}>
+              <Text style={nStyles.itemTitle} numberOfLines={1}>{n.title}</Text>
+              <Text style={nStyles.timeAgo}>{n.timeAgo}</Text>
+            </View>
+            <Text style={nStyles.itemBody}>{n.body}</Text>
           </View>
-          <Text style={nStyles.itemBody}>{n.body}</Text>
         </View>
-      </View>
-    </Animated.View>
+        {/* 왼쪽으로 밀면 나오는 삭제 버튼 */}
+        <TouchableOpacity style={nStyles.deleteBtn} onPress={() => onRemove(n.id)}>
+          <Text style={nStyles.deleteBtnText}>삭제</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -599,6 +592,15 @@ const nStyles = StyleSheet.create({
     elevation: 3,
   },
   clearText: { fontSize: FONTS.sizes.base, color: COLORS.textSecondary, fontWeight: '700' },
+  deleteBtn: {
+    width: 80,
+    backgroundColor: COLORS.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: RADIUS.lg,
+    marginLeft: SPACING.sm,
+  },
+  deleteBtnText: { color: '#fff', fontWeight: '700', fontSize: FONTS.sizes.sm },
 });
 
 // ── 메인 홈 ──────────────────────────────────────────
