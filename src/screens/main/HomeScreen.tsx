@@ -9,6 +9,7 @@ import { useStore } from '../../store';
 import Toggle from '../../components/common/Toggle';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import type { AppNotification } from '../../constants/types';
+import { deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
 
 // ── SVG 아이콘 ────────────────────────────────────────
 function PersonIcon({ size = 22, color = COLORS.text }: { size?: number; color?: string }) {
@@ -474,7 +475,17 @@ function SwipeableNotifItem({ n, onRemove }: { n: AppNotification; onRemove: (id
 
 // ── 알림 드로어 ──────────────────────────────────────
 function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { notifications, removeNotification, clearNotifications } = useStore();
+  const { notifications, removeNotification, clearNotifications, user } = useStore();
+
+  const handleRemove = (id: string) => {
+    removeNotification(id);                             // 로컬 즉시 반영
+    if (user?.id) deleteNotification(id).catch(() => {}); // Firestore 삭제
+  };
+
+  const handleClearAll = () => {
+    clearNotifications();                                        // 로컬 즉시 반영
+    if (user?.id) clearNotifFS(user.id).catch(() => {});         // Firestore 전체 삭제
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -505,7 +516,7 @@ function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: (
               <SwipeableNotifItem
                 key={n.id}
                 n={n}
-                onRemove={removeNotification}
+                onRemove={handleRemove}
               />
             ))}
           </ScrollView>
@@ -514,7 +525,7 @@ function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: (
         {/* 하단 버튼 */}
         {notifications.length > 0 && (
           <View style={nStyles.footer}>
-            <TouchableOpacity style={nStyles.clearBtn} onPress={clearNotifications}>
+            <TouchableOpacity style={nStyles.clearBtn} onPress={handleClearAll}>
               <Text style={nStyles.clearText}>모두 지우기</Text>
             </TouchableOpacity>
           </View>
