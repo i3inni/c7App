@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator, ScrollView, StyleSheet, Text,
   TouchableOpacity, View,
@@ -24,17 +24,25 @@ export default function AIScreen() {
   const nav = useNavigation();
   const {
     currentAngle, currentScore, todayStats, weeklyStats,
-    lastExercises, setLastExercises,
+    lastExercisesAt, setLastExercises,
     lastDiagnosisAt,
     lastWeeklyReport, setLastWeeklyReport,
   } = useStore();
 
-  const DIAGNOSIS_INTERVAL = 6 * 60 * 60 * 1000; // 6시간
   const now = Date.now();
+
+  // 진단: 6시간
+  const DIAGNOSIS_INTERVAL = 6 * 60 * 60 * 1000;
   const canRefresh = !lastDiagnosisAt || (now - lastDiagnosisAt) >= DIAGNOSIS_INTERVAL;
   const nextRefreshMs = lastDiagnosisAt ? Math.max(0, DIAGNOSIS_INTERVAL - (now - lastDiagnosisAt)) : 0;
   const nextRefreshHour = Math.floor(nextRefreshMs / (60 * 60 * 1000));
   const nextRefreshMin = Math.floor((nextRefreshMs % (60 * 60 * 1000)) / (60 * 1000));
+
+  // 솔루션: 1시간
+  const EXERCISE_INTERVAL = 60 * 60 * 1000;
+  const canRefreshEx = !lastExercisesAt || (now - lastExercisesAt) >= EXERCISE_INTERVAL;
+  const nextExMs = lastExercisesAt ? Math.max(0, EXERCISE_INTERVAL - (now - lastExercisesAt)) : 0;
+  const nextExMin = Math.floor(nextExMs / (60 * 1000));
 
   const [activeStep, setActiveStep] = useState<Step>(1);
 
@@ -45,25 +53,23 @@ export default function AIScreen() {
   );
 
   // 단계별 운동: LLM, 캐시 우선
-  const [exercises, setExercises] = useState<[ExerciseStep, ExerciseStep, ExerciseStep] | null>(lastExercises);
-  const [exLoading, setExLoading] = useState(!lastExercises);
+  const [exercises, setExercises] = useState<[ExerciseStep, ExerciseStep, ExerciseStep] | null>(null);
+  const [exLoading, setExLoading] = useState(false);
+  const [exError, setExError] = useState<string | null>(null);
 
   const fetchExercises = useCallback(async () => {
-    if (!canRefresh) { setExLoading(false); return; }
+    setExLoading(true);
+    setExError(null);
     try {
       const result = await analyzeExercises(diagnosis.level, currentAngle, currentScore);
       setExercises(result);
       setLastExercises(result);
-    } catch {
-      // 실패 시 조용히 무시 (이전 캐시 유지)
+    } catch (e) {
+      setExError(e instanceof Error ? e.message : '운동 추천 중 오류가 발생했습니다.');
     } finally {
       setExLoading(false);
     }
-  }, [diagnosis.level, currentAngle, currentScore, canRefresh]);
-
-  useEffect(() => {
-    fetchExercises();
-  }, []);
+  }, [diagnosis.level, currentAngle, currentScore]);
 
   // 주간 리포트: 버튼 눌러야 분석
   const [report, setReport] = useState<WeeklyReport | null>(lastWeeklyReport);
@@ -161,45 +167,86 @@ export default function AIScreen() {
             <Text style={styles.sectionTitle}>단계별 솔루션</Text>
           </View>
 
-          <View style={styles.stepRow}>
-            {([1, 2, 3] as Step[]).map((s) => (
-              <TouchableOpacity
-                key={s}
-                style={[styles.stepTab, activeStep === s && { backgroundColor: STEP_COLORS[s] }]}
-                onPress={() => setActiveStep(s)}
-              >
-                <Text style={[styles.stepTabText, activeStep === s && styles.stepTabTextActive]}>
-                  {s}단계
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {!exercises && !exLoading && !exError && canRefreshEx && (
+            <TouchableOpacity style={styles.solutionBtn} onPress={fetchExercises} activeOpacity={0.85}>
+              <View style={styles.solutionBtnInner}>
+                <Text style={styles.solutionBtnIcon}>🏋️</Text>
+                <View>
+                  <Text style={styles.solutionBtnTitle}>맞춤 운동 솔루션 받기</Text>
+                  <Text style={styles.solutionBtnSub}>진단 결과 기반 3단계 교정 운동 추천</Text>
+                </View>
+              </View>
+              <Text style={styles.solutionBtnArrow}>›</Text>
+            </TouchableOpacity>
+          )}
 
-          {exLoading ? (
+          {exLoading && (
             <View style={styles.exLoadingBox}>
               <ActivityIndicator size="small" color={COLORS.primary} />
               <Text style={styles.exLoadingText}>AI가 맞춤 운동을 준비 중입니다...</Text>
             </View>
-          ) : ex ? (
-            <View style={[styles.exCard, { borderLeftColor: stepColor, borderLeftWidth: 3 }]}>
-              <View style={styles.exTop}>
-                <Text style={styles.exActivityIcon}>📈</Text>
-                <View style={[styles.exBadge, { backgroundColor: stepColor }]}>
-                  <Text style={styles.exBadgeText}>STEP {activeStep}</Text>
-                </View>
-                <Text style={styles.exTitle}>{ex.title}</Text>
-              </View>
-              <Text style={styles.exDesc}>{ex.desc}</Text>
-              <View style={styles.exRepsRow}>
-                <Text style={styles.repsLabel}>권장 횟수</Text>
-                <Text style={[styles.repsVal, { color: stepColor }]}>{ex.reps}</Text>
-              </View>
-              <View style={styles.tipBox}>
-                <Text style={styles.tipText}>💡 Tip: {ex.tip}</Text>
-              </View>
+          )}
+
+          {exError && !exLoading && (
+            <View style={{ gap: SPACING.sm }}>
+              <Text style={styles.exErrorText}>⚠️ {exError}</Text>
+              <TouchableOpacity style={styles.analyzeBtn} onPress={fetchExercises}>
+                <Text style={styles.analyzeBtnText}>다시 받기</Text>
+              </TouchableOpacity>
             </View>
-          ) : null}
+          )}
+
+          {exercises && !exLoading && (
+            <>
+              <View style={styles.stepRow}>
+                {([1, 2, 3] as Step[]).map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[styles.stepTab, activeStep === s && { backgroundColor: STEP_COLORS[s] }]}
+                    onPress={() => setActiveStep(s)}
+                  >
+                    <Text style={[styles.stepTabText, activeStep === s && styles.stepTabTextActive]}>
+                      {s}단계
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {ex && (
+                <View style={[styles.exCard, { borderLeftColor: stepColor, borderLeftWidth: 3 }]}>
+                  <View style={styles.exTop}>
+                    <Text style={styles.exActivityIcon}>📈</Text>
+                    <View style={[styles.exBadge, { backgroundColor: stepColor }]}>
+                      <Text style={styles.exBadgeText}>STEP {activeStep}</Text>
+                    </View>
+                    <Text style={styles.exTitle}>{ex.title}</Text>
+                  </View>
+                  <Text style={styles.exDesc}>{ex.desc}</Text>
+                  <View style={styles.exRepsRow}>
+                    <Text style={styles.repsLabel}>권장 횟수</Text>
+                    <Text style={[styles.repsVal, { color: stepColor }]}>{ex.reps}</Text>
+                  </View>
+                  <View style={styles.tipBox}>
+                    <Text style={styles.tipText}>💡 Tip: {ex.tip}</Text>
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+
         </View>
+
+        {/* 솔루션 타이머 뱃지 / 갱신 버튼 */}
+        {exercises && !exLoading && (
+          canRefreshEx ? (
+            <TouchableOpacity style={styles.refreshInfo} onPress={fetchExercises}>
+              <Text style={styles.refreshInfoText}>🔄 새 솔루션 받기</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.refreshInfo}>
+              <Text style={styles.refreshInfoText}>🕐 다음 솔루션 갱신까지 {nextExMin}분</Text>
+            </View>
+          )
+        )}
 
         {/* 주간 건강 리포트 */}
         <View style={[styles.section, { paddingHorizontal: SPACING.base }]}>
@@ -215,8 +262,15 @@ export default function AIScreen() {
             </View>
 
             {!report && !reportLoading && !reportError && (
-              <TouchableOpacity style={styles.analyzeBtn} onPress={fetchReport}>
-                <Text style={styles.analyzeBtnText}>✦ 분석하기</Text>
+              <TouchableOpacity style={styles.reportAnalyzeBtn} onPress={fetchReport} activeOpacity={0.85}>
+                <View style={styles.reportAnalyzeBtnInner}>
+                  <Text style={styles.reportAnalyzeBtnIcon}>📊</Text>
+                  <View>
+                    <Text style={styles.reportAnalyzeBtnTitle}>주간 리포트 분석하기</Text>
+                    <Text style={styles.reportAnalyzeBtnSub}>7일간의 자세 데이터 AI 분석</Text>
+                  </View>
+                </View>
+                <Text style={styles.reportAnalyzeBtnArrow}>›</Text>
               </TouchableOpacity>
             )}
 
@@ -362,9 +416,55 @@ const styles = StyleSheet.create({
   reportLoadingBox: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.sm },
   reportLoadingText: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.5)' },
   reportErrorText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
+  exErrorText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
+
+  solutionBtn: {
+    backgroundColor: '#fff',
+    borderRadius: RADIUS.xl,
+    padding: SPACING.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...SHADOWS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary + '30',
+  },
+  solutionBtnInner: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  solutionBtnIcon: { fontSize: 28 },
+  solutionBtnTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text },
+  solutionBtnSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginTop: 2 },
+  solutionBtnArrow: { fontSize: 24, color: COLORS.primary, fontWeight: '700' },
+
+  reportAnalyzeBtn: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: RADIUS.xl,
+    padding: SPACING.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  reportAnalyzeBtnInner: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  reportAnalyzeBtnIcon: { fontSize: 28 },
+  reportAnalyzeBtnTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: '#fff' },
+  reportAnalyzeBtnSub: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
+  reportAnalyzeBtnArrow: { fontSize: 24, color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
+
+  anotherSolutionBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: SPACING.xs, marginTop: SPACING.sm,
+    backgroundColor: COLORS.bgSecondary,
+    borderRadius: RADIUS.full,
+    paddingVertical: SPACING.sm, paddingHorizontal: SPACING.base,
+    alignSelf: 'center',
+  },
+  anotherSolutionIcon: { fontSize: 14 },
+  anotherSolutionText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  cardDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: SPACING.sm },
 
   refreshInfo: {
-    marginHorizontal: SPACING.base, marginTop: -SPACING.md, marginBottom: SPACING.xs,
+    marginHorizontal: SPACING.base, marginTop: -SPACING.md, marginBottom: SPACING.md,
     backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.full,
     paddingVertical: SPACING.xs, paddingHorizontal: SPACING.base,
     alignSelf: 'flex-end',

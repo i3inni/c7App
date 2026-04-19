@@ -36,6 +36,7 @@ interface AppState {
 
   // AI
   lastExercises: [ExerciseStep, ExerciseStep, ExerciseStep] | null;
+  lastExercisesAt: number | null; // timestamp (ms)
   lastDiagnosisAt: number | null; // timestamp (ms)
   lastWeeklyReport: WeeklyReport | null;
 
@@ -136,8 +137,9 @@ export const useStore = create<AppState>()(
         set((s) => ({ snapshots: [snapshot, ...s.snapshots].slice(0, 500) })),
 
       lastExercises: null,
+      lastExercisesAt: null,
       lastDiagnosisAt: null,
-      setLastExercises: (e) => set({ lastExercises: e, lastDiagnosisAt: Date.now() }),
+      setLastExercises: (e) => set({ lastExercises: e, lastExercisesAt: Date.now(), lastDiagnosisAt: Date.now() }),
       lastWeeklyReport: null,
       setLastWeeklyReport: (r: WeeklyReport) => set({ lastWeeklyReport: r }),
 
@@ -166,6 +168,7 @@ export const useStore = create<AppState>()(
         notifications: state.notifications,
         settings: state.settings,
         lastExercises: state.lastExercises,
+        lastExercisesAt: state.lastExercisesAt,
         lastDiagnosisAt: state.lastDiagnosisAt,
         lastWeeklyReport: state.lastWeeklyReport,
       }),
