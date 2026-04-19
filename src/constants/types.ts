@@ -25,6 +25,15 @@ export interface DeviceState {
 // ─── Posture / Sensor ─────────────────────────────
 export type PostureLevel = 'excellent' | 'good' | 'normal' | 'caution' | 'danger';
 
+// 모델이 감지하는 자세 타입 (나중에 ML 모델 출력과 매핑)
+export type PostureType =
+  | 'normal'        // 정상
+  | 'forward_head'  // 거북목
+  | 'rounded_back'  // 굽은 등
+  | 'straight_neck' // 일자목
+  | 'tilted'        // 기울어진 자세
+  | 'unknown';      // 미감지
+
 export interface PostureSnapshot {
   id: string;
   timestamp: number;
@@ -36,17 +45,18 @@ export interface PostureSnapshot {
 
 export interface DayStats {
   date: string; // YYYY-MM-DD
-  score: number;
+  dailyScore: number;
   badPostureCount: number;
-  correctionMin: number;
+  correctionCount: number;
   avgAngle: number;
   vibrationCount: number;
-  goodPostureHours: number;
+  totalUsageTime: number; // 시간 단위 (e.g. 6.2)
 }
 
 export interface WeekStats {
-  weekLabel: string; // '1주'
-  score: number;
+  weekLabel: string; // '1주' (표시용)
+  avgScore: number;
+  scoreChange?: number; // 전주 대비 변화
 }
 
 // ─── Notifications ────────────────────────────────
