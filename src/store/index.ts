@@ -3,8 +3,9 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   User, DeviceState, PostureSnapshot, DayStats,
-  WeekStats, AppNotification, AppSettings, PostureLevel,
+  WeekStats, AppNotification, AppSettings, PostureLevel, PostureType,
 } from '../constants/types';
+import { WeeklyReport, ExerciseStep } from '../services/aiService';
 
 // ── 유틸 ────────────────────────────────────────────
 function scoreToLevel(score: number): PostureLevel {
@@ -28,9 +29,15 @@ interface AppState {
   currentScore: number;
   currentAngle: number;
   currentLevel: PostureLevel;
+  currentPostureType: PostureType; // ML 모델 출력값 (현재는 각도 기반 자동 도출)
   todayStats: DayStats | null;
   weeklyStats: WeekStats[];
   snapshots: PostureSnapshot[];
+
+  // AI
+  lastExercises: [ExerciseStep, ExerciseStep, ExerciseStep] | null;
+  lastDiagnosisAt: number | null; // timestamp (ms)
+  lastWeeklyReport: WeeklyReport | null;
 
   // Notifications
   notifications: AppNotification[];
@@ -47,10 +54,14 @@ interface AppState {
   connectMqtt: (deviceId: string) => void;
   disconnectMqtt: () => void;
 
-  updatePosture: (score: number, angle: number) => void;
+  updatePosture: (score: number, angle: number, postureType?: PostureType) => void;
+  setPostureType: (type: PostureType) => void;
   setTodayStats: (stats: DayStats) => void;
   setWeeklyStats: (stats: WeekStats[]) => void;
   addSnapshot: (snapshot: PostureSnapshot) => void;
+
+  setLastExercises: (e: [ExerciseStep, ExerciseStep, ExerciseStep]) => void;
+  setLastWeeklyReport: (r: WeeklyReport) => void;
 
   addNotification: (n: AppNotification) => void;
   removeNotification: (id: string) => void;
@@ -62,21 +73,21 @@ interface AppState {
 
 // ── Mock 초기 데이터 (AsyncStorage에 데이터 없을 때만 사용) ──
 const MOCK_WEEKLY: WeekStats[] = [
-  { weekLabel: '1주', score: 73 },
-  { weekLabel: '2주', score: 71 },
-  { weekLabel: '3주', score: 78 },
-  { weekLabel: '4주', score: 85 },
-  { weekLabel: '5주', score: 88 },
+  { weekLabel: '1주', avgScore: 73, scoreChange: 0 },
+  { weekLabel: '2주', avgScore: 71, scoreChange: -2 },
+  { weekLabel: '3주', avgScore: 78, scoreChange: 7 },
+  { weekLabel: '4주', avgScore: 85, scoreChange: 7 },
+  { weekLabel: '5주', avgScore: 88, scoreChange: 3 },
 ];
 
 const MOCK_TODAY: DayStats = {
   date: new Date().toISOString().split('T')[0],
-  score: 82,
+  dailyScore: 82,
   badPostureCount: 4,
-  correctionMin: 45,
+  correctionCount: 12,
   avgAngle: 17.2,
   vibrationCount: 8,
-  goodPostureHours: 6.2,
+  totalUsageTime: 6.2,
 };
 
 const MOCK_NOTIFICATIONS: AppNotification[] = [
@@ -109,7 +120,7 @@ const MOCK_NOTIFICATIONS: AppNotification[] = [
 // ── Store (persist로 앱 재시작 후에도 데이터 유지) ──────
 export const useStore = create<AppState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       isLoggedIn: false,
 
@@ -127,9 +138,12 @@ export const useStore = create<AppState>()(
       currentScore: 84,
       currentAngle: 18.5,
       currentLevel: 'good',
+      currentPostureType: 'forward_head',
       todayStats: MOCK_TODAY,
       weeklyStats: MOCK_WEEKLY,
       snapshots: [],
+
+      lastDiagnosis: null,
 
       notifications: MOCK_NOTIFICATIONS,
 
@@ -158,14 +172,20 @@ export const useStore = create<AppState>()(
         })),
 
       // Posture
-      updatePosture: (score, angle) =>
-        set({ currentScore: score, currentAngle: angle, currentLevel: scoreToLevel(score) }),
+      updatePosture: (score, angle, postureType) =>
+        set({ currentScore: score, currentAngle: angle, currentLevel: scoreToLevel(score), ...(postureType ? { currentPostureType: postureType } : {}) }),
+      setPostureType: (type) => set({ currentPostureType: type }),
       setTodayStats: (stats) => set({ todayStats: stats }),
       setWeeklyStats: (stats) => set({ weeklyStats: stats }),
       addSnapshot: (snapshot) =>
         set((s) => ({ snapshots: [snapshot, ...s.snapshots].slice(0, 500) })),
 
-      // Notifications
+      lastExercises: null,
+      lastDiagnosisAt: null,
+      setLastExercises: (e) => set({ lastExercises: e, lastDiagnosisAt: Date.now() }),
+      lastWeeklyReport: null,
+      setLastWeeklyReport: (r: WeeklyReport) => set({ lastWeeklyReport: r }),
+
       addNotification: (n) =>
         set((s) => ({ notifications: [n, ...s.notifications] })),
       removeNotification: (id) =>
@@ -190,6 +210,9 @@ export const useStore = create<AppState>()(
         snapshots: state.snapshots,
         notifications: state.notifications,
         settings: state.settings,
+        lastExercises: state.lastExercises,
+        lastDiagnosisAt: state.lastDiagnosisAt,
+        lastWeeklyReport: state.lastWeeklyReport,
       }),
     }
   )

@@ -1,50 +1,91 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  ActivityIndicator, ScrollView, StyleSheet, Text,
+  TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
-import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import { COLORS, FONTS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import {
+  analyzeExercises, analyzeWeeklyReport,
+  buildLocalDiagnosis, ExerciseStep, WeeklyReport,
+} from '../../services/aiService';
 
 type Step = 1 | 2 | 3;
 
-const EXERCISES: Record<Step, {
-  badge: string; title: string; desc: string;
-  reps: string; tip: string; color: string;
-}> = {
-  1: {
-    badge: 'STEP 1',
-    title: '목 뒤 스트레칭',
-    desc: '양손을 깍지 껴 머리 뒤에 대고 천천히 앞으로 당겨주세요. 목 뒤쪽 근육이 늘어나는 느낌이 들면 15초간 유지합니다.',
-    reps: '15초 × 3회',
-    tip: '호흡을 천천히 하면서 무리하지 않게 진행하세요.',
-    color: COLORS.step1,
-  },
-  2: {
-    badge: 'STEP 2',
-    title: '어깨 으쓱 운동',
-    desc: '어깨를 귀 쪽으로 최대한 올리고 5초간 유지한 후 천천히 내려주세요. 어깨와 목 주변 긴장을 풀어줍니다.',
-    reps: '5초 × 10회',
-    tip: '내릴 때는 힘을 빼고 자연스럽게 떨어뜨리세요.',
-    color: COLORS.step2,
-  },
-  3: {
-    badge: 'STEP 3',
-    title: '턱 당기기 운동',
-    desc: '정면을 바라본 상태에서 턱을 뒤로 당겨 이중턱을 만들듯이 합니다. 목을 곧게 펴는 효과가 있습니다.',
-    reps: '10초 × 5회',
-    tip: '거울을 보며 정확한 자세를 확인하세요.',
-    color: COLORS.step3,
-  },
+const STEP_COLORS: Record<Step, string> = {
+  1: COLORS.step1,
+  2: COLORS.step2,
+  3: COLORS.step3,
 };
 
 export default function AIScreen() {
   const nav = useNavigation();
-  const { currentAngle, currentScore } = useStore();
+  const {
+    currentAngle, currentScore, todayStats, weeklyStats,
+    lastExercises, setLastExercises,
+    lastDiagnosisAt,
+    lastWeeklyReport, setLastWeeklyReport,
+  } = useStore();
+
+  const DIAGNOSIS_INTERVAL = 6 * 60 * 60 * 1000; // 6시간
+  const now = Date.now();
+  const canRefresh = !lastDiagnosisAt || (now - lastDiagnosisAt) >= DIAGNOSIS_INTERVAL;
+  const nextRefreshMs = lastDiagnosisAt ? Math.max(0, DIAGNOSIS_INTERVAL - (now - lastDiagnosisAt)) : 0;
+  const nextRefreshHour = Math.floor(nextRefreshMs / (60 * 60 * 1000));
+  const nextRefreshMin = Math.floor((nextRefreshMs % (60 * 60 * 1000)) / (60 * 1000));
+
   const [activeStep, setActiveStep] = useState<Step>(1);
 
-  const ex = EXERCISES[activeStep];
+  // 진단 결과: 로컬 즉시 계산
+  const diagnosis = useMemo(
+    () => buildLocalDiagnosis(currentAngle, currentScore, weeklyStats),
+    [currentAngle, currentScore, weeklyStats],
+  );
+
+  // 단계별 운동: LLM, 캐시 우선
+  const [exercises, setExercises] = useState<[ExerciseStep, ExerciseStep, ExerciseStep] | null>(lastExercises);
+  const [exLoading, setExLoading] = useState(!lastExercises);
+
+  const fetchExercises = useCallback(async () => {
+    if (!canRefresh) { setExLoading(false); return; }
+    try {
+      const result = await analyzeExercises(diagnosis.level, currentAngle, currentScore);
+      setExercises(result);
+      setLastExercises(result);
+    } catch {
+      // 실패 시 조용히 무시 (이전 캐시 유지)
+    } finally {
+      setExLoading(false);
+    }
+  }, [diagnosis.level, currentAngle, currentScore, canRefresh]);
+
+  useEffect(() => {
+    fetchExercises();
+  }, []);
+
+  // 주간 리포트: 버튼 눌러야 분석
+  const [report, setReport] = useState<WeeklyReport | null>(lastWeeklyReport);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  const fetchReport = async () => {
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      const result = await analyzeWeeklyReport(currentScore, todayStats, weeklyStats);
+      setReport(result);
+      setLastWeeklyReport(result);
+    } catch (e) {
+      setReportError(e instanceof Error ? e.message : '분석 중 오류가 발생했습니다.');
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const ex = exercises?.[activeStep - 1];
+  const stepColor = STEP_COLORS[activeStep];
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -67,11 +108,11 @@ export default function AIScreen() {
               <Text style={styles.aiTitle}>목 건강 지도사</Text>
               <View style={styles.aiBadge}><Text style={styles.aiBadgeText}>AI</Text></View>
             </View>
-            <Text style={styles.aiDesc}>AI 기반 맞춤형 거북목 진단 및 교정 전문가입니다</Text>
+            <Text style={styles.aiDesc}>AI 기반 맞춤형 자세 진단 및 교정 전문가입니다</Text>
           </View>
         </View>
 
-        {/* 오늘의 진단 */}
+        {/* 오늘의 진단 결과 */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionIcon}>📋</Text>
@@ -80,14 +121,13 @@ export default function AIScreen() {
 
           <View style={styles.diagCard}>
             <View style={styles.diagTop}>
-              <Text style={styles.diagWarningIcon}>⚠️</Text>
-              <Text style={styles.diagTitle}>중등도 거북목</Text>
-              <View style={styles.cautionBadge}><Text style={styles.cautionText}>주의</Text></View>
+              <Text style={styles.diagWarningIcon}>{diagnosis.warningIcon}</Text>
+              <Text style={styles.diagTitle}>{diagnosis.levelText}</Text>
+              <View style={[styles.cautionBadge, { backgroundColor: `${diagnosis.badgeColor}20` }]}>
+                <Text style={[styles.cautionText, { color: diagnosis.badgeColor }]}>{diagnosis.badgeText}</Text>
+              </View>
             </View>
-            <Text style={styles.diagDesc}>
-              현재 목 각도 {currentAngle}°로 정상 범위(5-15°)를 벗어났습니다.
-              장시간 같은 자세 유지 시 통증이 발생할 수 있습니다.
-            </Text>
+            <Text style={styles.diagDesc}>{diagnosis.description}</Text>
             <View style={styles.diagStats}>
               <View style={styles.diagStat}>
                 <Text style={styles.diagStatLabel}>현재 각도</Text>
@@ -99,11 +139,20 @@ export default function AIScreen() {
               </View>
               <View style={styles.diagStat}>
                 <Text style={styles.diagStatLabel}>개선율</Text>
-                <Text style={[styles.diagStatVal, { color: COLORS.primary }]}>+12%</Text>
+                <Text style={[styles.diagStatVal, { color: COLORS.primary }]}>{diagnosis.improvementRate}</Text>
               </View>
             </View>
           </View>
         </View>
+
+        {/* 다음 진단 가능 시간 */}
+        {!canRefresh && (
+          <View style={styles.refreshInfo}>
+            <Text style={styles.refreshInfoText}>
+              🕐 다음 진단 갱신까지 {nextRefreshHour}시간 {nextRefreshMin}분
+            </Text>
+          </View>
+        )}
 
         {/* 단계별 솔루션 */}
         <View style={styles.section}>
@@ -112,15 +161,11 @@ export default function AIScreen() {
             <Text style={styles.sectionTitle}>단계별 솔루션</Text>
           </View>
 
-          {/* 스텝 탭 */}
           <View style={styles.stepRow}>
-            {([1, 2, 3] as Step[]).map(s => (
+            {([1, 2, 3] as Step[]).map((s) => (
               <TouchableOpacity
                 key={s}
-                style={[
-                  styles.stepTab,
-                  activeStep === s && { backgroundColor: EXERCISES[s].color },
-                ]}
+                style={[styles.stepTab, activeStep === s && { backgroundColor: STEP_COLORS[s] }]}
                 onPress={() => setActiveStep(s)}
               >
                 <Text style={[styles.stepTabText, activeStep === s && styles.stepTabTextActive]}>
@@ -130,24 +175,30 @@ export default function AIScreen() {
             ))}
           </View>
 
-          {/* 운동 카드 */}
-          <View style={[styles.exCard, { borderLeftColor: ex.color, borderLeftWidth: 3 }]}>
-            <View style={styles.exTop}>
-              <Text style={styles.exActivityIcon}>📈</Text>
-              <View style={[styles.exBadge, { backgroundColor: ex.color }]}>
-                <Text style={styles.exBadgeText}>{ex.badge}</Text>
+          {exLoading ? (
+            <View style={styles.exLoadingBox}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.exLoadingText}>AI가 맞춤 운동을 준비 중입니다...</Text>
+            </View>
+          ) : ex ? (
+            <View style={[styles.exCard, { borderLeftColor: stepColor, borderLeftWidth: 3 }]}>
+              <View style={styles.exTop}>
+                <Text style={styles.exActivityIcon}>📈</Text>
+                <View style={[styles.exBadge, { backgroundColor: stepColor }]}>
+                  <Text style={styles.exBadgeText}>STEP {activeStep}</Text>
+                </View>
+                <Text style={styles.exTitle}>{ex.title}</Text>
               </View>
-              <Text style={styles.exTitle}>{ex.title}</Text>
+              <Text style={styles.exDesc}>{ex.desc}</Text>
+              <View style={styles.exRepsRow}>
+                <Text style={styles.repsLabel}>권장 횟수</Text>
+                <Text style={[styles.repsVal, { color: stepColor }]}>{ex.reps}</Text>
+              </View>
+              <View style={styles.tipBox}>
+                <Text style={styles.tipText}>💡 Tip: {ex.tip}</Text>
+              </View>
             </View>
-            <Text style={styles.exDesc}>{ex.desc}</Text>
-            <View style={styles.exRepsRow}>
-              <Text style={styles.repsLabel}>권장 횟수</Text>
-              <Text style={[styles.repsVal, { color: ex.color }]}>{ex.reps}</Text>
-            </View>
-            <View style={styles.tipBox}>
-              <Text style={styles.tipText}>💡 Tip: {ex.tip}</Text>
-            </View>
-          </View>
+          ) : null}
         </View>
 
         {/* 주간 건강 리포트 */}
@@ -157,27 +208,52 @@ export default function AIScreen() {
               <View style={styles.reportIconBox}>
                 <Text style={styles.reportIcon}>🛡️</Text>
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.reportTitle}>주간 건강 리포트</Text>
                 <Text style={styles.reportSub}>Based on 7 days monitoring</Text>
               </View>
             </View>
-            <Text style={styles.reportBody}>
-              지난주 대비 평균 자세 점수가{' '}
-              <Text style={{ color: COLORS.scoreExcellent, fontWeight: '700' }}>8.2점 상승</Text>
-              했습니다. 목요일 오전 시간대에 가장 좋은 자세를 유지하셨어요.
-              꾸준한 개선이 관찰되고 있으니 이대로 유지해주세요!
-            </Text>
-            <View style={styles.reportStats}>
-              <View style={styles.reportStat}>
-                <Text style={styles.reportStatLabel}>Best Score</Text>
-                <Text style={styles.reportStatVal}>92점</Text>
+
+            {!report && !reportLoading && !reportError && (
+              <TouchableOpacity style={styles.analyzeBtn} onPress={fetchReport}>
+                <Text style={styles.analyzeBtnText}>✦ 분석하기</Text>
+              </TouchableOpacity>
+            )}
+
+            {reportLoading && (
+              <View style={styles.reportLoadingBox}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.reportLoadingText}>AI가 주간 데이터를 분석 중입니다...</Text>
               </View>
-              <View style={styles.reportStat}>
-                <Text style={styles.reportStatLabel}>개선 추세</Text>
-                <Text style={[styles.reportStatVal, { color: COLORS.scoreExcellent }]}>↑ 15%</Text>
+            )}
+
+            {reportError && !reportLoading && (
+              <View style={{ gap: SPACING.sm }}>
+                <Text style={styles.reportErrorText}>⚠️ {reportError}</Text>
+                <TouchableOpacity style={styles.analyzeBtn} onPress={fetchReport}>
+                  <Text style={styles.analyzeBtnText}>다시 분석하기</Text>
+                </TouchableOpacity>
               </View>
-            </View>
+            )}
+
+            {report && !reportLoading && (
+              <>
+                <Text style={styles.reportBody}>{report.body}</Text>
+                <View style={styles.reportStats}>
+                  <View style={styles.reportStat}>
+                    <Text style={styles.reportStatLabel}>Best Score</Text>
+                    <Text style={styles.reportStatVal}>{report.bestScore}점</Text>
+                  </View>
+                  <View style={styles.reportStat}>
+                    <Text style={styles.reportStatLabel}>개선 추세</Text>
+                    <Text style={[styles.reportStatVal, { color: COLORS.scoreExcellent }]}>{report.trend}</Text>
+                  </View>
+                </View>
+                <TouchableOpacity style={styles.reAnalyzeBtn} onPress={fetchReport}>
+                  <Text style={styles.reAnalyzeBtnText}>다시 분석하기</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -196,7 +272,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', ...SHADOWS.sm,
   },
   backIcon: { fontSize: 22, color: COLORS.text },
-  pageTitle: { fontSize: FONTS.sizes.lg, fontWeight: '700', color: COLORS.text },
+  pageTitle: { flex: 1, fontSize: FONTS.sizes.lg, fontWeight: '700', color: COLORS.text },
 
   aiCard: {
     flexDirection: 'row', alignItems: 'center',
@@ -224,8 +300,8 @@ const styles = StyleSheet.create({
   diagTop: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginBottom: SPACING.sm },
   diagWarningIcon: { fontSize: 18 },
   diagTitle: { flex: 1, fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
-  cautionBadge: { backgroundColor: '#FFF7EC', borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2 },
-  cautionText: { fontSize: FONTS.sizes.xs, color: COLORS.warning, fontWeight: '700' },
+  cautionBadge: { borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2 },
+  cautionText: { fontSize: FONTS.sizes.xs, fontWeight: '700' },
   diagDesc: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, lineHeight: 20, marginBottom: SPACING.base },
   diagStats: { flexDirection: 'row', justifyContent: 'space-around' },
   diagStat: { alignItems: 'center' },
@@ -240,10 +316,14 @@ const styles = StyleSheet.create({
   stepTabText: { fontSize: FONTS.sizes.sm, fontWeight: '600', color: COLORS.textSecondary },
   stepTabTextActive: { color: '#fff' },
 
-  exCard: {
-    backgroundColor: '#F8FAFF', borderRadius: RADIUS.xl,
-    padding: SPACING.base, ...SHADOWS.sm,
+  exLoadingBox: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: SPACING.sm, backgroundColor: '#fff', borderRadius: RADIUS.xl,
+    padding: SPACING.lg, ...SHADOWS.sm,
   },
+  exLoadingText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary },
+
+  exCard: { backgroundColor: '#F8FAFF', borderRadius: RADIUS.xl, padding: SPACING.base, ...SHADOWS.sm },
   exTop: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginBottom: SPACING.sm },
   exActivityIcon: { fontSize: 18 },
   exBadge: { borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2 },
@@ -256,9 +336,7 @@ const styles = StyleSheet.create({
   tipBox: { backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: RADIUS.sm, padding: SPACING.sm },
   tipText: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
 
-  reportCard: {
-    backgroundColor: COLORS.bgDark, borderRadius: RADIUS.xl, padding: SPACING.lg,
-  },
+  reportCard: { backgroundColor: COLORS.bgDark, borderRadius: RADIUS.xl, padding: SPACING.lg },
   reportHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.base },
   reportIconBox: {
     width: 40, height: 40, borderRadius: 20,
@@ -268,8 +346,28 @@ const styles = StyleSheet.create({
   reportTitle: { fontSize: FONTS.sizes.base, fontWeight: '700', color: '#fff' },
   reportSub: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.4)' },
   reportBody: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.7)', lineHeight: 20, marginBottom: SPACING.base },
-  reportStats: { flexDirection: 'row', gap: SPACING.lg },
+  reportStats: { flexDirection: 'row', gap: SPACING.lg, marginBottom: SPACING.base },
   reportStat: {},
   reportStatLabel: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.4)' },
   reportStatVal: { fontSize: FONTS.sizes.xl, fontWeight: '800', color: '#fff', marginTop: 4 },
+
+  analyzeBtn: {
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.full,
+    paddingVertical: SPACING.sm, alignItems: 'center',
+  },
+  analyzeBtnText: { fontSize: FONTS.sizes.sm, color: '#fff', fontWeight: '700' },
+  reAnalyzeBtn: { alignSelf: 'center', paddingVertical: SPACING.xs },
+  reAnalyzeBtnText: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
+
+  reportLoadingBox: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.sm },
+  reportLoadingText: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.5)' },
+  reportErrorText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
+
+  refreshInfo: {
+    marginHorizontal: SPACING.base, marginTop: -SPACING.md, marginBottom: SPACING.xs,
+    backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.full,
+    paddingVertical: SPACING.xs, paddingHorizontal: SPACING.base,
+    alignSelf: 'flex-end',
+  },
+  refreshInfoText: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted },
 });

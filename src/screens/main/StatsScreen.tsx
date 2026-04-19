@@ -100,7 +100,7 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
           <View style={dtStyles.scoreCard}>
             <View>
               <Text style={dtStyles.scoreSub}>오늘의 종합 점수</Text>
-              <Text style={dtStyles.scoreNum}>{todayStats.score}</Text>
+              <Text style={dtStyles.scoreNum}>{todayStats.dailyScore}</Text>
               <View style={dtStyles.improveRow}>
                 <View style={dtStyles.dot} />
                 <Text style={dtStyles.improveText}>어제보다 +3점 향상</Text>
@@ -148,7 +148,7 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
           <View style={dtStyles.summaryGrid}>
             {[
               { icon: '📈', label: '교정 횟수', val: `${todayStats.badPostureCount * 3}회` },
-              { icon: '⏰', label: '바른 자세 유지', val: `${todayStats.goodPostureHours}h` },
+              { icon: '⏰', label: '바른 자세 유지', val: `${todayStats.totalUsageTime}h` },
               { icon: '🔴', label: '평균 각도', val: `${todayStats.avgAngle}°` },
               { icon: '⚡', label: '진동 알림', val: `${todayStats.vibrationCount}회` },
             ].map((s, i) => (
@@ -318,7 +318,7 @@ export default function StatsScreen() {
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0);
 
-  const chartData = weeklyStats.map(w => ({ label: w.weekLabel, score: w.score }));
+  const chartData = weeklyStats.map(w => ({ label: w.weekLabel, score: w.avgScore }));
 
   return (
     <SafeAreaView style={s.safe}>
@@ -344,7 +344,7 @@ export default function StatsScreen() {
             </View>
             <View style={{ flex: 1, marginLeft: SPACING.sm }}>
               <Text style={s.todayScoreSub}>오늘 점수</Text>
-              <Text style={s.todayScoreNum}>{todayStats?.score ?? '--'}</Text>
+              <Text style={s.todayScoreNum}>{todayStats?.dailyScore ?? '--'}</Text>
             </View>
             <View style={s.goodBadge}>
               <View style={s.goodDot} />
@@ -368,7 +368,7 @@ export default function StatsScreen() {
               </View>
               <View>
                 <Text style={s.miniLabel}>교정 시간</Text>
-                <Text style={s.miniVal}>{todayStats?.correctionMin ?? 0}<Text style={s.miniUnit}> 분</Text></Text>
+                <Text style={s.miniVal}>{todayStats?.correctionCount ?? 0}<Text style={s.miniUnit}> 회</Text></Text>
               </View>
             </View>
           </View>
