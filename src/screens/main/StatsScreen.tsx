@@ -7,8 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Polyline, Circle, Line, Text as SvgText, Path } from 'react-native-svg';
 import { useStore } from '../../store';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
-import { getTodayStats, getWeeklyStats, getSnapshots } from '../../services/statsService';
-import { PostureSnapshot } from '../../constants/types';
+import { getTodayStats, getWeeklyStats } from '../../services/statsService';
 
 const { width } = Dimensions.get('window');
 
@@ -39,21 +38,15 @@ function LineChart({
 
   return (
     <Svg width={W} height={H}>
-      <Line
-        x1={PAD.l} y1={targetY} x2={W - PAD.r} y2={targetY}
-        stroke={COLORS.accent} strokeWidth={1.5} strokeDasharray="5,4" opacity={0.6}
-      />
+      <Line x1={PAD.l} y1={targetY} x2={W - PAD.r} y2={targetY}
+        stroke={COLORS.accent} strokeWidth={1.5} strokeDasharray="5,4" opacity={0.6} />
       <Path d={fillPath} fill={COLORS.primary} opacity={0.08} />
       <Polyline points={points} fill="none" stroke={COLORS.primary} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
       {data.map((d, i) => (
         <React.Fragment key={i}>
           <Circle cx={xOf(i)} cy={yOf(d.score)} r={5} fill="#fff" stroke={COLORS.primary} strokeWidth={2} />
-          <SvgText x={xOf(i)} y={H - 4} textAnchor="middle" fontSize={10} fill={COLORS.textSecondary}>
-            {d.label}
-          </SvgText>
-          <SvgText x={xOf(i)} y={yOf(d.score) - 10} textAnchor="middle" fontSize={10} fill={COLORS.textSecondary} fontWeight="600">
-            {d.score}
-          </SvgText>
+          <SvgText x={xOf(i)} y={H - 4} textAnchor="middle" fontSize={10} fill={COLORS.textSecondary}>{d.label}</SvgText>
+          <SvgText x={xOf(i)} y={yOf(d.score) - 10} textAnchor="middle" fontSize={10} fill={COLORS.textSecondary} fontWeight="600">{d.score}</SvgText>
         </React.Fragment>
       ))}
     </Svg>
@@ -61,17 +54,19 @@ function LineChart({
 }
 
 // ── 오늘 요약 상세 모달 ──────────────────────────────
-function TodayDetailModal({
-  visible, onClose, snapshots,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  snapshots: PostureSnapshot[];
-}) {
+function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { todayStats } = useStore();
-  if (!todayStats) return null;
+  if (!todayStats || !todayStats.summary) return null;
 
-  const badPostures = snapshots.filter(s => s.level === 'caution' || s.level === 'danger').slice(0, 10);
+  const hourlyLabels: Record<string, string> = {
+    '09_12': '오전 9-12시',
+    '12_15': '오후 12-3시',
+    '15_18': '오후 3-6시',
+    '18_21': '오후 6-9시',
+  };
+  const hourlyData = Object.entries(hourlyLabels)
+    .map(([key, label]) => ({ label, score: todayStats.hourlyScores?.[key] ?? 0 }))
+    .filter(h => h.score > 0);
 
   return (
     <Modal visible={visible} animationType="slide">
@@ -85,32 +80,49 @@ function TodayDetailModal({
           <View style={dtStyles.scoreCard}>
             <View>
               <Text style={dtStyles.scoreSub}>오늘의 종합 점수</Text>
-              <Text style={dtStyles.scoreNum}>{todayStats.dailyScore}</Text>
+              <Text style={dtStyles.scoreNum}>{todayStats.summary.dailyScore}</Text>
               <View style={dtStyles.improveRow}>
                 <View style={dtStyles.dot} />
-                <Text style={dtStyles.improveText}>평균 각도 {todayStats.avgAngle}°</Text>
+                <Text style={dtStyles.improveText}>평균 각도 {todayStats.summary.avgAngle}°</Text>
               </View>
             </View>
             <Text style={{ fontSize: 28 }}>📈</Text>
           </View>
 
-          {/* 불량 자세 */}
+          {/* 시간대별 점수 */}
+          {hourlyData.length > 0 && (
+            <>
+              <Text style={dtStyles.sectionTitle}>시간대별 자세 점수</Text>
+              <View style={dtStyles.card}>
+                {hourlyData.map((h, i) => (
+                  <View key={i} style={dtStyles.hourRow}>
+                    <Text style={dtStyles.hourLabel}>{h.label}</Text>
+                    <View style={dtStyles.barTrack}>
+                      <View style={[dtStyles.barFill, { width: `${h.score}%`, backgroundColor: h.score >= 80 ? COLORS.primary : COLORS.warning }]} />
+                    </View>
+                    <Text style={[dtStyles.hourScore, { color: h.score >= 80 ? COLORS.primary : COLORS.warning }]}>{h.score}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {/* 불량 자세 기록 */}
           <Text style={dtStyles.sectionTitle}>불량 자세 발생 기록</Text>
-          {badPostures.length === 0 ? (
+          {(!todayStats.badPostureLogs || todayStats.badPostureLogs.length === 0) ? (
             <View style={dtStyles.emptyBox}>
               <Text style={dtStyles.emptyText}>오늘 불량 자세 기록이 없습니다 👍</Text>
             </View>
           ) : (
-            badPostures.map((b, i) => {
-              const isDanger = b.level === 'danger';
-              const time = new Date(b.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            todayStats.badPostureLogs.map((b, i) => {
+              const isDanger = b.angle >= 25;
               return (
                 <View key={i} style={[dtStyles.badCard, { backgroundColor: isDanger ? '#FFF0F3' : '#FFF7EC' }]}>
                   <View style={dtStyles.badLeft}>
                     <Text style={{ fontSize: 14, marginRight: 6 }}>⏰</Text>
-                    <Text style={[dtStyles.badTime, { color: isDanger ? COLORS.accent : COLORS.warning }]}>{time}</Text>
+                    <Text style={[dtStyles.badTime, { color: isDanger ? COLORS.accent : COLORS.warning }]}>{b.time}</Text>
                   </View>
-                  <Text style={dtStyles.badDetail}>각도: {b.angle}°    지속시간: {b.durationMin}분</Text>
+                  <Text style={dtStyles.badDetail}>각도: {b.angle}°    지속시간: {b.duration}</Text>
                   <View style={[dtStyles.levelBadge, { backgroundColor: isDanger ? COLORS.accent : COLORS.warning }]}>
                     <Text style={dtStyles.levelText}>{isDanger ? '위험' : '주의'}</Text>
                   </View>
@@ -123,10 +135,10 @@ function TodayDetailModal({
           <Text style={dtStyles.sectionTitle}>활동 요약</Text>
           <View style={dtStyles.summaryGrid}>
             {[
-              { icon: '📈', label: '교정 횟수', val: `${todayStats.correctionCount}회` },
-              { icon: '⏰', label: '사용 시간', val: `${todayStats.totalUsageTime}h` },
-              { icon: '🔴', label: '평균 각도', val: `${todayStats.avgAngle}°` },
-              { icon: '⚡', label: '진동 알림', val: `${todayStats.vibrationCount}회` },
+              { icon: '📈', label: '교정 횟수', val: `${todayStats.summary.correctionCount}회` },
+              { icon: '⏰', label: '사용 시간', val: todayStats.summary.totalUsageTime },
+              { icon: '🔴', label: '평균 각도', val: `${todayStats.summary.avgAngle}°` },
+              { icon: '⚠️', label: '불량 자세', val: `${todayStats.summary.badPostureCount}회` },
             ].map((s, i) => (
               <View key={i} style={dtStyles.summaryCard}>
                 <Text style={dtStyles.summaryIcon}>{s.icon}</Text>
@@ -161,6 +173,11 @@ const dtStyles = StyleSheet.create({
   emptyBox: { backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md, padding: SPACING.base, alignItems: 'center' },
   emptyText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary },
   card: { backgroundColor: '#fff', borderRadius: RADIUS.lg, padding: SPACING.base, ...SHADOWS.sm, marginBottom: SPACING.sm },
+  hourRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.sm },
+  hourLabel: { width: 100, fontSize: FONTS.sizes.sm, color: COLORS.textSecondary },
+  barTrack: { flex: 1, height: 6, backgroundColor: COLORS.bgSecondary, borderRadius: 3, marginHorizontal: SPACING.sm, overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3 },
+  hourScore: { width: 28, fontSize: FONTS.sizes.sm, fontWeight: '700', textAlign: 'right' },
   badCard: { borderRadius: RADIUS.md, padding: SPACING.md, marginBottom: SPACING.sm },
   badLeft: { flexDirection: 'row', alignItems: 'center' },
   badTime: { fontSize: FONTS.sizes.md, fontWeight: '700' },
@@ -188,9 +205,7 @@ function WeekDetailModal({ visible, onClose }: { visible: boolean; onClose: () =
   const avgScore = weeklyStats.length > 0
     ? (weeklyStats.reduce((s, w) => s + w.avgScore, 0) / weeklyStats.length).toFixed(1)
     : '--';
-  const latestChange = weeklyStats.length >= 2
-    ? weeklyStats[weeklyStats.length - 1].avgScore - weeklyStats[weeklyStats.length - 2].avgScore
-    : 0;
+  const latestChange = weeklyStats.length >= 1 ? weeklyStats[weeklyStats.length - 1].scoreChange : 0;
 
   return (
     <Modal visible={visible} animationType="slide">
@@ -200,7 +215,6 @@ function WeekDetailModal({ visible, onClose }: { visible: boolean; onClose: () =
           <TouchableOpacity onPress={onClose}><Text style={dtStyles.close}>✕</Text></TouchableOpacity>
         </View>
         <ScrollView contentContainerStyle={{ padding: SPACING.base, paddingBottom: 40 }}>
-          {/* 평균 */}
           <View style={[dtStyles.scoreCard, { backgroundColor: '#B45309' }]}>
             <View>
               <Text style={dtStyles.scoreSub}>최근 5주 평균 점수</Text>
@@ -233,18 +247,45 @@ function WeekDetailModal({ visible, onClose }: { visible: boolean; onClose: () =
                       <Text style={wkStyles.dayName}>{w.weekLabel}</Text>
                       {isLast && <View style={wkStyles.bestBadge}><Text style={wkStyles.bestText}>이번 주</Text></View>}
                     </View>
+                    {w.targetSuccessDays && (
+                      <Text style={{ fontSize: FONTS.sizes.xs, color: COLORS.textMuted }}>목표 달성 {w.targetSuccessDays}일</Text>
+                    )}
                     <View style={[wkStyles.barTrack, { marginTop: 6 }]}>
                       <View style={[wkStyles.barFill, { width: `${w.avgScore}%`, backgroundColor: scoreColor }]} />
                     </View>
                   </View>
-                  {w.scoreChange !== undefined && (
-                    <Text style={{ fontSize: FONTS.sizes.sm, color: w.scoreChange >= 0 ? COLORS.primary : COLORS.accent, fontWeight: '700' }}>
-                      {w.scoreChange >= 0 ? `+${w.scoreChange}` : `${w.scoreChange}`}
-                    </Text>
-                  )}
+                  <Text style={{ fontSize: FONTS.sizes.sm, color: w.scoreChange >= 0 ? COLORS.primary : COLORS.accent, fontWeight: '700' }}>
+                    {w.scoreChange >= 0 ? `+${w.scoreChange}` : `${w.scoreChange}`}
+                  </Text>
                 </View>
               );
             })
+          )}
+
+          {/* 요일별 상세 (마지막 주) */}
+          {weeklyStats.length > 0 && weeklyStats[weeklyStats.length - 1].dailyBreakdown && (
+            <>
+              <Text style={dtStyles.sectionTitle}>이번 주 요일별 점수</Text>
+              {weeklyStats[weeklyStats.length - 1].dailyBreakdown!.map((d, i) => {
+                const c = d.score >= 80 ? COLORS.primary : d.score >= 70 ? COLORS.scoreNormal : COLORS.accent;
+                return (
+                  <View key={i} style={[wkStyles.dayRow, d.score < 70 && wkStyles.dayRowBad]}>
+                    <View style={[wkStyles.scoreBadge, { backgroundColor: c }]}>
+                      <Text style={wkStyles.scoreBadgeText}>{d.score}</Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                      <Text style={wkStyles.dayName}>{d.day}요일</Text>
+                      <View style={[wkStyles.barTrack, { marginTop: 6 }]}>
+                        <View style={[wkStyles.barFill, { width: `${d.score}%`, backgroundColor: c }]} />
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: FONTS.sizes.sm, color: d.change >= 0 ? COLORS.primary : COLORS.accent, fontWeight: '700' }}>
+                      {d.change >= 0 ? `+${d.change}` : `${d.change}`}
+                    </Text>
+                  </View>
+                );
+              })}
+            </>
           )}
         </ScrollView>
       </SafeAreaView>
@@ -259,22 +300,15 @@ const wkStyles = StyleSheet.create({
     padding: SPACING.md, marginBottom: SPACING.sm, ...SHADOWS.sm,
   },
   dayRowBad: { backgroundColor: '#FFF5F5' },
-  scoreBadge: {
-    width: 44, height: 44, borderRadius: RADIUS.md,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  scoreBadge: { width: 44, height: 44, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
   scoreBadgeText: { fontSize: FONTS.sizes.base, fontWeight: '800', color: '#fff' },
   dayName: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text },
   barTrack: { height: 4, backgroundColor: COLORS.bgSecondary, borderRadius: 2, overflow: 'hidden' },
   barFill: { height: 4, borderRadius: 2 },
-  bestBadge: {
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.full,
-    paddingHorizontal: 6, paddingVertical: 1,
-  },
+  bestBadge: { backgroundColor: COLORS.primary, borderRadius: RADIUS.full, paddingHorizontal: 6, paddingVertical: 1 },
   bestText: { fontSize: 9, color: '#fff', fontWeight: '700' },
 });
 
-// ── 레벨 텍스트 ───────────────────────────────────────
 function scoreToLabel(score: number): string {
   if (score >= 90) return '우수';
   if (score >= 80) return '양호';
@@ -292,31 +326,25 @@ function scoreToBadgeColor(score: number): string {
 
 // ── 메인 STATS 화면 ──────────────────────────────────
 export default function StatsScreen() {
-  const { user, todayStats, weeklyStats, snapshots, settings, setTodayStats, setWeeklyStats, addSnapshot } = useStore();
+  const { user, todayStats, weeklyStats, settings, setTodayStats, setWeeklyStats } = useStore();
   const [tab, setTab] = useState<'weekly' | 'monthly'>('monthly');
   const [showTodayDetail, setShowTodayDetail] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [localSnapshots, setLocalSnapshots] = useState<PostureSnapshot[]>(snapshots);
 
   const chartData = weeklyStats.map(w => ({ label: w.weekLabel, score: w.avgScore }));
-  const todayLabel = scoreToLabel(todayStats?.dailyScore ?? 0);
-  const todayBadgeColor = scoreToBadgeColor(todayStats?.dailyScore ?? 0);
+  const dailyScore = todayStats?.summary?.dailyScore ?? 0;
+  const todayLabel = todayStats?.summary ? scoreToLabel(dailyScore) : '--';
+  const todayBadgeColor = scoreToBadgeColor(dailyScore);
 
   useEffect(() => {
     if (!user || user.isGuest) return;
     setLoading(true);
-    Promise.all([
-      getTodayStats(user.id),
-      getWeeklyStats(user.id),
-      getSnapshots(user.id),
-    ])
-      .then(([today, weekly, snaps]) => {
+    Promise.all([getTodayStats(user.id), getWeeklyStats(user.id)])
+      .then(([today, weekly]) => {
         if (today) setTodayStats(today);
-        if (weekly.length > 0) setWeeklyStats(weekly);
-        setLocalSnapshots(snaps);
-        snaps.forEach(s => addSnapshot(s));
+        setWeeklyStats(weekly);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -336,44 +364,52 @@ export default function StatsScreen() {
         </View>
 
         <View style={s.todayCard}>
-          <View style={s.todayScoreRow}>
-            <View style={[s.todayIconBox, { backgroundColor: todayBadgeColor }]}>
-              <Text style={s.todayIcon}>◉</Text>
+          {!todayStats || !todayStats.summary ? (
+            <View style={s.emptyChart}>
+              <Text style={s.emptyChartText}>오늘의 데이터가 없습니다</Text>
             </View>
-            <View style={{ flex: 1, marginLeft: SPACING.sm }}>
-              <Text style={s.todayScoreSub}>오늘 점수</Text>
-              <Text style={s.todayScoreNum}>{todayStats?.dailyScore ?? '--'}</Text>
-            </View>
-            <View style={s.goodBadge}>
-              <View style={[s.goodDot, { backgroundColor: todayBadgeColor }]} />
-              <Text style={[s.goodText, { color: todayBadgeColor }]}>{todayLabel}</Text>
-            </View>
-          </View>
+          ) : (
+            <>
+              <View style={s.todayScoreRow}>
+                <View style={[s.todayIconBox, { backgroundColor: todayBadgeColor }]}>
+                  <Text style={s.todayIcon}>◉</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                  <Text style={s.todayScoreSub}>오늘 점수</Text>
+                  <Text style={s.todayScoreNum}>{dailyScore}</Text>
+                </View>
+                <View style={s.goodBadge}>
+                  <View style={[s.goodDot, { backgroundColor: todayBadgeColor }]} />
+                  <Text style={[s.goodText, { color: todayBadgeColor }]}>{todayLabel}</Text>
+                </View>
+              </View>
 
-          <View style={s.todayMiniRow}>
-            <View style={s.todayMiniBox}>
-              <View style={[s.miniIconCircle, { backgroundColor: '#FEF3C7' }]}>
-                <Text style={s.miniIcon}>⚠️</Text>
+              <View style={s.todayMiniRow}>
+                <View style={s.todayMiniBox}>
+                  <View style={[s.miniIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                    <Text style={s.miniIcon}>⚠️</Text>
+                  </View>
+                  <View>
+                    <Text style={s.miniLabel}>불량 자세</Text>
+                    <Text style={s.miniVal}>{todayStats.summary.badPostureCount}<Text style={s.miniUnit}> 회</Text></Text>
+                  </View>
+                </View>
+                <View style={s.todayMiniBox}>
+                  <View style={[s.miniIconCircle, { backgroundColor: '#D1FAE5' }]}>
+                    <Text style={s.miniIcon}>⏰</Text>
+                  </View>
+                  <View>
+                    <Text style={s.miniLabel}>교정 횟수</Text>
+                    <Text style={s.miniVal}>{todayStats.summary.correctionCount}<Text style={s.miniUnit}> 회</Text></Text>
+                  </View>
+                </View>
               </View>
-              <View>
-                <Text style={s.miniLabel}>불량 자세</Text>
-                <Text style={s.miniVal}>{todayStats?.badPostureCount ?? 0}<Text style={s.miniUnit}> 회</Text></Text>
-              </View>
-            </View>
-            <View style={s.todayMiniBox}>
-              <View style={[s.miniIconCircle, { backgroundColor: '#D1FAE5' }]}>
-                <Text style={s.miniIcon}>⏰</Text>
-              </View>
-              <View>
-                <Text style={s.miniLabel}>교정 횟수</Text>
-                <Text style={s.miniVal}>{todayStats?.correctionCount ?? 0}<Text style={s.miniUnit}> 회</Text></Text>
-              </View>
-            </View>
-          </View>
 
-          <TouchableOpacity style={s.moreBtn} onPress={() => setShowTodayDetail(true)}>
-            <Text style={s.moreBtnText}>더 보기  ›</Text>
-          </TouchableOpacity>
+              <TouchableOpacity style={s.moreBtn} onPress={() => setShowTodayDetail(true)}>
+                <Text style={s.moreBtnText}>더 보기  ›</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* 자세 측정 지표 */}
@@ -383,31 +419,18 @@ export default function StatsScreen() {
         </View>
 
         <View style={s.chartCard}>
-          {/* 탭 */}
           <View style={s.tabRow}>
             {(['weekly', 'monthly'] as const).map(t => (
-              <TouchableOpacity
-                key={t}
-                style={[s.tabBtn, tab === t && s.tabBtnActive]}
-                onPress={() => setTab(t)}
-              >
-                <Text style={[s.tabText, tab === t && s.tabTextActive]}>
-                  {t === 'weekly' ? '주간' : '월간'}
-                </Text>
+              <TouchableOpacity key={t} style={[s.tabBtn, tab === t && s.tabBtnActive]} onPress={() => setTab(t)}>
+                <Text style={[s.tabText, tab === t && s.tabTextActive]}>{t === 'weekly' ? '주간' : '월간'}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* 차트 */}
           <View style={{ marginTop: SPACING.sm }}>
             <Text style={s.chartSub}>평균 점수의 주별 추이</Text>
             {chartData.length >= 2 ? (
-              <LineChart
-                data={chartData}
-                targetScore={settings.targetScore}
-                width={width - SPACING.base * 4}
-                height={160}
-              />
+              <LineChart data={chartData} targetScore={settings.targetScore} width={width - SPACING.base * 4} height={160} />
             ) : (
               <View style={s.emptyChart}>
                 <Text style={s.emptyChartText}>데이터가 쌓이면 그래프가 표시됩니다</Text>
@@ -415,7 +438,6 @@ export default function StatsScreen() {
             )}
           </View>
 
-          {/* 월 네비게이션 */}
           <View style={s.monthNav}>
             <TouchableOpacity onPress={() => setMonthOffset(p => p + 1)}>
               <Text style={s.navArrow}>‹</Text>
@@ -434,11 +456,7 @@ export default function StatsScreen() {
         </View>
       </ScrollView>
 
-      <TodayDetailModal
-        visible={showTodayDetail}
-        onClose={() => setShowTodayDetail(false)}
-        snapshots={localSnapshots}
-      />
+      <TodayDetailModal visible={showTodayDetail} onClose={() => setShowTodayDetail(false)} />
       <WeekDetailModal visible={showWeekDetail} onClose={() => setShowWeekDetail(false)} />
     </SafeAreaView>
   );
@@ -451,42 +469,31 @@ const s = StyleSheet.create({
     paddingHorizontal: SPACING.base, paddingVertical: SPACING.md,
   },
   pageTitle: { fontSize: FONTS.sizes.xl, fontWeight: '700', color: COLORS.text },
-
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm },
   sectionTitle: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
   targetLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
-
   todayCard: { backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: SPACING.base, ...SHADOWS.md },
   todayScoreRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.base },
-  todayIconBox: {
-    width: 48, height: 48, borderRadius: RADIUS.lg,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  todayIconBox: { width: 48, height: 48, borderRadius: RADIUS.lg, alignItems: 'center', justifyContent: 'center' },
   todayIcon: { fontSize: 22, color: '#fff' },
   todayScoreSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
   todayScoreNum: { fontSize: FONTS.sizes['3xl'], fontWeight: '800', color: COLORS.text },
   goodBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   goodDot: { width: 6, height: 6, borderRadius: 3 },
   goodText: { fontSize: FONTS.sizes.sm, fontWeight: '600' },
-
   todayMiniRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.sm },
   todayMiniBox: {
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
     backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md, padding: SPACING.sm,
   },
-  miniIconCircle: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  miniIconCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   miniIcon: { fontSize: 16 },
   miniLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginBottom: 2 },
   miniVal: { fontSize: FONTS.sizes.lg, fontWeight: '800', color: COLORS.text },
   miniUnit: { fontSize: FONTS.sizes.sm, fontWeight: '400', color: COLORS.textSecondary },
-
   moreBtn: { alignSelf: 'center', paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm },
   moreBtnText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, fontWeight: '600' },
   weekMoreBtn: { alignSelf: 'center', marginTop: SPACING.sm, paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm },
-
   chartCard: { backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: SPACING.base, ...SHADOWS.sm },
   tabRow: { flexDirection: 'row', backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.full, padding: 3 },
   tabBtn: { flex: 1, height: 36, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center' },
@@ -494,9 +501,8 @@ const s = StyleSheet.create({
   tabText: { fontSize: FONTS.sizes.sm, fontWeight: '600', color: COLORS.textSecondary },
   tabTextActive: { color: '#fff' },
   chartSub: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted, marginBottom: SPACING.xs },
-  emptyChart: { height: 100, alignItems: 'center', justifyContent: 'center' },
+  emptyChart: { height: 80, alignItems: 'center', justifyContent: 'center' },
   emptyChartText: { fontSize: FONTS.sizes.sm, color: COLORS.textMuted },
-
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACING.sm },
   navArrow: { fontSize: 22, color: COLORS.textSecondary, padding: SPACING.sm },
   monthLabel: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },

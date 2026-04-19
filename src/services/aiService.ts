@@ -127,7 +127,7 @@ export async function analyzeWeeklyReport(
     `현재 자세 점수: ${currentScore}점`,
     weekScores ? `주간 점수 추이: ${weekScores}` : '',
     `지난주 점수: ${prevScore}점, 이번 주 점수: ${latestScore}점, 최고 점수: ${bestScore}점`,
-    todayStats ? `오늘 불량 자세: ${todayStats.badPostureCount}회, 교정 횟수: ${todayStats.correctionCount}회, 사용 시간: ${todayStats.totalUsageTime}시간` : '',
+    todayStats ? `오늘 불량 자세: ${todayStats.summary.badPostureCount}회, 교정 횟수: ${todayStats.summary.correctionCount}회, 사용 시간: ${todayStats.summary.totalUsageTime}` : '',
   ].filter(Boolean).join('\n');
 
   const text = await callLLM(WEEKLY_SYSTEM_PROMPT, userContent, 512);

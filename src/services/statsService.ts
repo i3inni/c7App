@@ -1,100 +1,75 @@
 import { db } from '../lib/firebase';
 import {
   collection, doc, getDoc, getDocs, setDoc,
-  query, orderBy, limit, writeBatch,
+  query, where, orderBy, limit, writeBatch,
 } from 'firebase/firestore';
-import { DayStats, WeekStats, PostureSnapshot } from '../constants/types';
+import { DayStats, WeekStats } from '../constants/types';
 
-const dailyRef = (uid: string, date: string) =>
-  doc(db, 'users', uid, 'dailyStats', date);
-const snapshotRef = (uid: string, id: string) =>
-  doc(db, 'users', uid, 'snapshots', id);
+// ── 날짜 헬퍼 ─────────────────────────────────────────
+function toYYYYMMDD(date: Date): string {
+  return date.toISOString().split('T')[0].replace(/-/g, '');
+}
 
-// ── 오늘 통계 저장 ────────────────────────────────────
+function getISOWeekNumber(date: Date): number {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+// ── 오늘 통계 저장 ─────────────────────────────────────
 export const saveTodayStats = async (userId: string, stats: DayStats) => {
-  await setDoc(dailyRef(userId, stats.date), stats);
+  const today = new Date();
+  const docId = `${userId}_${toYYYYMMDD(today)}`;
+  await setDoc(doc(db, 'daily_stats', docId), { ...stats, uid: userId });
 };
 
-// ── 오늘 통계 조회 ────────────────────────────────────
+// ── 오늘 통계 조회 ─────────────────────────────────────
 export const getTodayStats = async (userId: string): Promise<DayStats | null> => {
-  const today = new Date().toISOString().split('T')[0];
-  const snap = await getDoc(dailyRef(userId, today));
+  const docId = `${userId}_${toYYYYMMDD(new Date())}`;
+  const snap = await getDoc(doc(db, 'daily_stats', docId));
   return snap.exists() ? (snap.data() as DayStats) : null;
 };
 
-// ── 주간 통계 조회 (최근 35일 일별 데이터 → 주차별 집계) ──
+// ── 주간 통계 저장 ─────────────────────────────────────
+export const saveWeeklyStats = async (userId: string, stats: Omit<WeekStats, 'weekLabel'>) => {
+  const now = new Date();
+  const weekNum = getISOWeekNumber(now);
+  const docId = `${userId}_${now.getFullYear()}_${String(weekNum).padStart(2, '0')}`;
+  await setDoc(doc(db, 'weekly_stats', docId), { ...stats, uid: userId });
+};
+
+// ── 주간 통계 조회 (최근 5주) ──────────────────────────
 export const getWeeklyStats = async (userId: string): Promise<WeekStats[]> => {
   const q = query(
-    collection(db, 'users', userId, 'dailyStats'),
-    orderBy('date', 'desc'),
-    limit(35),
+    collection(db, 'weekly_stats'),
+    where('uid', '==', userId),
+    orderBy('uid'),
+    limit(5),
   );
   const snap = await getDocs(q);
   if (snap.empty) return [];
 
-  const days = snap.docs.map(d => d.data() as DayStats);
-
-  // ISO 주차별 그룹핑
-  const weekMap = new Map<string, number[]>();
-  days.forEach(d => {
-    const date = new Date(d.date);
-    const week = getISOWeekKey(date);
-    if (!weekMap.has(week)) weekMap.set(week, []);
-    weekMap.get(week)!.push(d.dailyScore);
-  });
-
-  const weeks = Array.from(weekMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-5);
-
-  return weeks.map(([, scores], i) => {
-    const avgScore = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length);
-    const prevAvg = i > 0
-      ? Math.round(weeks[i - 1][1].reduce((s, v) => s + v, 0) / weeks[i - 1][1].length)
-      : avgScore;
-    return {
-      weekLabel: `${i + 1}주`,
-      avgScore,
-      scoreChange: avgScore - prevAvg,
-    };
-  });
+  return snap.docs.map((d, i) => ({
+    ...(d.data() as Omit<WeekStats, 'weekLabel'>),
+    weekLabel: `${i + 1}주`,
+  }));
 };
 
-// ── 자세 스냅샷 저장 ──────────────────────────────────
-export const saveSnapshot = async (userId: string, snapshot: PostureSnapshot) => {
-  await setDoc(snapshotRef(userId, snapshot.id), snapshot);
-};
-
-// ── 자세 스냅샷 목록 조회 (최근 100개) ───────────────
-export const getSnapshots = async (userId: string): Promise<PostureSnapshot[]> => {
-  const q = query(
-    collection(db, 'users', userId, 'snapshots'),
-    orderBy('timestamp', 'desc'),
-    limit(100),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => d.data() as PostureSnapshot);
-};
-
-// ── 기록 전체 삭제 ────────────────────────────────────
+// ── 기록 전체 삭제 ─────────────────────────────────────
 export const clearAllStats = async (userId: string) => {
   const batch = writeBatch(db);
 
-  const dailySnap = await getDocs(collection(db, 'users', userId, 'dailyStats'));
+  const dailySnap = await getDocs(
+    query(collection(db, 'daily_stats'), where('uid', '==', userId))
+  );
   dailySnap.docs.forEach(d => batch.delete(d.ref));
 
-  const snapshotSnap = await getDocs(collection(db, 'users', userId, 'snapshots'));
-  snapshotSnap.docs.forEach(d => batch.delete(d.ref));
+  const weeklySnap = await getDocs(
+    query(collection(db, 'weekly_stats'), where('uid', '==', userId))
+  );
+  weeklySnap.docs.forEach(d => batch.delete(d.ref));
 
   await batch.commit();
 };
-
-// ── 유틸 ─────────────────────────────────────────────
-function getISOWeekKey(date: Date): string {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
-  const year = d.getFullYear();
-  const week = Math.ceil(((d.getTime() - new Date(year, 0, 1).getTime()) / 86400000 + 1) / 7);
-  return `${year}-W${String(week).padStart(2, '0')}`;
-}
