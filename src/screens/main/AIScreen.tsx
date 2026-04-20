@@ -355,8 +355,23 @@ export default function AIScreen() {
 
             {report && !reportLoading && (
               <>
-                <Text style={styles.reportBody}>{report.summary}</Text>
+                {/* 등급 */}
+                {(() => {
+                  const gradeColor = { S: '#FFD700', A: '#4ADE80', B: '#60A5FA', C: '#FBBF24', D: '#F87171' }[report.grade] ?? '#fff';
+                  return (
+                    <View style={styles.gradeRow}>
+                      <View style={[styles.gradeBadge, { borderColor: gradeColor }]}>
+                        <Text style={[styles.gradeText, { color: gradeColor }]}>{report.grade}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.gradeComment}>{report.gradeComment}</Text>
+                        <Text style={styles.reportBody}>{report.summary}</Text>
+                      </View>
+                    </View>
+                  );
+                })()}
 
+                {/* 점수 통계 */}
                 <View style={styles.reportStatRow}>
                   <View style={styles.reportStatBox}>
                     <Text style={styles.reportStatLabel}>최고 점수</Text>
@@ -370,19 +385,77 @@ export default function AIScreen() {
                   <View style={styles.reportStatDivider} />
                   <View style={styles.reportStatBox}>
                     <Text style={styles.reportStatLabel}>추세</Text>
-                    <Text style={[styles.reportStatVal, { color: report.trend.startsWith('↑') ? '#4ADE80' : '#F87171' }]}>{report.trend}</Text>
+                    <Text style={[styles.reportStatVal, { color: report.trend.startsWith('↑') ? '#4ADE80' : report.trend.startsWith('↓') ? '#F87171' : '#fff' }]}>{report.trend}</Text>
                   </View>
                 </View>
 
-                <View style={styles.reportInsightBox}>
-                  <Text style={styles.reportInsightLabel}>💡 핵심 인사이트</Text>
-                  <Text style={styles.reportInsightText}>{report.insight}</Text>
+                {/* 4개 분석 카드 */}
+                <Text style={styles.sectionLabel}>상세 분석</Text>
+                {report.analyses?.map((a, i) => {
+                  const statusColor = { good: '#4ADE80', warning: '#FBBF24', bad: '#F87171' }[a.status] ?? '#fff';
+                  return (
+                    <View key={i} style={[styles.analysisCard, { borderLeftColor: statusColor }]}>
+                      <View style={styles.analysisTop}>
+                        <Text style={styles.analysisIcon}>{a.icon}</Text>
+                        <Text style={styles.analysisLabel}>{a.label}</Text>
+                        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                      </View>
+                      <Text style={styles.analysisText}>{a.text}</Text>
+                    </View>
+                  );
+                })}
+
+                {/* 비교 분석 */}
+                <Text style={styles.sectionLabel}>지난주 대비</Text>
+                <View style={styles.comparisonRow}>
+                  <View style={styles.comparisonCol}>
+                    <Text style={styles.comparisonHeader}>✅ 개선</Text>
+                    {report.comparison?.improvements?.map((t, i) => (
+                      <Text key={i} style={styles.comparisonItem}>· {t}</Text>
+                    ))}
+                  </View>
+                  <View style={styles.comparisonDivider} />
+                  <View style={styles.comparisonCol}>
+                    <Text style={[styles.comparisonHeader, { color: '#F87171' }]}>📉 악화</Text>
+                    {report.comparison?.regressions?.map((t, i) => (
+                      <Text key={i} style={[styles.comparisonItem, { color: 'rgba(248,113,113,0.8)' }]}>· {t}</Text>
+                    ))}
+                  </View>
                 </View>
 
-                <View style={styles.reportRecommendBox}>
-                  <Text style={styles.reportInsightLabel}>🎯 이번 주 추천</Text>
-                  <Text style={styles.reportInsightText}>{report.recommendation}</Text>
-                </View>
+                {/* 리스크 레벨 */}
+                {(() => {
+                  const riskColor = { low: '#4ADE80', medium: '#FBBF24', high: '#F87171' }[report.riskLevel] ?? '#fff';
+                  const riskLabel = { low: '낮음', medium: '보통', high: '높음' }[report.riskLevel] ?? '-';
+                  return (
+                    <View style={styles.riskBox}>
+                      <View style={styles.riskHeader}>
+                        <Text style={styles.sectionLabel}>리스크 레벨</Text>
+                        <View style={[styles.riskBadge, { backgroundColor: riskColor + '25' }]}>
+                          <Text style={[styles.riskBadgeText, { color: riskColor }]}>{riskLabel}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.riskBar}>
+                        <View style={[styles.riskFill, {
+                          width: report.riskLevel === 'low' ? '33%' : report.riskLevel === 'medium' ? '66%' : '100%',
+                          backgroundColor: riskColor,
+                        }]} />
+                      </View>
+                      <Text style={styles.riskDetail}>{report.riskDetail}</Text>
+                    </View>
+                  );
+                })()}
+
+                {/* 실천 계획 */}
+                <Text style={styles.sectionLabel}>이번 주 실천 계획</Text>
+                {report.actionPlan?.map((item, i) => (
+                  <View key={i} style={styles.actionItem}>
+                    <View style={styles.actionNum}>
+                      <Text style={styles.actionNumText}>{i + 1}</Text>
+                    </View>
+                    <Text style={styles.actionText}>{item}</Text>
+                  </View>
+                ))}
 
                 <TouchableOpacity style={styles.reAnalyzeBtn} onPress={fetchReport}>
                   <Text style={styles.reAnalyzeBtnText}>다시 분석하기</Text>
@@ -598,6 +671,52 @@ const styles = StyleSheet.create({
   reportLoadingText: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.5)' },
   reportErrorText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
   exErrorText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
+
+  gradeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm, marginBottom: SPACING.sm },
+  gradeBadge: {
+    width: 52, height: 52, borderRadius: RADIUS.md,
+    borderWidth: 2, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  gradeText: { fontSize: FONTS.sizes['2xl'], fontWeight: '900' },
+  gradeComment: { fontSize: FONTS.sizes.xs, fontWeight: '700', color: 'rgba(255,255,255,0.5)', marginBottom: 4 },
+
+  sectionLabel: { fontSize: FONTS.sizes.xs, fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: 0.8, marginTop: SPACING.sm, marginBottom: SPACING.xs },
+
+  analysisCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: RADIUS.md,
+    padding: SPACING.sm, marginBottom: SPACING.xs, borderLeftWidth: 3,
+  },
+  analysisTop: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginBottom: 4 },
+  analysisIcon: { fontSize: 14 },
+  analysisLabel: { flex: 1, fontSize: FONTS.sizes.xs, fontWeight: '700', color: 'rgba(255,255,255,0.6)' },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  analysisText: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.75)', lineHeight: 18 },
+
+  comparisonRow: {
+    flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: RADIUS.md, padding: SPACING.sm, marginBottom: SPACING.xs,
+  },
+  comparisonCol: { flex: 1 },
+  comparisonDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: SPACING.sm },
+  comparisonHeader: { fontSize: FONTS.sizes.xs, fontWeight: '700', color: '#4ADE80', marginBottom: SPACING.xs },
+  comparisonItem: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.65)', lineHeight: 18, marginBottom: 2 },
+
+  riskBox: { marginTop: SPACING.xs },
+  riskHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  riskBadge: { borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2, marginBottom: SPACING.xs },
+  riskBadgeText: { fontSize: FONTS.sizes.xs, fontWeight: '700' },
+  riskBar: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.1)', marginBottom: SPACING.xs, overflow: 'hidden' },
+  riskFill: { height: 4, borderRadius: 2 },
+  riskDetail: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.65)', lineHeight: 18 },
+
+  actionItem: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm, marginBottom: SPACING.xs },
+  actionNum: {
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', marginTop: 1,
+  },
+  actionNumText: { fontSize: 10, fontWeight: '800', color: '#fff' },
+  actionText: { flex: 1, fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.8)', lineHeight: 18 },
 
   refreshInfo: {
     marginHorizontal: SPACING.base, marginTop: -SPACING.md, marginBottom: SPACING.md,
