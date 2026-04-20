@@ -620,9 +620,14 @@ const nStyles = StyleSheet.create({
 // ── 메인 홈 ──────────────────────────────────────────
 export default function HomeScreen() {
   const nav = useNavigation();
-  const { user, device, currentScore, currentAngle, currentLevel, settings, setDevice, notifications } = useStore();
+  const { user, device, currentScore, currentAngle, currentLevel, settings, setDevice, notifications, setNotifications } = useStore();
   const [showGoal, setShowGoal] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    getNotifications(user.id).then(setNotifications).catch(() => {});
+  }, [user?.id]);
 
   const levelLabel: Record<string, string> = {
     excellent: '우수',

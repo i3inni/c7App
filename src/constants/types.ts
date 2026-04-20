@@ -5,6 +5,7 @@ export interface User {
   email?: string;
   height?: number;
   weight?: number;
+  sittingTime?: number;
   isGuest: boolean;
 }
 
@@ -25,6 +26,15 @@ export interface DeviceState {
 // ─── Posture / Sensor ─────────────────────────────
 export type PostureLevel = 'excellent' | 'good' | 'normal' | 'caution' | 'danger';
 
+// 모델이 감지하는 자세 타입 (나중에 ML 모델 출력과 매핑)
+export type PostureType =
+  | 'normal'        // 정상
+  | 'forward_head'  // 거북목
+  | 'rounded_back'  // 굽은 등
+  | 'straight_neck' // 일자목
+  | 'tilted'        // 기울어진 자세
+  | 'unknown';      // 미감지
+
 export interface PostureSnapshot {
   id: string;
   timestamp: number;
@@ -34,19 +44,39 @@ export interface PostureSnapshot {
   durationMin: number;
 }
 
+export interface BadPostureLog {
+  time: string;     // "14:23"
+  angle: number;    // 22.5
+  duration: string; // "3분"
+}
+
 export interface DayStats {
-  date: string; // YYYY-MM-DD
-  score: number;
-  badPostureCount: number;
-  correctionMin: number;
-  avgAngle: number;
-  vibrationCount: number;
-  goodPostureHours: number;
+  uid?: string;
+  date: string; // "YYYY-MM-DD"
+  summary: {
+    dailyScore: number;
+    badPostureCount: number;
+    correctionCount: number;
+    totalUsageTime: string; // "6.2h"
+    avgAngle: number;
+  };
+  hourlyScores: Record<string, number>; // { "09_12": 88, ... }
+  badPostureLogs: BadPostureLog[];
 }
 
 export interface WeekStats {
-  weekLabel: string; // '1주'
-  score: number;
+  uid?: string;
+  weekLabel: string; // 표시용 ("1주")
+  avgScore: number;
+  scoreChange: number;
+  targetSuccessDays?: string; // "3/7"
+  dailyBreakdown?: { day: string; score: number; change: number }[];
+  aiDiagnosis?: {
+    resultTitle: string;
+    statusText: string;
+    improvementRate: number;
+    solutionStep: number;
+  };
 }
 
 // ─── Notifications ────────────────────────────────
