@@ -11,6 +11,7 @@ import ConfirmModal from '../../components/common/ConfirmModal';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import { updateNotificationSettings } from '../../services/userService';
 
 // ── 공통 헤더 ────────────────────────────────────────
 function PageHeader({ title }: { title: string }) {
@@ -108,7 +109,10 @@ export function MyInfoScreen() {
               </View>
               <Toggle
                 value={settings.postureAlertEnabled}
-                onToggle={v => updateSettings({ postureAlertEnabled: v })}
+                onToggle={v => {
+                  updateSettings({ postureAlertEnabled: v });
+                  if (user?.id) updateNotificationSettings(user.id, { postureAlert: v });
+                }}
               />
             </View>
             <View style={styles.separator} />
@@ -119,7 +123,10 @@ export function MyInfoScreen() {
               </View>
               <Toggle
                 value={settings.reportAlertEnabled}
-                onToggle={v => updateSettings({ reportAlertEnabled: v })}
+                onToggle={v => {
+                  updateSettings({ reportAlertEnabled: v });
+                  if (user?.id) updateNotificationSettings(user.id, { reportAlert: v });
+                }}
               />
             </View>
           </View>

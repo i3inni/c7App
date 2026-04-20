@@ -115,15 +115,15 @@ export const updateCalibrationAngle = async (userId: string, angle: number): Pro
 // ─────────────────────────────────────────────────────────────
 //
 // [내 정보 화면]
-// - 연결/비연결 상태 실시간 표시
+// - 연결/비연결 상태 실시간 표시 ✅
 //   → deviceService에서 실시간 기기 상태를 받아와 화면에 표시 예정
-// - 배터리 상태 표시
-//   → deviceService와 연결 예정
+// - 배터리 상태 표시 ❌
+//   → deviceService와 연결 예정 ❌
 // - 홈화면 전원 관리(전원 on/off, 절전 모드)
 //   → deviceService 제어 로직과 연결 예정
 //
 // [홈화면]
-// - 실시간 자세 점수 / 각도
+// - 실시간 자세 점수 / 각도 ❌
 //   → statsService 또는 실시간 측정 로직과 연결 예정
 //
 // [설정 화면]
