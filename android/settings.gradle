@@ -44,7 +44,7 @@ if (getRNMinorVersion() >= 75) {
   }
 }
 
-rootProject.name = 'C7AI'
+rootProject.name = 'C7 AI'
 
 dependencyResolutionManagement {
   versionCatalogs {

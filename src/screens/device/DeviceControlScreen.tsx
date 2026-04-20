@@ -14,6 +14,7 @@ import { useStore } from "../../store";
 import Toggle from "../../components/common/Toggle";
 import ConfirmModal from "../../components/common/ConfirmModal";
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from "../../constants/theme";
+import { saveDeviceSettings, updateDeviceConnection } from '../../services/deviceService';
 
 type Tab = "battery" | "power" | "sensor" | "vibration";
 
@@ -305,11 +306,18 @@ const mqStyles = StyleSheet.create({
 // ── 메인 ──────────────────────────────────────────────
 export default function DeviceControlScreen() {
   const nav = useNavigation();
-  const { device, setDevice, disconnectMqtt } = useStore();
+  const { device, setDevice, disconnectMqtt, user } = useStore();
+  const isGuest = user?.isGuest ?? false;
   const [activeTab, setActiveTab] = useState<Tab>("battery");
   const [showDisconnect, setShowDisconnect] = useState(false);
   const [sensorAngle, setSensorAngle] = useState(device.sensorAngle);
   const [vibIntensity, setVibIntensity] = useState(device.vibrationIntensity);
+
+  // 로컬 상태 + Firestore 동시 저장 헬퍼
+  const saveDevice = (partial: Parameters<typeof setDevice>[0]) => {
+    setDevice(partial);
+    if (user?.id) saveDeviceSettings(user.id, partial).catch(() => {});
+  };
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "battery", label: "배터리" },
@@ -325,9 +333,11 @@ export default function DeviceControlScreen() {
     <SafeAreaView style={styles.safe}>
       {/* 헤더 */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
-          <Text style={styles.backIcon}>‹</Text>
-        </TouchableOpacity>
+        {!isGuest && (
+          <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
+            <Text style={styles.backIcon}>‹</Text>
+          </TouchableOpacity>
+        )}
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>디바이스 제어</Text>
           <Text style={styles.headerSub}>C7 Hardware Interface</Text>
@@ -398,7 +408,7 @@ export default function DeviceControlScreen() {
                 <Text style={styles.rowLabel}>절전 모드</Text>
                 <Toggle
                   value={device.powerSaveMode}
-                  onToggle={(v) => setDevice({ powerSaveMode: v })}
+                  onToggle={(v) => saveDevice({ powerSaveMode: v })}
                   activeColor={COLORS.primary}
                   size="sm"
                 />
@@ -415,7 +425,7 @@ export default function DeviceControlScreen() {
                 <Text style={styles.rowLabel}>디바이스 전원</Text>
                 <Toggle
                   value={device.powerOn}
-                  onToggle={(v) => setDevice({ powerOn: v })}
+                  onToggle={(v) => saveDevice({ powerOn: v })}
                   activeColor="#3B82F6"
                 />
               </View>
@@ -443,14 +453,14 @@ export default function DeviceControlScreen() {
               <View style={styles.sliderRow}>
                 <TouchableOpacity
                   style={styles.angleStepBtn}
-                  onPress={() => { const v = Math.max(5, sensorAngle - 5); setSensorAngle(v); setDevice({ sensorAngle: v }); }}
+                  onPress={() => { const v = Math.max(5, sensorAngle - 5); setSensorAngle(v); saveDevice({ sensorAngle: v }); }}
                 >
                   <Text style={styles.angleStepText}>−</Text>
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
                   <DraggableSlider
                     value={sensorAngle}
-                    onChange={(v) => { setSensorAngle(v); setDevice({ sensorAngle: v }); }}
+                    onChange={(v) => { setSensorAngle(v); saveDevice({ sensorAngle: v }); }}
                     min={5}
                     max={90}
                     color={COLORS.primary}
@@ -458,7 +468,7 @@ export default function DeviceControlScreen() {
                 </View>
                 <TouchableOpacity
                   style={styles.angleStepBtn}
-                  onPress={() => { const v = Math.min(90, sensorAngle + 5); setSensorAngle(v); setDevice({ sensorAngle: v }); }}
+                  onPress={() => { const v = Math.min(90, sensorAngle + 5); setSensorAngle(v); saveDevice({ sensorAngle: v }); }}
                 >
                   <Text style={styles.angleStepText}>+</Text>
                 </TouchableOpacity>
@@ -470,7 +480,7 @@ export default function DeviceControlScreen() {
                     <TouchableOpacity
                       key={l}
                       style={[styles.vibBtn, sensorAngle === v && styles.sensorBtnActive]}
-                      onPress={() => { setSensorAngle(v); setDevice({ sensorAngle: v }); }}
+                      onPress={() => { setSensorAngle(v); saveDevice({ sensorAngle: v }); }}
                     >
                       <Text style={[styles.vibBtnText, sensorAngle === v && styles.sensorBtnTextActive]}>
                         {l}
@@ -494,7 +504,7 @@ export default function DeviceControlScreen() {
                 <Text style={styles.rowLabel}>진동 활성화</Text>
                 <Toggle
                   value={device.vibrationEnabled}
-                  onToggle={(v) => setDevice({ vibrationEnabled: v })}
+                  onToggle={(v) => saveDevice({ vibrationEnabled: v })}
                   activeColor="#8B5CF6"
                 />
               </View>
@@ -506,7 +516,7 @@ export default function DeviceControlScreen() {
               </View>
               <DraggableSlider
                 value={vibIntensity}
-                onChange={(v) => { setVibIntensity(v); setDevice({ vibrationIntensity: v }); }}
+                onChange={(v) => { setVibIntensity(v); saveDevice({ vibrationIntensity: v }); }}
                 min={0}
                 max={100}
                 color="#8B5CF6"
@@ -521,7 +531,7 @@ export default function DeviceControlScreen() {
                         styles.vibBtn,
                         vibIntensity === v && styles.vibBtnActive,
                       ]}
-                      onPress={() => { setVibIntensity(v); setDevice({ vibrationIntensity: v }); }}
+                      onPress={() => { setVibIntensity(v); saveDevice({ vibrationIntensity: v }); }}
                     >
                       <Text
                         style={[
@@ -562,9 +572,12 @@ export default function DeviceControlScreen() {
         cancelLabel="취소"
         confirmVariant="danger"
         onConfirm={() => {
+          if (user?.id && device.deviceId) {
+            updateDeviceConnection(user.id, device.deviceId, false).catch(() => {});
+          }
           disconnectMqtt();
           setShowDisconnect(false);
-          nav.replace("MqttConnect");
+          (nav as any).replace("MqttConnect");
         }}
         onCancel={() => setShowDisconnect(false)}
       />
