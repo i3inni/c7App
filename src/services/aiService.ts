@@ -24,13 +24,28 @@ export interface LocalDiagnosis {
   improvementRate: string;
 }
 
+export interface WeeklyAnalysis {
+  icon: string;
+  label: string;
+  status: 'good' | 'warning' | 'bad';
+  text: string;
+}
+
 export interface WeeklyReport {
-  summary: string;        // 종합 평가 2문장
-  bestScore: number;      // 주간 최고 점수
-  avgScore: number;       // 주간 평균 점수
-  trend: string;          // "↑ X%" 또는 "↓ X%"
-  insight: string;        // 핵심 인사이트 1문장
-  recommendation: string; // 개선 추천 1문장
+  grade: 'S' | 'A' | 'B' | 'C' | 'D';
+  gradeComment: string;
+  summary: string;
+  bestScore: number;
+  avgScore: number;
+  trend: string;
+  analyses: WeeklyAnalysis[];
+  comparison: {
+    improvements: string[];
+    regressions: string[];
+  };
+  riskLevel: 'low' | 'medium' | 'high';
+  riskDetail: string;
+  actionPlan: string[];
 }
 
 // ── 공통 fetch 헬퍼 ──────────────────────────────────────
@@ -153,12 +168,25 @@ export async function analyzeExercises(
 const WEEKLY_SYSTEM_PROMPT = `당신은 거북목 교정 전문 AI입니다. 사용자의 주간 자세 데이터를 분석하여 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
 
 {
-  "summary": "이번 주 자세 상태 종합 평가 10문장 (구체적 수치 포함)",
+  "grade": "S/A/B/C/D 중 하나 (S:최우수, A:우수, B:양호, C:보통, D:미흡)",
+  "gradeComment": "등급에 대한 핵심 평가 1문장",
+  "summary": "이번 주 자세 상태 종합 평가 2문장 (구체적 수치 포함)",
   "bestScore": 숫자,
   "avgScore": 숫자,
-  "trend": "↑ X% 또는 ↓ X%",
-  "insight": "가장 주목할 만한 패턴이나 변화 1문장",
-  "recommendation": "다음 주를 위한 가장 중요한 개선 행동 1문장"
+  "trend": "↑ X% 또는 ↓ X% 또는 → 0%",
+  "analyses": [
+    { "icon": "📊", "label": "점수 분석", "status": "good/warning/bad 중 하나", "text": "점수 변화 원인과 패턴 분석 2문장" },
+    { "icon": "🕐", "label": "사용 패턴", "status": "good/warning/bad 중 하나", "text": "하루 사용 시간대와 빈도 패턴 분석 2문장" },
+    { "icon": "🔄", "label": "교정 효과", "status": "good/warning/bad 중 하나", "text": "교정 자극 반응률과 실제 개선 효과 2문장" },
+    { "icon": "⚠️", "label": "위험 패턴", "status": "good/warning/bad 중 하나", "text": "반복되는 위험 자세 패턴과 누적 영향 2문장" }
+  ],
+  "comparison": {
+    "improvements": ["지난주 대비 개선된 점 1", "개선된 점 2"],
+    "regressions": ["지난주 대비 악화된 점 1", "악화된 점 2"]
+  },
+  "riskLevel": "low/medium/high 중 하나",
+  "riskDetail": "현재 리스크 수준의 원인과 방치 시 예상 결과 2문장",
+  "actionPlan": ["이번 주 실천 항목 1 (구체적 행동)", "실천 항목 2", "실천 항목 3"]
 }`;
 
 export async function analyzeWeeklyReport(
@@ -178,6 +206,6 @@ export async function analyzeWeeklyReport(
     todayStats ? `오늘 불량 자세: ${todayStats.summary.badPostureCount}회, 교정 횟수: ${todayStats.summary.correctionCount}회, 사용 시간: ${todayStats.summary.totalUsageTime}` : '',
   ].filter(Boolean).join('\n');
 
-  const text = await callLLM(WEEKLY_SYSTEM_PROMPT, userContent, 512);
+  const text = await callLLM(WEEKLY_SYSTEM_PROMPT, userContent, 1200);
   return JSON.parse(text) as WeeklyReport;
 }
