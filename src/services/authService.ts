@@ -3,14 +3,14 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   updatePassword,
-  deleteUser,
   GoogleAuthProvider,
   OAuthProvider,
   signInWithCredential,
   EmailAuthProvider,
   reauthenticateWithCredential,
+  sendEmailVerification,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { auth, db } from '../lib/firebase';
@@ -32,16 +32,45 @@ export const signUp = async (email: string, password: string, nickname: string) 
   const result = await createUserWithEmailAndPassword(auth, email, password);
   const user = result.user;
 
-  // Firestore에 유저 프로필 저장
-  // users/{userId} 경로에 문서 생성
   await setDoc(doc(db, 'users', user.uid), {
-    nickname,
-    email,
-    isGuest: false,
-    createdAt: Date.now(),
+    account: {
+      userId: user.uid,
+      nickname,
+      email,
+      isMember: true,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    },
+    bodyInfo: {
+      height: null,
+      weight: null,
+      sittingTime: null,
+      calibrationAngle: null,
+    },
+    deviceSettings: {
+      deviceId: null,
+      vibrationEnabled: true,
+      vibrationStrength: '중',
+      detectionAngle: 30,
+      powerSaveMode: false,
+      targetScore: 85,
+    },
+    notificationSettings: {
+      postureAlert: true,
+      reportAlert: true,
+    },
   });
 
+  await sendEmailVerification(user);
+
   return user;
+};
+
+// ─── 이메일 인증 재발송 ───────────────────────────────────────────────────────
+export const resendVerificationEmail = async () => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('로그인 상태가 아닙니다.');
+  await sendEmailVerification(user);
 };
 
 // ─── 구글 로그인 ──────────────────────────────────────────────────────────────
@@ -63,14 +92,35 @@ export const loginWithGoogle = async () => {
   const result = await signInWithCredential(auth, credential);
   const user = result.user;
 
-  // 신규 유저면 Firestore에 프로필 생성
   const userDoc = await getDoc(doc(db, 'users', user.uid));
   if (!userDoc.exists()) {
     await setDoc(doc(db, 'users', user.uid), {
-      nickname: user.displayName ?? '사용자',
-      email: user.email,
-      isGuest: false,
-      createdAt: Date.now(),
+      account: {
+        userId: user.uid,
+        nickname: user.displayName ?? '사용자',
+        email: user.email,
+        isMember: true,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      },
+      bodyInfo: {
+        height: null,
+        weight: null,
+        sittingTime: null,
+        calibrationAngle: null,
+      },
+      deviceSettings: {
+        deviceId: null,
+        vibrationEnabled: true,
+        vibrationStrength: '중',
+        detectionAngle: 30,
+        powerSaveMode: false,
+        targetScore: 85,
+      },
+      notificationSettings: {
+        postureAlert: true,
+        reportAlert: true,
+      },
     });
   }
 
@@ -143,9 +193,32 @@ export const changePassword = async (currentPassword: string, newPassword: strin
   await updatePassword(user, newPassword);
 };
 
-// ─── 회원 탈퇴 ────────────────────────────────────────────────────────────────
-export const deleteAccount = async () => {
+// ─── 회원 탈퇴 (소프트 삭제) ──────────────────────────────────────────────────
+// 이메일 계정: 비밀번호로 재인증 후 비활성화
+// 계정/데이터는 보존, account.isActive = false 로 비활성화 후 로그아웃
+export const deleteAccount = async (password?: string) => {
   const user = auth.currentUser;
   if (!user) throw new Error('로그인 상태가 아닙니다.');
-  await deleteUser(user);
+
+  const isEmailProvider = user.providerData.some((p) => p.providerId === 'password');
+  if (isEmailProvider) {
+    if (!password) throw new Error('비밀번호를 입력해주세요.');
+    if (!user.email) throw new Error('이메일 정보를 찾을 수 없습니다.');
+    const credential = EmailAuthProvider.credential(user.email, password);
+    await reauthenticateWithCredential(user, credential);
+  }
+
+  await updateDoc(doc(db, 'users', user.uid), {
+    'account.isActive': false,
+    'account.withdrawnAt': new Date().toISOString(),
+  });
+  await signOut(auth);
+};
+
+// ─── 탈퇴 취소 (계정 재활성화) ────────────────────────────────────────────────
+export const reactivateAccount = async (uid: string) => {
+  await updateDoc(doc(db, 'users', uid), {
+    'account.isActive': true,
+    'account.withdrawnAt': null,
+  });
 };

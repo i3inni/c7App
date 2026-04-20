@@ -16,8 +16,9 @@ interface Props {
   cancelLabel?: string;
   confirmVariant?: 'danger' | 'primary' | 'dark';
   confirmColor?: string;
+  hideCancel?: boolean;
   onConfirm: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
 }
 
 export default function ConfirmModal({
@@ -25,6 +26,7 @@ export default function ConfirmModal({
   title, message,
   confirmLabel = '확인', cancelLabel = '취소',
   confirmVariant = 'primary', confirmColor,
+  hideCancel = false,
   onConfirm, onCancel,
 }: Props) {
   const confirmBg = confirmColor ?? (
@@ -44,9 +46,11 @@ export default function ConfirmModal({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
           <View style={styles.row}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
-              <Text style={styles.cancelText}>{cancelLabel}</Text>
-            </TouchableOpacity>
+            {!hideCancel && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
+                <Text style={styles.cancelText}>{cancelLabel}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: confirmBg }]} onPress={onConfirm}>
               <Text style={styles.confirmText}>{confirmLabel}</Text>
             </TouchableOpacity>

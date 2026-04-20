@@ -70,6 +70,7 @@ interface AppState {
   setLastWeeklyReport: (r: WeeklyReport) => void;
 
   addNotification: (n: AppNotification) => void;
+  setNotifications: (ns: AppNotification[]) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
 
@@ -152,6 +153,7 @@ export const useStore = create<AppState>()(
 
       addNotification: (n) =>
         set((s) => ({ notifications: [n, ...s.notifications] })),
+      setNotifications: (ns) => set({ notifications: ns }),
       removeNotification: (id) =>
         set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
       clearNotifications: () => set({ notifications: [] }),
@@ -168,6 +170,7 @@ export const useStore = create<AppState>()(
       name: 'c7-app-storage-v2',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
+        device: state.device,
         todayStats: state.todayStats,
         weeklyStats: state.weeklyStats,
         snapshots: state.snapshots,
@@ -179,6 +182,12 @@ export const useStore = create<AppState>()(
         lastDiagnosisAt: state.lastDiagnosisAt,
         lastWeeklyReport: state.lastWeeklyReport,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // 앱 재시작 시 MQTT 연결 상태는 초기화 (기기 설정값은 유지)
+          state.device = { ...state.device, mqttStatus: 'idle' };
+        }
+      },
     }
   )
 );

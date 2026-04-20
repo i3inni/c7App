@@ -1,21 +1,71 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../../lib/firebase';
+import { useStore } from '../../store';
 import { COLORS, FONTS } from '../../constants/theme';
 
 export default function SplashScreen() {
   const nav = useNavigation();
+  const setUser = useStore((s) => s.setUser);
   const scale = new Animated.Value(0.8);
   const opacity = new Animated.Value(0);
 
   useEffect(() => {
+    const startedAt = Date.now();
+
     Animated.parallel([
       Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 12 }),
       Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
     ]).start();
 
-    const timer = setTimeout(() => nav.replace('Login'), 2000);
-    return () => clearTimeout(timer);
+    const goTo = (screen: string) => {
+      const remaining = Math.max(0, 2000 - (Date.now() - startedAt));
+      setTimeout(() => (nav as any).replace(screen), remaining);
+    };
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      unsubscribe();
+
+      if (!firebaseUser) {
+        goTo('Login');
+        return;
+      }
+
+      if (!firebaseUser.emailVerified) {
+        await signOut(auth);
+        goTo('Login');
+        return;
+      }
+
+      try {
+        const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
+        const data = snap.exists() ? snap.data() : null;
+        if (data?.account?.isActive === false) {
+          // 탈퇴 계정이면 로그인 화면으로 (재활성화 여부는 LoginScreen에서 처리)
+          await signOut(auth);
+          goTo('Login');
+          return;
+        }
+        setUser({
+          id: firebaseUser.uid,
+          nickname: data?.account?.nickname ?? firebaseUser.displayName ?? '사용자',
+          email: data?.account?.email ?? firebaseUser.email ?? undefined,
+          height: data?.bodyInfo?.height ?? undefined,
+          weight: data?.bodyInfo?.weight ?? undefined,
+          sittingTime: data?.bodyInfo?.sittingTime ?? undefined,
+          isGuest: false,
+        });
+        const hasBodyInfo = data?.bodyInfo?.height && data?.bodyInfo?.weight;
+        goTo(hasBodyInfo ? 'MainTabs' : 'InitBodyInfo');
+      } catch {
+        goTo('Login');
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   return (

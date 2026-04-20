@@ -5,6 +5,7 @@ export interface User {
   email?: string;
   height?: number;
   weight?: number;
+  sittingTime?: number;
   isGuest: boolean;
 }
 
@@ -70,6 +71,12 @@ export interface WeekStats {
   scoreChange: number;
   targetSuccessDays?: string; // "3/7"
   dailyBreakdown?: { day: string; score: number; change: number }[];
+  aiDiagnosis?: {
+    resultTitle: string;
+    statusText: string;
+    improvementRate: number;
+    solutionStep: number;
+  };
 }
 
 // ─── Notifications ────────────────────────────────
