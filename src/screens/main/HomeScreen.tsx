@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, PanResponder,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, PanResponder, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect, G } from 'react-native-svg';
@@ -10,6 +10,7 @@ import Toggle from '../../components/common/Toggle';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import type { AppNotification } from '../../constants/types';
 import { deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
+import { updateTargetScore } from '../../services/userService';
 
 // ── SVG 아이콘 ────────────────────────────────────────
 function PersonIcon({ size = 22, color = COLORS.text }: { size?: number; color?: string }) {
@@ -200,7 +201,7 @@ const GOAL_MIN = 60;
 const GOAL_MAX = 95;
 
 function GoalModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { settings, updateSettings } = useStore();
+  const { settings, updateSettings, user } = useStore();
   const [val, setVal] = useState(settings.targetScore);
   const trackWidthRef = useRef(1);
 
@@ -297,7 +298,18 @@ function GoalModal({ visible, onClose }: { visible: boolean; onClose: () => void
           {/* 확인 버튼 */}
           <TouchableOpacity
             style={modalStyles.confirmBtn}
-            onPress={() => { updateSettings({ targetScore: val }); onClose(); }}
+            onPress={async () => {
+              if (user?.id && user.id !== 'guest') {
+                try {
+                  await updateTargetScore(user.id, val);
+                } catch {
+                  Alert.alert('저장 실패', '목표 점수를 저장하지 못했습니다. 다시 시도해주세요.');
+                  return;
+                }
+              }
+              updateSettings({ targetScore: val });
+              onClose();
+            }}
           >
             <Text style={modalStyles.confirmText}>완료</Text>
           </TouchableOpacity>
