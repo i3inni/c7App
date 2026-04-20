@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, PanResponder, Alert,
 } from 'react-native';
@@ -487,7 +487,17 @@ function SwipeableNotifItem({ n, onRemove }: { n: AppNotification; onRemove: (id
 
 // ── 알림 드로어 ──────────────────────────────────────
 function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { notifications, removeNotification, clearNotifications, user } = useStore();
+  const { notifications, removeNotification, clearNotifications, addNotification, user } = useStore();
+
+  useEffect(() => {
+    if (!visible || !user?.id) return;
+    getNotifications(user.id)
+      .then((fetched) => {
+        clearNotifications();
+        fetched.forEach((n) => addNotification(n));
+      })
+      .catch(() => {});
+  }, [visible, user?.id]);
 
   const handleRemove = (id: string) => {
     removeNotification(id);                             // 로컬 즉시 반영
@@ -622,9 +632,14 @@ const nStyles = StyleSheet.create({
 // ── 메인 홈 ──────────────────────────────────────────
 export default function HomeScreen() {
   const nav = useNavigation();
-  const { user, device, currentScore, currentAngle, currentLevel, settings, setDevice, notifications } = useStore();
+  const { user, device, currentScore, currentAngle, currentLevel, settings, setDevice, notifications, setNotifications } = useStore();
   const [showGoal, setShowGoal] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    getNotifications(user.id).then(setNotifications).catch(() => {});
+  }, [user?.id]);
 
   const levelLabel: Record<string, string> = {
     excellent: '우수',

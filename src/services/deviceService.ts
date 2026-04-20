@@ -1,5 +1,5 @@
 import {
-  doc, setDoc, getDoc,
+  doc, setDoc, updateDoc, getDoc,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { DeviceState, AppSettings } from '../constants/types';
@@ -31,20 +31,34 @@ export const saveDeviceSettings = async (
   userId: string,
   device: Partial<DeviceState>,
 ) => {
-  const deviceSettings: Record<string, unknown> = {};
+  // 점 표기법으로 개별 필드만 업데이트 → 다른 deviceSettings 필드 덮어쓰기 방지
+  const dotFields: Record<string, unknown> = {};
 
   if (device.deviceId !== undefined)
-    deviceSettings.deviceId = device.deviceId;
+    dotFields['deviceSettings.deviceId'] = device.deviceId;
   if (device.vibrationEnabled !== undefined)
-    deviceSettings.vibrationEnabled = device.vibrationEnabled;
+    dotFields['deviceSettings.vibrationEnabled'] = device.vibrationEnabled;
   if (device.vibrationIntensity !== undefined)
-    deviceSettings.vibrationStrength = intensityToStrength(device.vibrationIntensity);
+    dotFields['deviceSettings.vibrationStrength'] = intensityToStrength(device.vibrationIntensity);
   if (device.sensorAngle !== undefined)
-    deviceSettings.detectionAngle = device.sensorAngle;
+    dotFields['deviceSettings.detectionAngle'] = device.sensorAngle;
   if (device.powerSaveMode !== undefined)
-    deviceSettings.powerSaveMode = device.powerSaveMode;
+    dotFields['deviceSettings.powerSaveMode'] = device.powerSaveMode;
 
-  await setDoc(userDoc(userId), { deviceSettings }, { merge: true });
+  if (Object.keys(dotFields).length === 0) return;
+
+  try {
+    await updateDoc(userDoc(userId), dotFields);
+  } catch {
+    // 문서가 없으면 새로 생성
+    const init: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(dotFields)) {
+      const field = k.split('.')[1];
+      if (!init.deviceSettings) init.deviceSettings = {};
+      (init.deviceSettings as Record<string, unknown>)[field] = v;
+    }
+    await setDoc(userDoc(userId), init, { merge: true });
+  }
 };
 
 // ── 기기 설정 조회 ────────────────────────────────────
@@ -73,26 +87,26 @@ export const saveNotificationSettings = async (
   userId: string,
   settings: Partial<AppSettings>,
 ) => {
-  const payload: Record<string, unknown> = {};
+  const dotFields: Record<string, unknown> = {};
 
-  if (settings.postureAlertEnabled !== undefined ||
-      settings.reportAlertEnabled !== undefined) {
-    payload.notificationSettings = {
-      ...(settings.postureAlertEnabled !== undefined && {
-        postureAlert: settings.postureAlertEnabled,
-      }),
-      ...(settings.reportAlertEnabled !== undefined && {
-        reportAlert: settings.reportAlertEnabled,
-      }),
-    };
-  }
+  if (settings.postureAlertEnabled !== undefined)
+    dotFields['notificationSettings.postureAlert'] = settings.postureAlertEnabled;
+  if (settings.reportAlertEnabled !== undefined)
+    dotFields['notificationSettings.reportAlert'] = settings.reportAlertEnabled;
+  if (settings.targetScore !== undefined)
+    dotFields['deviceSettings.targetScore'] = settings.targetScore;
 
-  if (settings.targetScore !== undefined) {
-    payload.deviceSettings = { targetScore: settings.targetScore };
-  }
+  if (Object.keys(dotFields).length === 0) return;
 
-  if (Object.keys(payload).length > 0) {
-    await setDoc(userDoc(userId), payload, { merge: true });
+  try {
+    await updateDoc(userDoc(userId), dotFields);
+  } catch {
+    await setDoc(userDoc(userId), {
+      ...(settings.postureAlertEnabled !== undefined || settings.reportAlertEnabled !== undefined
+        ? { notificationSettings: { postureAlert: settings.postureAlertEnabled, reportAlert: settings.reportAlertEnabled } }
+        : {}),
+      ...(settings.targetScore !== undefined ? { deviceSettings: { targetScore: settings.targetScore } } : {}),
+    }, { merge: true });
   }
 };
 
@@ -122,9 +136,11 @@ export const updateDeviceConnection = async (
   deviceId: string,
   connected: boolean,
 ) => {
-  await setDoc(
-    userDoc(userId),
-    { deviceSettings: { deviceId: connected ? deviceId : null } },
-    { merge: true },
-  );
+  try {
+    await updateDoc(userDoc(userId), {
+      'deviceSettings.deviceId': connected ? deviceId : null,
+    });
+  } catch {
+    await setDoc(userDoc(userId), { deviceSettings: { deviceId: connected ? deviceId : null } }, { merge: true });
+  }
 };
