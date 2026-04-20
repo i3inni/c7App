@@ -42,7 +42,8 @@ const hStyles = StyleSheet.create({
 // ── 내 정보 ──────────────────────────────────────────
 export function MyInfoScreen() {
   const nav = useNavigation();
-  const { user, updateUser, updateSettings, settings, logout, clearRecords } = useStore();
+  const { user, updateUser, updateSettings, settings, logout, clearRecords, device } = useStore();
+  const isConnected = device.mqttStatus === 'connected';
   const [showLogout, setShowLogout] = useState(false);
   const [showClearRecords, setShowClearRecords] = useState(false);
   const [showResetZero, setShowResetZero] = useState(false);
@@ -64,8 +65,10 @@ export function MyInfoScreen() {
               <Text style={styles.profileName}>{user?.nickname ?? '사용자'} 님</Text>
               <Text style={styles.profileEmail}>{user?.email ?? 'user@example.com'}</Text>
               <View style={styles.connRow}>
-                <View style={styles.connDot} />
-                <Text style={styles.connText}>CONNECTED</Text>
+                <View style={[styles.connDot, { backgroundColor: isConnected ? COLORS.primary : COLORS.textMuted }]} />
+                <Text style={[styles.connText, { color: isConnected ? COLORS.primary : COLORS.textMuted }]}>
+                  {isConnected ? 'CONNECTED' : 'DISCONNECTED'}
+                </Text>
               </View>
             </View>
             <Text style={styles.arrow}>›</Text>
