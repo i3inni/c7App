@@ -14,6 +14,7 @@ import Button from "../../components/common/Button";
 import Input from "../../components/common/Input";
 import { COLORS, FONTS, SPACING } from "../../constants/theme";
 import { login, loginWithGoogle, resendVerificationEmail } from "../../services/authService";
+import { getUserDoc } from "../../services/userService";
 
 export default function LoginScreen() {
   const nav = useNavigation();
@@ -50,7 +51,14 @@ export default function LoginScreen() {
         );
         return;
       }
-      setUser({ id: user.uid, nickname: user.email ?? id, isGuest: false });
+      const doc = await getUserDoc(user.uid);
+      setUser({
+        id: user.uid,
+        nickname: user.email ?? id,
+        isGuest: false,
+        height: doc?.bodyInfo?.height ?? undefined,
+        weight: doc?.bodyInfo?.weight ?? undefined,
+      });
       (nav as any).replace("MqttConnect");
     } catch (e: any) {
       Alert.alert("로그인 실패", firebaseErrorMessage(e.code));
@@ -64,11 +72,14 @@ export default function LoginScreen() {
     setGoogleLoading(true);
     try {
       const user = await loginWithGoogle();
+      const doc = await getUserDoc(user.uid);
       setUser({
         id: user.uid,
         nickname: user.displayName ?? "사용자",
         email: user.email ?? undefined,
         isGuest: false,
+        height: doc?.bodyInfo?.height ?? undefined,
+        weight: doc?.bodyInfo?.weight ?? undefined,
       });
       (nav as any).replace("MqttConnect");
     } catch (e: any) {

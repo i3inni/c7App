@@ -17,6 +17,7 @@ export type RootStackParamList = {
   SignUpStep3: { userId: string; password: string };
   SignUpComplete: { userId: string; password: string; nickname: string };
   MqttConnect: undefined;
+  InitBodyInfo: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   MyInfo: undefined;
   BodyInfo: undefined;

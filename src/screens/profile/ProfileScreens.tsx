@@ -11,7 +11,7 @@ import ConfirmModal from '../../components/common/ConfirmModal';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
-import { updateNotificationSettings } from '../../services/userService';
+import { updateNotificationSettings, updateBodyInfo } from '../../services/userService';
 import { logout as authLogout, changePassword, deleteAccount } from '../../services/authService';
 import { clearAllStats } from '../../services/statsService';
 import { clearNotifications } from '../../services/notificationService';
@@ -223,6 +223,7 @@ export function MyInfoScreen() {
             await authLogout();
             logout();
             setShowLogout(false);
+            (nav as any).replace('Login');
           } catch {
             Alert.alert('오류', '로그아웃에 실패했습니다. 다시 시도해주세요.');
           }
@@ -327,7 +328,15 @@ export function BodyInfoScreen() {
             <Text style={bsStyles.unit}>cm</Text>
             <Button
               label="완료"
-              onPress={() => { updateUser({ height: Number(heightVal) }); setShowHeight(false); }}
+              onPress={async () => {
+                const h = Number(heightVal);
+                updateUser({ height: h });
+                setShowHeight(false);
+                if (user?.id && user.id !== 'guest') {
+                  try { await updateBodyInfo(user.id, { height: h }); }
+                  catch { Alert.alert('저장 실패', '키 정보를 저장하지 못했습니다.'); }
+                }
+              }}
             />
           </View>
         </View>
@@ -349,7 +358,15 @@ export function BodyInfoScreen() {
             <Text style={bsStyles.unit}>kg</Text>
             <Button
               label="완료"
-              onPress={() => { updateUser({ weight: Number(weightVal) }); setShowWeight(false); }}
+              onPress={async () => {
+                const w = Number(weightVal);
+                updateUser({ weight: w });
+                setShowWeight(false);
+                if (user?.id && user.id !== 'guest') {
+                  try { await updateBodyInfo(user.id, { weight: w }); }
+                  catch { Alert.alert('저장 실패', '체중 정보를 저장하지 못했습니다.'); }
+                }
+              }}
             />
           </View>
         </View>
