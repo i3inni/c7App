@@ -153,7 +153,7 @@ export async function analyzeExercises(
 const WEEKLY_SYSTEM_PROMPT = `당신은 거북목 교정 전문 AI입니다. 사용자의 주간 자세 데이터를 분석하여 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
 
 {
-  "summary": "이번 주 자세 상태 종합 평가 2문장 (구체적 수치 포함)",
+  "summary": "이번 주 자세 상태 종합 평가 10문장 (구체적 수치 포함)",
   "bestScore": 숫자,
   "avgScore": 숫자,
   "trend": "↑ X% 또는 ↓ X%",

@@ -27,7 +27,7 @@ export default function AIScreen() {
     currentAngle, currentScore, currentPostureType, currentDiagnosisLevel,
     todayStats, weeklyStats,
     lastDiagnosis, setLastDiagnosis,
-    lastExercisesAt, setLastExercises,
+    lastExercises: lastExercisesCache, lastExercisesAt, setLastExercises,
     lastDiagnosisAt,
     lastWeeklyReport, setLastWeeklyReport,
   } = useStore();
@@ -73,7 +73,7 @@ export default function AIScreen() {
   }, [currentPostureType, currentAngle, currentScore, weeklyStats, todayStats]);
 
   // 단계별 운동: LLM
-  const [exercises, setExercises] = useState<[ExerciseStep, ExerciseStep, ExerciseStep] | null>(null);
+  const [exercises, setExercises] = useState<[ExerciseStep, ExerciseStep, ExerciseStep] | null>(lastExercisesCache);
   const [exLoading, setExLoading] = useState(false);
   const [exError, setExError] = useState<string | null>(null);
 
