@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, PanResponder,
 } from 'react-native';
@@ -9,7 +9,7 @@ import { useStore } from '../../store';
 import Toggle from '../../components/common/Toggle';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import type { AppNotification } from '../../constants/types';
-import { deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
+import { getNotifications, deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
 
 // ── SVG 아이콘 ────────────────────────────────────────
 function PersonIcon({ size = 22, color = COLORS.text }: { size?: number; color?: string }) {
@@ -610,9 +610,14 @@ const nStyles = StyleSheet.create({
 // ── 메인 홈 ──────────────────────────────────────────
 export default function HomeScreen() {
   const nav = useNavigation();
-  const { user, device, currentScore, currentAngle, currentLevel, settings, setDevice, notifications } = useStore();
+  const { user, device, currentScore, currentAngle, currentLevel, settings, setDevice, notifications, setNotifications } = useStore();
   const [showGoal, setShowGoal] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    getNotifications(user.id).then(setNotifications).catch(() => {});
+  }, [user?.id]);
 
   const levelLabel: Record<string, string> = {
     excellent: '우수',

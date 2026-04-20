@@ -70,6 +70,7 @@ interface AppState {
   setLastWeeklyReport: (r: WeeklyReport) => void;
 
   addNotification: (n: AppNotification) => void;
+  setNotifications: (ns: AppNotification[]) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
 
@@ -152,6 +153,7 @@ export const useStore = create<AppState>()(
 
       addNotification: (n) =>
         set((s) => ({ notifications: [n, ...s.notifications] })),
+      setNotifications: (ns) => set({ notifications: ns }),
       removeNotification: (id) =>
         set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
       clearNotifications: () => set({ notifications: [] }),
