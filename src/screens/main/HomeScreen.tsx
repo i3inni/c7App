@@ -9,7 +9,7 @@ import { useStore } from '../../store';
 import Toggle from '../../components/common/Toggle';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import type { AppNotification } from '../../constants/types';
-import { getNotifications, deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
+import { deleteNotification, clearNotifications as clearNotifFS, getNotifications } from '../../services/notificationService';
 
 // ── SVG 아이콘 ────────────────────────────────────────
 function PersonIcon({ size = 22, color = COLORS.text }: { size?: number; color?: string }) {
@@ -475,7 +475,17 @@ function SwipeableNotifItem({ n, onRemove }: { n: AppNotification; onRemove: (id
 
 // ── 알림 드로어 ──────────────────────────────────────
 function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { notifications, removeNotification, clearNotifications, user } = useStore();
+  const { notifications, removeNotification, clearNotifications, addNotification, user } = useStore();
+
+  useEffect(() => {
+    if (!visible || !user?.id) return;
+    getNotifications(user.id)
+      .then((fetched) => {
+        clearNotifications();
+        fetched.forEach((n) => addNotification(n));
+      })
+      .catch(() => {});
+  }, [visible, user?.id]);
 
   const handleRemove = (id: string) => {
     removeNotification(id);                             // 로컬 즉시 반영

@@ -1,18 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, Animated, TouchableOpacity,
+  View, Text, StyleSheet, Animated, TouchableOpacity, FlatList, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Device } from 'react-native-ble-plx';
 import { useStore } from '../../store';
+import { saveNotification } from '../../services/notificationService';
+import { updateDeviceConnection } from '../../services/deviceService';
+import {
+  requestBluetoothPermissions, startScan, stopScan,
+} from '../../services/bleService';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
-type Step = 'input' | 'connecting' | 'error';
-type ErrorType = 'timeout' | 'auth' | 'network';
+type Step = 'input' | 'scanning' | 'connecting' | 'error';
+type ErrorType = 'timeout' | 'auth' | 'network' | 'ble';
 
 const CONNECT_TIMEOUT_MS = 10000;
+const DEMO_DEVICE_ID = 'C7-DEMO-2024';
 
 export default function MqttConnectScreen() {
   const nav = useNavigation();
@@ -21,10 +28,61 @@ export default function MqttConnectScreen() {
   const [deviceId, setDeviceId] = useState('');
   const [step, setStep] = useState<Step>('input');
   const [errorType, setErrorType] = useState<ErrorType | null>(null);
+  const [bleDevices, setBleDevices] = useState<Device[]>([]);
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
 
+  // BLE 스캔 시작
+  const handleBleScan = async () => {
+    const granted = await requestBluetoothPermissions();
+    if (!granted) {
+      setErrorType('ble');
+      setStep('error');
+      return;
+    }
+    setBleDevices([]);
+    setStep('scanning');
+
+    startScan(
+      (device) => {
+        if (!device.name) return;
+        setBleDevices((prev) => {
+          if (prev.find((d) => d.id === device.id)) return prev;
+          return [...prev, device];
+        });
+      },
+      () => {
+        stopScan();
+        setErrorType('ble');
+        setStep('error');
+      },
+    );
+
+    // 10초 후 자동 스캔 중단
+    scanTimerRef.current = setTimeout(() => {
+      stopScan();
+    }, 10000);
+  };
+
+  // BLE 기기 선택 → 해당 기기 ID로 연결
+  const handleSelectDevice = (device: Device) => {
+    stopScan();
+    if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+    setDeviceId(device.id);
+    connectMqtt(device.id);
+    setStep('connecting');
+  };
+
+  useEffect(() => {
+    return () => {
+      stopScan();
+      if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+    };
+  }, []);
+
+  // connecting 단계 애니메이션 + 시뮬레이션
   useEffect(() => {
     if (step !== 'connecting') return;
 
@@ -40,8 +98,6 @@ export default function MqttConnectScreen() {
     );
     anim.start();
 
-    // 실제 MQTT 연결 타임아웃 (10초)
-    // TODO: 실제 연결 시 mqtt.js 또는 paho-mqtt 라이브러리로 교체
     const t = setTimeout(() => {
       anim.stop();
       setDevice({ mqttStatus: 'error' });
@@ -49,11 +105,20 @@ export default function MqttConnectScreen() {
       setStep('error');
     }, CONNECT_TIMEOUT_MS);
 
-    // 개발용 시뮬레이션: 2초 후 성공 처리 (실제 연결 구현 시 제거)
+    // 개발용 시뮬레이션: 2초 후 성공 처리
     const sim = setTimeout(() => {
       clearTimeout(t);
       anim.stop();
-      setDevice({ mqttStatus: 'connected', deviceId });
+      const connectedId = deviceId || DEMO_DEVICE_ID;
+      setDevice({ mqttStatus: 'connected', deviceId: connectedId });
+      if (user?.id) {
+        updateDeviceConnection(user.id, connectedId, true).catch(() => {});
+        saveNotification(user.id, {
+          category: 'device',
+          title: '기기 연결 완료',
+          body: `C7 기기(${connectedId})가 정상적으로 연결되었습니다.`,
+        }).catch(() => {});
+      }
       (nav as any).replace(isGuest ? 'GuestDevice' : 'MainTabs');
     }, 2000);
 
@@ -70,22 +135,26 @@ export default function MqttConnectScreen() {
     dot1.setValue(0);
     dot2.setValue(0);
     setErrorType(null);
-    connectMqtt(deviceId);
-    setStep('connecting');
+    setStep('input');
   };
 
-  const handleBackToInput = () => {
-    setErrorType(null);
-    setDevice({ mqttStatus: 'idle' });
-    setStep('input');
+  // 데모 모드: 기기 없이 홈으로 바로 이동
+  const handleDemoSkip = () => {
+    setDevice({ mqttStatus: 'connected', deviceId: DEMO_DEVICE_ID });
+    if (user?.id) {
+      updateDeviceConnection(user.id, DEMO_DEVICE_ID, true).catch(() => {});
+    }
+    (nav as any).replace(isGuest ? 'GuestDevice' : 'MainTabs');
   };
 
   const errorMessage: Record<ErrorType, string> = {
     timeout: '연결 시간이 초과되었습니다.\n기기가 켜져 있는지 확인해주세요.',
     auth: '기기 ID가 올바르지 않습니다.\nC7 기기 뒷면의 ID를 확인해주세요.',
     network: '네트워크 연결을 확인해주세요.\nWi-Fi 또는 데이터가 필요합니다.',
+    ble: '블루투스 권한이 필요하거나\n블루투스가 꺼져 있습니다.',
   };
 
+  // ── 에러 화면 ─────────────────────────────────────
   if (step === 'error') {
     return (
       <SafeAreaView style={styles.safe}>
@@ -110,13 +179,14 @@ export default function MqttConnectScreen() {
             style={{ width: '100%', marginTop: SPACING.xl }}
           />
         </View>
-        <TouchableOpacity style={styles.backToAuth} onPress={handleBackToInput}>
-          <Text style={styles.backToAuthText}>‹  기기 ID 재입력</Text>
+        <TouchableOpacity style={styles.demoBtn} onPress={handleDemoSkip}>
+          <Text style={styles.demoBtnText}>[데모] 기기 없이 홈으로 이동</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
+  // ── 연결 중 화면 ──────────────────────────────────
   if (step === 'connecting') {
     return (
       <SafeAreaView style={styles.safe}>
@@ -138,7 +208,7 @@ export default function MqttConnectScreen() {
             </View>
           </View>
           <Text style={styles.connectingTitle}>CONNECTING BROKER...</Text>
-          <Text style={styles.connectingSub}>토픽(posture/data/{deviceId || '1'})을 구독 중입니다.</Text>
+          <Text style={styles.connectingSub}>토픽(posture/data/{deviceId || DEMO_DEVICE_ID})을 구독 중입니다.</Text>
         </View>
         <TouchableOpacity style={styles.backToAuth} onPress={() => (nav as any).replace('Login')}>
           <Text style={styles.backToAuthText}>‹  BACK TO AUTH</Text>
@@ -147,6 +217,48 @@ export default function MqttConnectScreen() {
     );
   }
 
+  // ── BLE 스캔 화면 ─────────────────────────────────
+  if (step === 'scanning') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.header}>
+          <Text style={styles.mainTitle}>MQTT CONNECT</Text>
+          <Text style={styles.subTitle}>SELECT YOUR C7 DEVICE</Text>
+        </View>
+        <View style={styles.scanArea}>
+          <View style={styles.scanHeader}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.scanTitle}>  주변 BLE 기기 검색 중...</Text>
+          </View>
+          {bleDevices.length === 0 ? (
+            <Text style={styles.scanEmpty}>주변에서 기기를 찾고 있습니다.</Text>
+          ) : (
+            <FlatList
+              data={bleDevices}
+              keyExtractor={(d) => d.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.deviceItem} onPress={() => handleSelectDevice(item)}>
+                  <Text style={styles.deviceName}>{item.name ?? '알 수 없는 기기'}</Text>
+                  <Text style={styles.deviceAddr}>{item.id}</Text>
+                  <Text style={styles.deviceRssi}>RSSI {item.rssi ?? '-'} dBm  ›</Text>
+                </TouchableOpacity>
+              )}
+            />
+          )}
+        </View>
+        <View style={styles.bottomArea}>
+          <TouchableOpacity style={styles.demoBtn} onPress={handleDemoSkip}>
+            <Text style={styles.demoBtnText}>[데모] 기기 없이 홈으로 이동</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.backToAuth} onPress={() => { stopScan(); setStep('input'); }}>
+            <Text style={styles.backToAuthText}>‹  수동 입력으로 돌아가기</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── 기본 입력 화면 ────────────────────────────────
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -161,10 +273,22 @@ export default function MqttConnectScreen() {
           </View>
         </View>
 
-        <Text style={styles.inputTitle}>기기 ID 입력</Text>
+        <Text style={styles.inputTitle}>기기 연결</Text>
         <Text style={styles.inputDesc}>
-          C7 기기 뒷면에 기재된 고유 ID를 입력하여 실시간 데이터{'\n'}채널에 접속하세요.
+          BLE로 C7 기기를 자동 검색하거나{'\n'}기기 ID를 직접 입력하세요.
         </Text>
+
+        <Button
+          label="BLE 기기 자동 검색  →"
+          onPress={handleBleScan}
+          style={{ width: '100%', marginBottom: SPACING.md }}
+        />
+
+        <View style={styles.dividerRow}>
+          <View style={styles.divider} />
+          <Text style={styles.dividerText}>또는 직접 입력</Text>
+          <View style={styles.divider} />
+        </View>
 
         <View style={styles.inputRow}>
           <Text style={styles.inputIcon}>📱</Text>
@@ -177,7 +301,7 @@ export default function MqttConnectScreen() {
         </View>
 
         <Button
-          label={`CONNECT TO BROKER  →`}
+          label="CONNECT TO BROKER  →"
           onPress={handleConnect}
           disabled={!deviceId.trim()}
           variant={deviceId.trim() ? 'dark' : 'secondary'}
@@ -186,6 +310,9 @@ export default function MqttConnectScreen() {
         />
       </View>
 
+      <TouchableOpacity style={styles.demoBtn} onPress={handleDemoSkip}>
+        <Text style={styles.demoBtnText}>[데모] 기기 없이 홈으로 이동</Text>
+      </TouchableOpacity>
       <TouchableOpacity style={styles.backToAuth} onPress={() => (nav as any).replace('Login')}>
         <Text style={styles.backToAuthText}>‹  BACK TO AUTH</Text>
       </TouchableOpacity>
@@ -225,11 +352,36 @@ const styles = StyleSheet.create({
   inputTitle: { fontSize: FONTS.sizes.xl, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.sm },
   inputDesc: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: SPACING.xl },
 
+  dividerRow: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: SPACING.md },
+  divider: { flex: 1, height: 1, backgroundColor: COLORS.border },
+  dividerText: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted, marginHorizontal: SPACING.sm },
+
   inputRow: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: SPACING.sm },
   inputIcon: { fontSize: 18, marginRight: SPACING.sm },
   deviceInput: { flex: 1 },
 
   connectBtn: { width: '100%', marginTop: SPACING.sm },
+
+  // BLE 스캔 영역
+  scanArea: { flex: 1, paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg },
+  scanHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md },
+  scanTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text },
+  scanEmpty: { fontSize: FONTS.sizes.sm, color: COLORS.textMuted, textAlign: 'center', marginTop: SPACING.xl },
+  deviceItem: {
+    backgroundColor: '#fff', borderRadius: RADIUS.md, padding: SPACING.md,
+    marginBottom: SPACING.sm, ...SHADOWS.sm,
+  },
+  deviceName: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text },
+  deviceAddr: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted, marginTop: 2, fontFamily: 'monospace' },
+  deviceRssi: { fontSize: FONTS.sizes.xs, color: COLORS.primary, marginTop: 4, textAlign: 'right' },
+
+  bottomArea: { paddingBottom: SPACING.sm },
+
+  // 데모 버튼
+  demoBtn: { alignSelf: 'center', paddingVertical: SPACING.sm, paddingHorizontal: SPACING.lg,
+    backgroundColor: '#FFF3CD', borderRadius: RADIUS.md, marginBottom: 4 },
+  demoBtnText: { fontSize: FONTS.sizes.sm, color: '#856404', fontWeight: '700' },
+
   backToAuth: { alignSelf: 'center', paddingVertical: SPACING.lg },
   backToAuthText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, fontWeight: '600' },
 
