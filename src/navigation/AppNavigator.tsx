@@ -4,7 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import Svg, { Path, Rect, Circle, Line, Polyline } from 'react-native-svg';
+import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
 // Screens
 import SplashScreen from '../screens/auth/SplashScreen';
@@ -24,7 +24,7 @@ import {
   ChangePasswordScreen, WithdrawScreen,
 } from '../screens/profile/ProfileScreens';
 
-import { COLORS, FONTS, SPACING } from '../constants/theme';
+import { COLORS } from '../constants/theme';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import '../navigation/types'; // 전역 RootParamList 등록
 
@@ -73,7 +73,7 @@ function TabIcon({ name, color, size = 22 }: { name: string; color: string; size
   }
 }
 
-function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+function TabBar({ state, navigation }: BottomTabBarProps) {
   return (
     <View style={tabStyles.container}>
       {state.routes.map((route, index: number) => {
@@ -139,13 +139,14 @@ export default function AppNavigator() {
           {/* Auth */}
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="SignUpStep1" component={SignUpStep1} />
-          <Stack.Screen name="SignUpStep2" component={SignUpStep2} />
-          <Stack.Screen name="SignUpStep3" component={SignUpStep3} />
-          <Stack.Screen name="SignUpComplete" component={SignUpComplete} />
+          <Stack.Screen name="SignUpStep2" component={SignUpStep2 as any} />
+          <Stack.Screen name="SignUpStep3" component={SignUpStep3 as any} />
+          <Stack.Screen name="SignUpComplete" component={SignUpComplete as any} />
           <Stack.Screen name="MqttConnect" component={MqttConnectScreen} />
 
           {/* Main */}
           <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="GuestDevice" component={DeviceControlScreen} options={{ gestureEnabled: false }} />
 
           {/* Profile */}
           <Stack.Screen name="MyInfo" component={MyInfoScreen} />

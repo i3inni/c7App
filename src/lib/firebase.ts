@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/auth';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -14,5 +15,7 @@ const firebaseConfig = {
 // 앱이 이미 초기화된 경우 재사용 (Hot Reload 대응)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-export const auth = getAuth(app);
+export const auth = getApps().length === 1
+  ? initializeAuth(app, { persistence: getReactNativePersistence(ReactNativeAsyncStorage) })
+  : getAuth(app);
 export const db = getFirestore(app);

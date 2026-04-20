@@ -7,7 +7,7 @@ import { COLORS, FONTS, RADIUS, SPACING, SHADOWS } from '../../constants/theme';
 
 interface Props {
   visible: boolean;
-  icon?: string;
+  icon?: ReactNode;
   iconNode?: ReactNode;
   iconBg?: string;
   title: string;
@@ -36,13 +36,9 @@ export default function ConfirmModal({
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.box}>
-        {iconNode ? (
+        {(iconNode ?? icon) ? (
           <View style={[styles.iconWrap, iconBg ? { backgroundColor: iconBg } : undefined]}>
-            {iconNode}
-          </View>
-        ) : icon ? (
-          <View style={[styles.iconWrap, iconBg ? { backgroundColor: iconBg } : undefined]}>
-            <Text style={styles.iconText}>{icon}</Text>
+            {iconNode ?? icon}
           </View>
         ) : null}
           <Text style={styles.title}>{title}</Text>
