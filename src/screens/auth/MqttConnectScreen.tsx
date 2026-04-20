@@ -54,7 +54,14 @@ export default function MqttConnectScreen() {
       clearTimeout(t);
       anim.stop();
       setDevice({ mqttStatus: 'connected', deviceId });
-      (nav as any).replace(isGuest ? 'GuestDevice' : 'MainTabs');
+      if (isGuest) {
+        (nav as any).replace('GuestDevice');
+      } else if (!user?.height && !user?.weight) {
+        // 키/체중 미입력 상태 → 초기 신체정보 입력 화면으로
+        (nav as any).replace('InitBodyInfo');
+      } else {
+        (nav as any).replace('MainTabs');
+      }
     }, 2000);
 
     return () => { anim.stop(); clearTimeout(t); clearTimeout(sim); };

@@ -13,6 +13,7 @@ import {
   SignUpStep1, SignUpStep2, SignUpStep3, SignUpComplete,
 } from '../screens/auth/SignUpScreens';
 import MqttConnectScreen from '../screens/auth/MqttConnectScreen';
+import InitBodyInfoScreen from '../screens/auth/InitBodyInfoScreen';
 
 import HomeScreen from '../screens/main/HomeScreen';
 import StatsScreen from '../screens/main/StatsScreen';
@@ -143,6 +144,7 @@ export default function AppNavigator() {
           <Stack.Screen name="SignUpStep3" component={SignUpStep3 as any} />
           <Stack.Screen name="SignUpComplete" component={SignUpComplete as any} />
           <Stack.Screen name="MqttConnect" component={MqttConnectScreen} />
+          <Stack.Screen name="InitBodyInfo" component={InitBodyInfoScreen} />
 
           {/* Main */}
           <Stack.Screen name="MainTabs" component={MainTabs} />
