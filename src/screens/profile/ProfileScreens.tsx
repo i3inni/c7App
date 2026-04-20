@@ -6,7 +6,6 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
-import { logout as firebaseLogout } from '../../services/authService';
 import Toggle from '../../components/common/Toggle';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import Button from '../../components/common/Button';
@@ -206,12 +205,7 @@ export function MyInfoScreen() {
         confirmLabel="로그아웃"
         cancelLabel="취소"
         confirmVariant="dark"
-        onConfirm={async () => {
-          await firebaseLogout();
-          logout();
-          setShowLogout(false);
-          (nav as any).replace('Login');
-        }}
+        onConfirm={() => { logout(); setShowLogout(false); }}
         onCancel={() => setShowLogout(false)}
       />
       <ConfirmModal
@@ -525,7 +519,7 @@ export function WithdrawScreen() {
 
         <Button
           label="탈퇴 진행"
-          onPress={async () => { await firebaseLogout(); logout(); (nav as any).replace('Login'); }}
+          onPress={() => { logout(); nav.replace('Login'); }}
           variant="danger"
           style={{ marginBottom: SPACING.sm }}
         />
