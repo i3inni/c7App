@@ -34,15 +34,7 @@
       ]
     },
     "plugins": [
-      "expo-notifications",
-      [
-        "react-native-ble-plx",
-        {
-          "isBackgroundEnabled": false,
-          "modes": ["peripheral", "central"],
-          "bluetoothAlwaysPermission": "BLE 기기 연결을 위해 블루투스 권한이 필요합니다."
-        }
-      ]
+      "expo-notifications"
     ]
   }
 }
