@@ -13,6 +13,8 @@ import Input from '../../components/common/Input';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import { updateNotificationSettings } from '../../services/userService';
 import { logout as authLogout, changePassword, deleteAccount } from '../../services/authService';
+import { clearAllStats } from '../../services/statsService';
+import { clearNotifications } from '../../services/notificationService';
 
 // ── 공통 헤더 ────────────────────────────────────────
 function PageHeader({ title }: { title: string }) {
@@ -44,7 +46,7 @@ const hStyles = StyleSheet.create({
 // ── 내 정보 ──────────────────────────────────────────
 export function MyInfoScreen() {
   const nav = useNavigation();
-  const { user, updateSettings, settings, logout, clearRecords, device } = useStore();
+  const { user, updateSettings, settings, logout, clearRecords, clearNotifications: clearLocalNotifications, device } = useStore();
   const isConnected = device.mqttStatus === 'connected';
   const [showLogout, setShowLogout] = useState(false);
   const [showClearRecords, setShowClearRecords] = useState(false);
@@ -242,7 +244,18 @@ export function MyInfoScreen() {
         confirmLabel="삭제"
         cancelLabel="취소"
         confirmVariant="danger"
-        onConfirm={() => { clearRecords(); setShowClearRecords(false); }}
+        onConfirm={async () => {
+          if (!user?.id) return;
+          try {
+            await clearAllStats(user.id);
+            await clearNotifications(user.id);
+            clearRecords();
+            clearLocalNotifications();
+            setShowClearRecords(false);
+          } catch {
+            Alert.alert('오류', '기록 초기화에 실패했습니다. 다시 시도해주세요.');
+          }
+        }}
         onCancel={() => setShowClearRecords(false)}
       />
       <ConfirmModal
