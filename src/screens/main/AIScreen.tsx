@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator, ScrollView, StyleSheet, Text,
   TouchableOpacity, View,
@@ -8,8 +8,9 @@ import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
 import { COLORS, FONTS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import {
-  analyzeExercises, analyzeWeeklyReport,
-  buildLocalDiagnosis, ExerciseStep, WeeklyReport,
+  analyzeExercises, analyzeWeeklyReport, analyzeDiagnosis,
+  classifyLevel, levelToMeta,
+  ExerciseStep, WeeklyReport, LLMDiagnosis,
 } from '../../services/aiService';
 
 type Step = 1 | 2 | 3;
@@ -23,7 +24,9 @@ const STEP_COLORS: Record<Step, string> = {
 export default function AIScreen() {
   const nav = useNavigation();
   const {
-    currentAngle, currentScore, todayStats, weeklyStats,
+    currentAngle, currentScore, currentPostureType, currentDiagnosisLevel,
+    todayStats, weeklyStats,
+    lastDiagnosis, setLastDiagnosis,
     lastExercisesAt, setLastExercises,
     lastDiagnosisAt,
     lastWeeklyReport, setLastWeeklyReport,
@@ -44,15 +47,32 @@ export default function AIScreen() {
   const nextExMs = lastExercisesAt ? Math.max(0, EXERCISE_INTERVAL - (now - lastExercisesAt)) : 0;
   const nextExMin = Math.floor(nextExMs / (60 * 1000));
 
+  // 레벨/배지: ML 모델 출력 우선, 없으면 각도 기반 폴백
+  const level = currentDiagnosisLevel ?? classifyLevel(currentAngle);
+  const { levelText, badgeText, badgeColor, warningIcon } = levelToMeta(level);
+
   const [activeStep, setActiveStep] = useState<Step>(1);
 
-  // 진단 결과: 로컬 즉시 계산
-  const diagnosis = useMemo(
-    () => buildLocalDiagnosis(currentAngle, currentScore, weeklyStats),
-    [currentAngle, currentScore, weeklyStats],
-  );
+  // 진단 결과: LLM (캐시 우선, 버튼으로 갱신)
+  const [diagnosis, setDiagnosis] = useState<LLMDiagnosis | null>(lastDiagnosis);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagError, setDiagError] = useState<string | null>(null);
 
-  // 단계별 운동: LLM, 캐시 우선
+  const fetchDiagnosis = useCallback(async () => {
+    setDiagLoading(true);
+    setDiagError(null);
+    try {
+      const result = await analyzeDiagnosis(currentPostureType, currentAngle, currentScore, weeklyStats, todayStats);
+      setDiagnosis(result);
+      setLastDiagnosis(result);
+    } catch (e) {
+      setDiagError(e instanceof Error ? e.message : '진단 중 오류가 발생했습니다.');
+    } finally {
+      setDiagLoading(false);
+    }
+  }, [currentPostureType, currentAngle, currentScore, weeklyStats, todayStats]);
+
+  // 단계별 운동: LLM
   const [exercises, setExercises] = useState<[ExerciseStep, ExerciseStep, ExerciseStep] | null>(null);
   const [exLoading, setExLoading] = useState(false);
   const [exError, setExError] = useState<string | null>(null);
@@ -61,7 +81,7 @@ export default function AIScreen() {
     setExLoading(true);
     setExError(null);
     try {
-      const result = await analyzeExercises(diagnosis.level, currentAngle, currentScore);
+      const result = await analyzeExercises(level, currentAngle, currentScore);
       setExercises(result);
       setLastExercises(result);
     } catch (e) {
@@ -69,7 +89,7 @@ export default function AIScreen() {
     } finally {
       setExLoading(false);
     }
-  }, [diagnosis.level, currentAngle, currentScore]);
+  }, [level, currentAngle, currentScore]);
 
   // 주간 리포트: 버튼 눌러야 분석
   const [report, setReport] = useState<WeeklyReport | null>(lastWeeklyReport);
@@ -127,13 +147,13 @@ export default function AIScreen() {
 
           <View style={styles.diagCard}>
             <View style={styles.diagTop}>
-              <Text style={styles.diagWarningIcon}>{diagnosis.warningIcon}</Text>
-              <Text style={styles.diagTitle}>{diagnosis.levelText}</Text>
-              <View style={[styles.cautionBadge, { backgroundColor: `${diagnosis.badgeColor}20` }]}>
-                <Text style={[styles.cautionText, { color: diagnosis.badgeColor }]}>{diagnosis.badgeText}</Text>
+              <Text style={styles.diagWarningIcon}>{warningIcon}</Text>
+              <Text style={styles.diagTitle}>{levelText}</Text>
+              <View style={[styles.cautionBadge, { backgroundColor: `${badgeColor}20` }]}>
+                <Text style={[styles.cautionText, { color: badgeColor }]}>{badgeText}</Text>
               </View>
             </View>
-            <Text style={styles.diagDesc}>{diagnosis.description}</Text>
+
             <View style={styles.diagStats}>
               <View style={styles.diagStat}>
                 <Text style={styles.diagStatLabel}>현재 각도</Text>
@@ -145,9 +165,53 @@ export default function AIScreen() {
               </View>
               <View style={styles.diagStat}>
                 <Text style={styles.diagStatLabel}>개선율</Text>
-                <Text style={[styles.diagStatVal, { color: COLORS.primary }]}>{diagnosis.improvementRate}</Text>
+                <Text style={[styles.diagStatVal, { color: COLORS.primary }]}>
+                  {diagnosis?.improvementRate ?? '-'}
+                </Text>
               </View>
             </View>
+
+            {/* LLM 진단 영역 */}
+            {!diagnosis && !diagLoading && !diagError && (
+              <TouchableOpacity style={styles.diagFetchBtn} onPress={fetchDiagnosis} activeOpacity={0.85}>
+                <View style={styles.diagFetchBtnInner}>
+                  <Text style={styles.diagFetchBtnIcon}>🩺</Text>
+                  <View>
+                    <Text style={styles.diagFetchBtnTitle}>AI 진단 받기</Text>
+                    <Text style={styles.diagFetchBtnSub}>자세 데이터 기반 상세 분석</Text>
+                  </View>
+                </View>
+                <Text style={styles.diagFetchBtnArrow}>›</Text>
+              </TouchableOpacity>
+            )}
+
+            {diagLoading && (
+              <View style={styles.diagLoadingBox}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.diagLoadingText}>AI가 자세를 분석 중입니다...</Text>
+              </View>
+            )}
+
+            {diagError && !diagLoading && (
+              <View style={{ gap: SPACING.sm, marginTop: SPACING.sm }}>
+                <Text style={styles.exErrorText}>⚠️ {diagError}</Text>
+                <TouchableOpacity style={styles.analyzeBtn} onPress={fetchDiagnosis}>
+                  <Text style={styles.analyzeBtnText}>다시 진단받기</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {diagnosis && !diagLoading && (
+              <>
+                <Text style={styles.diagDesc}>{diagnosis.description}</Text>
+                <View style={styles.diagRiskBox}>
+                  <Text style={styles.diagRiskText}>⚠️ {diagnosis.riskMessage}</Text>
+                </View>
+                <View style={styles.diagTipBox}>
+                  <Text style={styles.diagTipText}>💡 {diagnosis.actionTip}</Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -232,7 +296,6 @@ export default function AIScreen() {
               )}
             </>
           )}
-
         </View>
 
         {/* 솔루션 타이머 뱃지 / 갱신 버튼 */}
@@ -292,17 +355,35 @@ export default function AIScreen() {
 
             {report && !reportLoading && (
               <>
-                <Text style={styles.reportBody}>{report.body}</Text>
-                <View style={styles.reportStats}>
-                  <View style={styles.reportStat}>
-                    <Text style={styles.reportStatLabel}>Best Score</Text>
-                    <Text style={styles.reportStatVal}>{report.bestScore}점</Text>
+                <Text style={styles.reportBody}>{report.summary}</Text>
+
+                <View style={styles.reportStatRow}>
+                  <View style={styles.reportStatBox}>
+                    <Text style={styles.reportStatLabel}>최고 점수</Text>
+                    <Text style={styles.reportStatVal}>{report.bestScore}<Text style={styles.reportStatUnit}>점</Text></Text>
                   </View>
-                  <View style={styles.reportStat}>
-                    <Text style={styles.reportStatLabel}>개선 추세</Text>
-                    <Text style={[styles.reportStatVal, { color: COLORS.scoreExcellent }]}>{report.trend}</Text>
+                  <View style={styles.reportStatDivider} />
+                  <View style={styles.reportStatBox}>
+                    <Text style={styles.reportStatLabel}>평균 점수</Text>
+                    <Text style={styles.reportStatVal}>{report.avgScore}<Text style={styles.reportStatUnit}>점</Text></Text>
+                  </View>
+                  <View style={styles.reportStatDivider} />
+                  <View style={styles.reportStatBox}>
+                    <Text style={styles.reportStatLabel}>추세</Text>
+                    <Text style={[styles.reportStatVal, { color: report.trend.startsWith('↑') ? '#4ADE80' : '#F87171' }]}>{report.trend}</Text>
                   </View>
                 </View>
+
+                <View style={styles.reportInsightBox}>
+                  <Text style={styles.reportInsightLabel}>💡 핵심 인사이트</Text>
+                  <Text style={styles.reportInsightText}>{report.insight}</Text>
+                </View>
+
+                <View style={styles.reportRecommendBox}>
+                  <Text style={styles.reportInsightLabel}>🎯 이번 주 추천</Text>
+                  <Text style={styles.reportInsightText}>{report.recommendation}</Text>
+                </View>
+
                 <TouchableOpacity style={styles.reAnalyzeBtn} onPress={fetchReport}>
                   <Text style={styles.reAnalyzeBtnText}>다시 분석하기</Text>
                 </TouchableOpacity>
@@ -356,11 +437,53 @@ const styles = StyleSheet.create({
   diagTitle: { flex: 1, fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
   cautionBadge: { borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2 },
   cautionText: { fontSize: FONTS.sizes.xs, fontWeight: '700' },
-  diagDesc: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, lineHeight: 20, marginBottom: SPACING.base },
-  diagStats: { flexDirection: 'row', justifyContent: 'space-around' },
+  diagDesc: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, lineHeight: 20, marginBottom: SPACING.sm },
+  diagStats: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: SPACING.sm },
   diagStat: { alignItems: 'center' },
   diagStatLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted, marginBottom: 4 },
   diagStatVal: { fontSize: FONTS.sizes.base, fontWeight: '800', color: COLORS.text },
+
+  diagFetchBtn: {
+    marginTop: SPACING.sm,
+    backgroundColor: COLORS.bgSecondary,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1.5,
+    borderColor: COLORS.primary + '30',
+  },
+  diagFetchBtnInner: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  diagFetchBtnIcon: { fontSize: 24 },
+  diagFetchBtnTitle: { fontSize: FONTS.sizes.sm, fontWeight: '700', color: COLORS.text },
+  diagFetchBtnSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginTop: 2 },
+  diagFetchBtnArrow: { fontSize: 20, color: COLORS.primary, fontWeight: '700' },
+
+  diagLoadingBox: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: SPACING.sm, marginTop: SPACING.sm, paddingVertical: SPACING.sm,
+  },
+  diagLoadingText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary },
+
+  diagRiskBox: {
+    backgroundColor: COLORS.danger + '10',
+    borderRadius: RADIUS.sm,
+    padding: SPACING.sm,
+    marginBottom: SPACING.xs,
+    borderLeftWidth: 2,
+    borderLeftColor: COLORS.danger,
+  },
+  diagRiskText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
+
+  diagTipBox: {
+    backgroundColor: COLORS.primary + '10',
+    borderRadius: RADIUS.sm,
+    padding: SPACING.sm,
+    borderLeftWidth: 2,
+    borderLeftColor: COLORS.primary,
+  },
+  diagTipText: { fontSize: FONTS.sizes.xs, color: COLORS.primary, lineHeight: 18 },
 
   stepRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.sm },
   stepTab: {
@@ -390,6 +513,23 @@ const styles = StyleSheet.create({
   tipBox: { backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: RADIUS.sm, padding: SPACING.sm },
   tipText: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
 
+  solutionBtn: {
+    backgroundColor: '#fff',
+    borderRadius: RADIUS.xl,
+    padding: SPACING.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...SHADOWS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary + '30',
+  },
+  solutionBtnInner: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  solutionBtnIcon: { fontSize: 28 },
+  solutionBtnTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text },
+  solutionBtnSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginTop: 2 },
+  solutionBtnArrow: { fontSize: 24, color: COLORS.primary, fontWeight: '700' },
+
   reportCard: { backgroundColor: COLORS.bgDark, borderRadius: RADIUS.xl, padding: SPACING.lg },
   reportHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.base },
   reportIconBox: {
@@ -413,27 +553,30 @@ const styles = StyleSheet.create({
   reAnalyzeBtn: { alignSelf: 'center', paddingVertical: SPACING.xs },
   reAnalyzeBtnText: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
 
-  reportLoadingBox: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.sm },
-  reportLoadingText: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.5)' },
-  reportErrorText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
-  exErrorText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
-
-  solutionBtn: {
-    backgroundColor: '#fff',
-    borderRadius: RADIUS.xl,
-    padding: SPACING.base,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...SHADOWS.md,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary + '30',
+  reportStatRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: RADIUS.lg, padding: SPACING.base,
+    marginBottom: SPACING.sm,
   },
-  solutionBtnInner: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  solutionBtnIcon: { fontSize: 28 },
-  solutionBtnTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text },
-  solutionBtnSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginTop: 2 },
-  solutionBtnArrow: { fontSize: 24, color: COLORS.primary, fontWeight: '700' },
+  reportStatBox: { flex: 1, alignItems: 'center' },
+  reportStatDivider: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.12)' },
+  reportStatUnit: { fontSize: FONTS.sizes.sm, fontWeight: '400', color: 'rgba(255,255,255,0.5)' },
+
+  reportInsightBox: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: RADIUS.md, padding: SPACING.sm,
+    marginBottom: SPACING.xs,
+    borderLeftWidth: 2, borderLeftColor: '#4ADE80',
+  },
+  reportRecommendBox: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: RADIUS.md, padding: SPACING.sm,
+    marginBottom: SPACING.base,
+    borderLeftWidth: 2, borderLeftColor: '#60A5FA',
+  },
+  reportInsightLabel: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.45)', fontWeight: '700', marginBottom: 4 },
+  reportInsightText: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.8)', lineHeight: 18 },
 
   reportAnalyzeBtn: {
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -451,17 +594,10 @@ const styles = StyleSheet.create({
   reportAnalyzeBtnSub: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
   reportAnalyzeBtnArrow: { fontSize: 24, color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
 
-  anotherSolutionBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: SPACING.xs, marginTop: SPACING.sm,
-    backgroundColor: COLORS.bgSecondary,
-    borderRadius: RADIUS.full,
-    paddingVertical: SPACING.sm, paddingHorizontal: SPACING.base,
-    alignSelf: 'center',
-  },
-  anotherSolutionIcon: { fontSize: 14 },
-  anotherSolutionText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, fontWeight: '600' },
-  cardDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: SPACING.sm },
+  reportLoadingBox: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.sm },
+  reportLoadingText: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.5)' },
+  reportErrorText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
+  exErrorText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
 
   refreshInfo: {
     marginHorizontal: SPACING.base, marginTop: -SPACING.md, marginBottom: SPACING.md,

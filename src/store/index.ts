@@ -5,7 +5,7 @@ import {
   User, DeviceState, PostureSnapshot, DayStats,
   WeekStats, AppNotification, AppSettings, PostureLevel, PostureType,
 } from '../constants/types';
-import { WeeklyReport, ExerciseStep } from '../services/aiService';
+import { WeeklyReport, ExerciseStep, LLMDiagnosis, DiagnosisLevel } from '../services/aiService';
 
 // ── 유틸 ────────────────────────────────────────────
 function scoreToLevel(score: number): PostureLevel {
@@ -29,16 +29,20 @@ interface AppState {
   currentScore: number;
   currentAngle: number;
   currentLevel: PostureLevel;
-  currentPostureType: PostureType; // ML 모델 출력값 (현재는 각도 기반 자동 도출)
+  currentPostureType: PostureType;
+  currentDiagnosisLevel: DiagnosisLevel | null; // ML 모델 직접 출력 (null이면 각도 기반 폴백)
   todayStats: DayStats | null;
   weeklyStats: WeekStats[];
   snapshots: PostureSnapshot[];
 
   // AI
+  lastDiagnosis: LLMDiagnosis | null;
   lastExercises: [ExerciseStep, ExerciseStep, ExerciseStep] | null;
-  lastExercisesAt: number | null; // timestamp (ms)
-  lastDiagnosisAt: number | null; // timestamp (ms)
+  lastExercisesAt: number | null;
+  lastDiagnosisAt: number | null;
   lastWeeklyReport: WeeklyReport | null;
+
+  setLastDiagnosis: (d: LLMDiagnosis) => void;
 
   // Notifications
   notifications: AppNotification[];
@@ -57,6 +61,7 @@ interface AppState {
 
   updatePosture: (score: number, angle: number, postureType?: PostureType) => void;
   setPostureType: (type: PostureType) => void;
+  setDiagnosisLevel: (level: DiagnosisLevel | null) => void;
   setTodayStats: (stats: DayStats) => void;
   setWeeklyStats: (stats: WeekStats[]) => void;
   addSnapshot: (snapshot: PostureSnapshot) => void;
@@ -95,11 +100,10 @@ export const useStore = create<AppState>()(
       currentAngle: 18.5,
       currentLevel: 'good',
       currentPostureType: 'forward_head',
+      currentDiagnosisLevel: null,
       todayStats: null,
       weeklyStats: [],
       snapshots: [],
-
-      lastDiagnosis: null,
 
       notifications: [],
 
@@ -131,15 +135,18 @@ export const useStore = create<AppState>()(
       updatePosture: (score, angle, postureType) =>
         set({ currentScore: score, currentAngle: angle, currentLevel: scoreToLevel(score), ...(postureType ? { currentPostureType: postureType } : {}) }),
       setPostureType: (type) => set({ currentPostureType: type }),
+      setDiagnosisLevel: (level) => set({ currentDiagnosisLevel: level }),
       setTodayStats: (stats) => set({ todayStats: stats }),
       setWeeklyStats: (stats) => set({ weeklyStats: stats }),
       addSnapshot: (snapshot) =>
         set((s) => ({ snapshots: [snapshot, ...s.snapshots].slice(0, 500) })),
 
+      lastDiagnosis: null,
+      setLastDiagnosis: (d) => set({ lastDiagnosis: d, lastDiagnosisAt: Date.now() }),
       lastExercises: null,
       lastExercisesAt: null,
       lastDiagnosisAt: null,
-      setLastExercises: (e) => set({ lastExercises: e, lastExercisesAt: Date.now(), lastDiagnosisAt: Date.now() }),
+      setLastExercises: (e) => set({ lastExercises: e, lastExercisesAt: Date.now() }),
       lastWeeklyReport: null,
       setLastWeeklyReport: (r: WeeklyReport) => set({ lastWeeklyReport: r }),
 
@@ -160,13 +167,13 @@ export const useStore = create<AppState>()(
     {
       name: 'c7-app-storage-v2',
       storage: createJSONStorage(() => AsyncStorage),
-      // 앱 재시작 후 유지할 항목만 선택 (인증/실시간 데이터 제외)
       partialize: (state) => ({
         todayStats: state.todayStats,
         weeklyStats: state.weeklyStats,
         snapshots: state.snapshots,
         notifications: state.notifications,
         settings: state.settings,
+        lastDiagnosis: state.lastDiagnosis,
         lastExercises: state.lastExercises,
         lastExercisesAt: state.lastExercisesAt,
         lastDiagnosisAt: state.lastDiagnosisAt,
