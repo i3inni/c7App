@@ -7,14 +7,24 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
+import Svg, { Path, Circle } from "react-native-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useStore } from "../../store";
 import Button from "../../components/common/Button";
 import Input from "../../components/common/Input";
-import { COLORS, FONTS, SPACING } from "../../constants/theme";
-import { login, loginWithGoogle, resendVerificationEmail } from "../../services/authService";
+import ConfirmModal from "../../components/common/ConfirmModal";
+import { COLORS, FONTS, SPACING, RADIUS } from "../../constants/theme";
+import { login, logout, loginWithGoogle, reactivateAccount, resendVerificationEmail } from "../../services/authService";
 import { getUserDoc } from "../../services/userService";
+
+interface PendingUser {
+  uid: string;
+  nickname: string;
+  email: string | undefined;
+  height: number | undefined;
+  weight: number | undefined;
+}
 
 export default function LoginScreen() {
   const nav = useNavigation();
@@ -23,6 +33,62 @@ export default function LoginScreen() {
   const [pw, setPw] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
+  const [pendingUser, setPendingUser] = useState<PendingUser | null>(null);
+  const [errorModal, setErrorModal] = useState<{ title: string; message: string } | null>(null);
+
+  const proceedLogin = (u: PendingUser) => {
+    setUser({
+      id: u.uid,
+      nickname: u.nickname,
+      email: u.email,
+      isGuest: false,
+      height: u.height,
+      weight: u.weight,
+    });
+    (nav as any).replace("MqttConnect");
+  };
+
+  const handleReactivateConfirm = async () => {
+    if (!pendingUser) return;
+    setShowReactivateModal(false);
+    await reactivateAccount(pendingUser.uid);
+    proceedLogin(pendingUser);
+  };
+
+  const handleReactivateCancel = async () => {
+    setShowReactivateModal(false);
+    setPendingUser(null);
+    await logout();
+  };
+
+  const checkAndLogin = async (
+    uid: string,
+    doc: any,
+    fallbackNickname: string,
+    fallbackEmail: string | undefined,
+  ) => {
+    const userData: PendingUser = {
+      uid,
+      nickname: doc?.account?.nickname ?? fallbackNickname,
+      email: doc?.account?.email ?? fallbackEmail,
+      height: doc?.bodyInfo?.height ?? undefined,
+      weight: doc?.bodyInfo?.weight ?? undefined,
+    };
+
+    if (doc?.account?.isActive === false) {
+      if (doc?.account?.withdrawnAt) {
+        setPendingUser(userData);
+        setShowReactivateModal(true);
+      } else {
+        // 신규 가입 후 첫 로그인 — 자동 활성화
+        await reactivateAccount(uid);
+        proceedLogin(userData);
+      }
+      return;
+    }
+    proceedLogin(userData);
+  };
 
   // 이메일/비밀번호 로그인
   const handleLogin = async () => {
@@ -52,17 +118,9 @@ export default function LoginScreen() {
         return;
       }
       const doc = await getUserDoc(user.uid);
-      setUser({
-        id: user.uid,
-        nickname: doc?.account?.nickname ?? user.email ?? id,
-        email: doc?.account?.email ?? user.email ?? undefined,
-        isGuest: false,
-        height: doc?.bodyInfo?.height ?? undefined,
-        weight: doc?.bodyInfo?.weight ?? undefined,
-      });
-      (nav as any).replace("MqttConnect");
+      await checkAndLogin(user.uid, doc, user.email ?? id, user.email ?? undefined);
     } catch (e: any) {
-      Alert.alert("로그인 실패", firebaseErrorMessage(e.code));
+      setErrorModal({ title: '로그인 실패', message: firebaseErrorMessage(e.code) });
     } finally {
       setLoading(false);
     }
@@ -74,18 +132,10 @@ export default function LoginScreen() {
     try {
       const user = await loginWithGoogle();
       const doc = await getUserDoc(user.uid);
-      setUser({
-        id: user.uid,
-        nickname: doc?.account?.nickname ?? user.displayName ?? '사용자',
-        email: doc?.account?.email ?? user.email ?? undefined,
-        isGuest: false,
-        height: doc?.bodyInfo?.height ?? undefined,
-        weight: doc?.bodyInfo?.weight ?? undefined,
-      });
-      (nav as any).replace("MqttConnect");
+      await checkAndLogin(user.uid, doc, user.displayName ?? '사용자', user.email ?? undefined);
     } catch (e: any) {
       if (e.message !== "Google 로그인 취소됨") {
-        Alert.alert("구글 로그인 실패", e.message);
+        setErrorModal({ title: '구글 로그인 실패', message: e.message });
       }
     } finally {
       setGoogleLoading(false);
@@ -159,6 +209,51 @@ export default function LoginScreen() {
           <Text style={styles.guestText}>비회원으로 시작하기</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* 로그인 오류 모달 */}
+      <ConfirmModal
+        visible={!!errorModal}
+        iconNode={
+          <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
+            <Circle cx="12" cy="12" r="9" stroke={COLORS.accent} strokeWidth="1.8" />
+            <Path d="M12 8v4" stroke={COLORS.accent} strokeWidth="2" strokeLinecap="round" />
+            <Circle cx="12" cy="16" r="1" fill={COLORS.accent} />
+          </Svg>
+        }
+        iconBg={COLORS.accentLight}
+        title={errorModal?.title ?? '오류'}
+        message={errorModal?.message ?? ''}
+        confirmLabel="확인"
+        confirmVariant="danger"
+        hideCancel
+        onConfirm={() => setErrorModal(null)}
+      />
+
+      {/* 탈퇴 취소 모달 */}
+      <ConfirmModal
+        visible={showReactivateModal}
+        iconNode={
+          <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
+            <Circle cx="12" cy="8" r="4" stroke={COLORS.primary} strokeWidth="1.8" />
+            <Path
+              d="M4 20c0-4 3.6-7 8-7s8 3 8 7"
+              stroke={COLORS.primary} strokeWidth="1.8" strokeLinecap="round"
+            />
+            <Path
+              d="M17 14l1.5 1.5L21 13"
+              stroke={COLORS.primary} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+            />
+          </Svg>
+        }
+        iconBg={COLORS.primaryLight}
+        title="다시 돌아오셨군요!"
+        message={`탈퇴 처리된 계정입니다.\n탈퇴를 취소하고 다시 시작하시겠습니까?`}
+        confirmLabel="탈퇴 취소"
+        cancelLabel="아니요"
+        confirmVariant="primary"
+        onConfirm={handleReactivateConfirm}
+        onCancel={handleReactivateCancel}
+      />
     </SafeAreaView>
   );
 }
@@ -168,6 +263,7 @@ const firebaseErrorMessage = (code: string): string => {
   switch (code) {
     case "auth/user-not-found":     return "존재하지 않는 계정입니다.";
     case "auth/wrong-password":     return "비밀번호가 틀렸습니다.";
+    case "auth/invalid-credential": return "이메일 또는 비밀번호가 올바르지 않습니다.";
     case "auth/invalid-email":      return "이메일 형식이 올바르지 않습니다.";
     case "auth/too-many-requests":  return "잠시 후 다시 시도해주세요.";
     case "auth/network-request-failed": return "네트워크 연결을 확인해주세요.";
@@ -230,4 +326,5 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
   },
   guestText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary },
+
 });

@@ -3,7 +3,6 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   updatePassword,
-  deleteUser,
   GoogleAuthProvider,
   OAuthProvider,
   signInWithCredential,
@@ -11,7 +10,7 @@ import {
   reauthenticateWithCredential,
   sendEmailVerification,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, deleteDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { auth, db } from '../lib/firebase';
@@ -39,6 +38,7 @@ export const signUp = async (email: string, password: string, nickname: string) 
       nickname,
       email,
       isMember: true,
+      isActive: true,
       createdAt: new Date().toISOString(),
     },
     bodyInfo: {
@@ -100,6 +100,7 @@ export const loginWithGoogle = async () => {
         nickname: user.displayName ?? '사용자',
         email: user.email,
         isMember: true,
+        isActive: true,
         createdAt: new Date().toISOString(),
       },
       bodyInfo: {
@@ -192,9 +193,9 @@ export const changePassword = async (currentPassword: string, newPassword: strin
   await updatePassword(user, newPassword);
 };
 
-// ─── 회원 탈퇴 ────────────────────────────────────────────────────────────────
-// 이메일 계정: 비밀번호로 재인증 후 삭제
-// 구글 계정: 재인증 없이 삭제 시도 (토큰 유효 시간 내)
+// ─── 회원 탈퇴 (소프트 삭제) ──────────────────────────────────────────────────
+// 이메일 계정: 비밀번호로 재인증 후 비활성화
+// 계정/데이터는 보존, account.isActive = false 로 비활성화 후 로그아웃
 export const deleteAccount = async (password?: string) => {
   const user = auth.currentUser;
   if (!user) throw new Error('로그인 상태가 아닙니다.');
@@ -207,22 +208,17 @@ export const deleteAccount = async (password?: string) => {
     await reauthenticateWithCredential(user, credential);
   }
 
-  const uid = user.uid;
+  await updateDoc(doc(db, 'users', user.uid), {
+    'account.isActive': false,
+    'account.withdrawnAt': new Date().toISOString(),
+  });
+  await signOut(auth);
+};
 
-  // Firestore 데이터 삭제 (Auth 삭제 전에 처리)
-  const batch = writeBatch(db);
-
-  const dailySnap = await getDocs(query(collection(db, 'daily_stats'), where('uid', '==', uid)));
-  dailySnap.forEach((d) => batch.delete(d.ref));
-
-  const weeklySnap = await getDocs(query(collection(db, 'weekly_stats'), where('uid', '==', uid)));
-  weeklySnap.forEach((d) => batch.delete(d.ref));
-
-  const notifSnap = await getDocs(query(collection(db, 'notifications'), where('uid', '==', uid)));
-  notifSnap.forEach((d) => batch.delete(d.ref));
-
-  batch.delete(doc(db, 'users', uid));
-
-  await batch.commit();
-  await deleteUser(user);
+// ─── 탈퇴 취소 (계정 재활성화) ────────────────────────────────────────────────
+export const reactivateAccount = async (uid: string) => {
+  await updateDoc(doc(db, 'users', uid), {
+    'account.isActive': true,
+    'account.withdrawnAt': null,
+  });
 };

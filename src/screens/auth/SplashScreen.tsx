@@ -43,6 +43,12 @@ export default function SplashScreen() {
       try {
         const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
         const data = snap.exists() ? snap.data() : null;
+        if (data?.account?.isActive === false) {
+          // 탈퇴 계정이면 로그인 화면으로 (재활성화 여부는 LoginScreen에서 처리)
+          await signOut(auth);
+          goTo('Login');
+          return;
+        }
         setUser({
           id: firebaseUser.uid,
           nickname: data?.account?.nickname ?? firebaseUser.displayName ?? '사용자',
