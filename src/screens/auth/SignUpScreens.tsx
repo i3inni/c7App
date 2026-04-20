@@ -121,6 +121,7 @@ export function SignUpStep1() {
 export function SignUpStep2({ route }: { route: RouteProp<RootStackParamList, 'SignUpStep2'> }) {
   const nav = useNavigation();
   const [pw, setPw] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
 
   const strength: null | "weak" | "normal" | "strong" =
     pw.length === 0 ? null : pw.length < 4 ? "weak" : pw.length < 8 ? "normal" : "strong";
@@ -131,6 +132,9 @@ export function SignUpStep2({ route }: { route: RouteProp<RootStackParamList, 'S
     strength === "weak" ? "약함" : strength === "normal" ? "보통" : "강함";
   const strengthRatio =
     strength === "weak" ? 0.25 : strength === "normal" ? 0.6 : 1;
+
+  const isConfirmMatch = pwConfirm.length > 0 && pw === pwConfirm;
+  const isConfirmMismatch = pwConfirm.length > 0 && pw !== pwConfirm;
 
   return (
     <SignUpLayout step={2} total={3} onBack={() => nav.goBack()}>
@@ -153,13 +157,30 @@ export function SignUpStep2({ route }: { route: RouteProp<RootStackParamList, 'S
               <Text style={[styles.strengthLabel, { color: strengthColor }]}>{strengthLabel}</Text>
             </View>
           )}
+
+          <View style={{ marginTop: SPACING.base }}>
+            <Input
+              value={pwConfirm}
+              onChangeText={setPwConfirm}
+              placeholder="비밀번호 재확인"
+              secureTextEntry
+              rightElement={
+                isConfirmMatch ? <Text style={{ color: COLORS.primary, fontSize: 18 }}>✓</Text> : undefined
+              }
+            />
+            {isConfirmMismatch && (
+              <Text style={{ fontSize: FONTS.sizes.sm, color: COLORS.accent, marginTop: SPACING.xs, paddingLeft: SPACING.xs }}>
+                비밀번호가 일치하지 않습니다
+              </Text>
+            )}
+          </View>
         </View>
       </View>
 
       <Button
         label="다음 단계  →"
         onPress={() => (nav as any).navigate("SignUpStep3", { ...route.params, password: pw })}
-        disabled={!strength || strength === "weak"}
+        disabled={!strength || strength === "weak" || !isConfirmMatch}
         style={styles.nextBtn}
       />
     </SignUpLayout>

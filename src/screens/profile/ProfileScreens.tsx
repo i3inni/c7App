@@ -527,17 +527,25 @@ const pwStyles = StyleSheet.create({
 export function WithdrawScreen() {
   const nav = useNavigation();
   const { logout } = useStore();
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleWithdraw = async () => {
+    setLoading(true);
     try {
-      await deleteAccount();
+      await deleteAccount(password || undefined);
       logout();
       (nav as any).replace('Login');
     } catch (e: any) {
-      const msg = e?.code === 'auth/requires-recent-login'
-        ? '보안을 위해 재로그인 후 다시 시도해주세요.'
-        : '회원 탈퇴에 실패했습니다. 다시 시도해주세요.';
+      const msg =
+        e?.code === 'auth/wrong-password' || e?.code === 'auth/invalid-credential'
+          ? '비밀번호가 올바르지 않습니다.'
+          : e?.message === '비밀번호를 입력해주세요.'
+          ? '비밀번호를 입력해주세요.'
+          : '회원 탈퇴에 실패했습니다. 다시 시도해주세요.';
       Alert.alert('오류', msg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -586,10 +594,20 @@ export function WithdrawScreen() {
 
         <View style={{ flex: 1 }} />
 
+        <Text style={pwStyles.fieldLabel}>비밀번호 확인</Text>
+        <Input
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          placeholder="현재 비밀번호를 입력해주세요"
+          style={{ marginBottom: SPACING.base }}
+        />
+
         <Button
-          label="탈퇴 진행"
+          label={loading ? '처리 중...' : '탈퇴 진행'}
           onPress={handleWithdraw}
           variant="danger"
+          disabled={loading}
           style={{ marginBottom: SPACING.sm }}
         />
         <Button label="취소" onPress={() => nav.goBack()} variant="secondary" />

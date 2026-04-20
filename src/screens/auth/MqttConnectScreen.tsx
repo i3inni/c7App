@@ -119,7 +119,8 @@ export default function MqttConnectScreen() {
           body: `C7 기기(${connectedId})가 정상적으로 연결되었습니다.`,
         }).catch(() => {});
       }
-      (nav as any).replace(isGuest ? 'GuestDevice' : 'MainTabs');
+      const nextScreen = isGuest ? 'GuestDevice' : (!user?.height || !user?.weight) ? 'InitBodyInfo' : 'MainTabs';
+      (nav as any).replace(nextScreen);
     }, 2000);
 
     return () => { anim.stop(); clearTimeout(t); clearTimeout(sim); };
@@ -144,7 +145,8 @@ export default function MqttConnectScreen() {
     if (user?.id) {
       updateDeviceConnection(user.id, DEMO_DEVICE_ID, true).catch(() => {});
     }
-    (nav as any).replace(isGuest ? 'GuestDevice' : 'MainTabs');
+    const nextScreen = isGuest ? 'GuestDevice' : (!user?.height || !user?.weight) ? 'InitBodyInfo' : 'MainTabs';
+    (nav as any).replace(nextScreen);
   };
 
   const errorMessage: Record<ErrorType, string> = {

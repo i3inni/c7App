@@ -54,7 +54,8 @@ export default function LoginScreen() {
       const doc = await getUserDoc(user.uid);
       setUser({
         id: user.uid,
-        nickname: user.email ?? id,
+        nickname: doc?.account?.nickname ?? user.email ?? id,
+        email: doc?.account?.email ?? user.email ?? undefined,
         isGuest: false,
         height: doc?.bodyInfo?.height ?? undefined,
         weight: doc?.bodyInfo?.weight ?? undefined,
@@ -75,8 +76,8 @@ export default function LoginScreen() {
       const doc = await getUserDoc(user.uid);
       setUser({
         id: user.uid,
-        nickname: user.displayName ?? "사용자",
-        email: user.email ?? undefined,
+        nickname: doc?.account?.nickname ?? user.displayName ?? '사용자',
+        email: doc?.account?.email ?? user.email ?? undefined,
         isGuest: false,
         height: doc?.bodyInfo?.height ?? undefined,
         weight: doc?.bodyInfo?.weight ?? undefined,

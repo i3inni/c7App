@@ -11,7 +11,7 @@ import {
   reauthenticateWithCredential,
   sendEmailVerification,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { auth, db } from '../lib/firebase';
@@ -193,8 +193,36 @@ export const changePassword = async (currentPassword: string, newPassword: strin
 };
 
 // ─── 회원 탈퇴 ────────────────────────────────────────────────────────────────
-export const deleteAccount = async () => {
+// 이메일 계정: 비밀번호로 재인증 후 삭제
+// 구글 계정: 재인증 없이 삭제 시도 (토큰 유효 시간 내)
+export const deleteAccount = async (password?: string) => {
   const user = auth.currentUser;
   if (!user) throw new Error('로그인 상태가 아닙니다.');
+
+  const isEmailProvider = user.providerData.some((p) => p.providerId === 'password');
+  if (isEmailProvider) {
+    if (!password) throw new Error('비밀번호를 입력해주세요.');
+    if (!user.email) throw new Error('이메일 정보를 찾을 수 없습니다.');
+    const credential = EmailAuthProvider.credential(user.email, password);
+    await reauthenticateWithCredential(user, credential);
+  }
+
+  const uid = user.uid;
+
+  // Firestore 데이터 삭제 (Auth 삭제 전에 처리)
+  const batch = writeBatch(db);
+
+  const dailySnap = await getDocs(query(collection(db, 'daily_stats'), where('uid', '==', uid)));
+  dailySnap.forEach((d) => batch.delete(d.ref));
+
+  const weeklySnap = await getDocs(query(collection(db, 'weekly_stats'), where('uid', '==', uid)));
+  weeklySnap.forEach((d) => batch.delete(d.ref));
+
+  const notifSnap = await getDocs(query(collection(db, 'notifications'), where('uid', '==', uid)));
+  notifSnap.forEach((d) => batch.delete(d.ref));
+
+  batch.delete(doc(db, 'users', uid));
+
+  await batch.commit();
   await deleteUser(user);
 };
