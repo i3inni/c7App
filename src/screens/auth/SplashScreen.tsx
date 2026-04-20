@@ -45,8 +45,11 @@ export default function SplashScreen() {
         const data = snap.exists() ? snap.data() : null;
         setUser({
           id: firebaseUser.uid,
-          nickname: data?.nickname ?? firebaseUser.displayName ?? '사용자',
-          email: data?.email ?? firebaseUser.email ?? undefined,
+          nickname: data?.account?.nickname ?? firebaseUser.displayName ?? '사용자',
+          email: data?.account?.email ?? firebaseUser.email ?? undefined,
+          height: data?.bodyInfo?.height ?? undefined,
+          weight: data?.bodyInfo?.weight ?? undefined,
+          sittingTime: data?.bodyInfo?.sittingTime ?? undefined,
           isGuest: false,
         });
         goTo('MainTabs');

@@ -33,13 +33,32 @@ export const signUp = async (email: string, password: string, nickname: string) 
   const result = await createUserWithEmailAndPassword(auth, email, password);
   const user = result.user;
 
-  // Firestore에 유저 프로필 저장
-  // users/{userId} 경로에 문서 생성
   await setDoc(doc(db, 'users', user.uid), {
-    nickname,
-    email,
-    isGuest: false,
-    createdAt: Date.now(),
+    account: {
+      userId: user.uid,
+      nickname,
+      email,
+      isMember: true,
+      createdAt: new Date().toISOString(),
+    },
+    bodyInfo: {
+      height: null,
+      weight: null,
+      sittingTime: null,
+      calibrationAngle: null,
+    },
+    deviceSettings: {
+      deviceId: null,
+      vibrationEnabled: true,
+      vibrationStrength: '중',
+      detectionAngle: 30,
+      powerSaveMode: false,
+      targetScore: 85,
+    },
+    notificationSettings: {
+      postureAlert: true,
+      reportAlert: true,
+    },
   });
 
   await sendEmailVerification(user);
@@ -73,14 +92,34 @@ export const loginWithGoogle = async () => {
   const result = await signInWithCredential(auth, credential);
   const user = result.user;
 
-  // 신규 유저면 Firestore에 프로필 생성
   const userDoc = await getDoc(doc(db, 'users', user.uid));
   if (!userDoc.exists()) {
     await setDoc(doc(db, 'users', user.uid), {
-      nickname: user.displayName ?? '사용자',
-      email: user.email,
-      isGuest: false,
-      createdAt: Date.now(),
+      account: {
+        userId: user.uid,
+        nickname: user.displayName ?? '사용자',
+        email: user.email,
+        isMember: true,
+        createdAt: new Date().toISOString(),
+      },
+      bodyInfo: {
+        height: null,
+        weight: null,
+        sittingTime: null,
+        calibrationAngle: null,
+      },
+      deviceSettings: {
+        deviceId: null,
+        vibrationEnabled: true,
+        vibrationStrength: '중',
+        detectionAngle: 30,
+        powerSaveMode: false,
+        targetScore: 85,
+      },
+      notificationSettings: {
+        postureAlert: true,
+        reportAlert: true,
+      },
     });
   }
 
