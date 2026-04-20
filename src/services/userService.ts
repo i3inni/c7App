@@ -127,16 +127,16 @@ export const updateCalibrationAngle = async (userId: string, angle: number): Pro
 //   → statsService 또는 실시간 측정 로직과 연결 예정
 //
 // [설정 화면]
-// - 알림 on/off 저장: userService (updateNotificationSettings) 가 담당
+// - 알림 on/off 저장: userService  ✅(updateNotificationSettings) 가 담당
 // - 실제 알림 생성 / 발송
 //   → 별도 알림 서비스와 연결 예정
 //
 // [개인정보/보안]
-// - 비밀번호 변경
+// - 비밀번호 변경 ✅
 //   → authService에서 처리 예정
-// - 로그아웃
+// - 로그아웃 ✅
 //   → authService에서 처리 예정
-// - 회원탈퇴 (계정 삭제 + 관련 데이터 정리)
+// - 회원탈퇴 (계정 삭제 + 관련 데이터 정리) ✅
 //   → authService에서 처리 예정
 //
 // [기록 관리]

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import { updateNotificationSettings } from '../../services/userService';
+import { logout as authLogout, changePassword, deleteAccount } from '../../services/authService';
 
 // ── 공통 헤더 ────────────────────────────────────────
 function PageHeader({ title }: { title: string }) {
@@ -43,7 +44,7 @@ const hStyles = StyleSheet.create({
 // ── 내 정보 ──────────────────────────────────────────
 export function MyInfoScreen() {
   const nav = useNavigation();
-  const { user, updateUser, updateSettings, settings, logout, clearRecords, device } = useStore();
+  const { user, updateSettings, settings, logout, clearRecords, device } = useStore();
   const isConnected = device.mqttStatus === 'connected';
   const [showLogout, setShowLogout] = useState(false);
   const [showClearRecords, setShowClearRecords] = useState(false);
@@ -215,7 +216,15 @@ export function MyInfoScreen() {
         confirmLabel="로그아웃"
         cancelLabel="취소"
         confirmVariant="dark"
-        onConfirm={() => { logout(); setShowLogout(false); }}
+        onConfirm={async () => {
+          try {
+            await authLogout();
+            logout();
+            setShowLogout(false);
+          } catch {
+            Alert.alert('오류', '로그아웃에 실패했습니다. 다시 시도해주세요.');
+          }
+        }}
         onCancel={() => setShowLogout(false)}
       />
       <ConfirmModal
@@ -260,7 +269,6 @@ export function MyInfoScreen() {
 
 // ── 신체 정보 ──────────────────────────────────────
 export function BodyInfoScreen() {
-  const nav = useNavigation();
   const { user, updateUser } = useStore();
   const [showHeight, setShowHeight] = useState(false);
   const [showWeight, setShowWeight] = useState(false);
@@ -419,8 +427,16 @@ export function ChangePasswordScreen() {
   const [confirm, setConfirm] = useState('');
 
   const handleChange = async () => {
-    // Firebase updatePassword 자리
-    nav.goBack();
+    try {
+      await changePassword(cur, next);
+      Alert.alert('완료', '비밀번호가 변경되었습니다.');
+      nav.goBack();
+    } catch (e: any) {
+      const msg = e?.code === 'auth/wrong-password' || e?.code === 'auth/invalid-credential'
+        ? '현재 비밀번호가 올바르지 않습니다.'
+        : '비밀번호 변경에 실패했습니다. 다시 시도해주세요.';
+      Alert.alert('오류', msg);
+    }
   };
 
   return (
@@ -482,6 +498,19 @@ export function WithdrawScreen() {
   const nav = useNavigation();
   const { logout } = useStore();
 
+  const handleWithdraw = async () => {
+    try {
+      await deleteAccount();
+      logout();
+      (nav as any).replace('Login');
+    } catch (e: any) {
+      const msg = e?.code === 'auth/requires-recent-login'
+        ? '보안을 위해 재로그인 후 다시 시도해주세요.'
+        : '회원 탈퇴에 실패했습니다. 다시 시도해주세요.';
+      Alert.alert('오류', msg);
+    }
+  };
+
   const items = [
     '모든 자세 기록 및 분석 데이터 삭제',
     '주간 건강 리포트 및 통계 삭제',
@@ -529,7 +558,7 @@ export function WithdrawScreen() {
 
         <Button
           label="탈퇴 진행"
-          onPress={() => { logout(); nav.replace('Login'); }}
+          onPress={handleWithdraw}
           variant="danger"
           style={{ marginBottom: SPACING.sm }}
         />
