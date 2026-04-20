@@ -25,9 +25,12 @@ export interface LocalDiagnosis {
 }
 
 export interface WeeklyReport {
-  body: string;
-  bestScore: number;
-  trend: string;
+  summary: string;        // 종합 평가 2문장
+  bestScore: number;      // 주간 최고 점수
+  avgScore: number;       // 주간 평균 점수
+  trend: string;          // "↑ X%" 또는 "↓ X%"
+  insight: string;        // 핵심 인사이트 1문장
+  recommendation: string; // 개선 추천 1문장
 }
 
 // ── 공통 fetch 헬퍼 ──────────────────────────────────────
@@ -55,29 +58,71 @@ async function callLLM(systemPrompt: string, userContent: string, maxTokens = 51
   return json.choices[0].message.content as string;
 }
 
-// ── 로컬 진단 (즉시, LLM 없음) ──────────────────────────
-export function buildLocalDiagnosis(angle: number, score: number, weeklyStats: WeekStats[]): LocalDiagnosis {
-  let level: DiagnosisLevel;
-  if (angle <= 15) level = 'normal';
-  else if (angle <= 20) level = 'mild';
-  else if (angle <= 30) level = 'moderate';
-  else level = 'severe';
+// ── 레벨/배지 계산 (각도 기반, UI용) ────────────────────
+export function classifyLevel(angle: number): DiagnosisLevel {
+  if (angle <= 15) return 'normal';
+  if (angle <= 20) return 'mild';
+  if (angle <= 30) return 'moderate';
+  return 'severe';
+}
 
-  const levelText = { normal: '정상', mild: '경증 거북목', moderate: '중등도 거북목', severe: '중증 거북목' }[level];
-  const badgeText = { normal: '정상', mild: '경미', moderate: '주의', severe: '위험' }[level];
-  const badgeColor = { normal: COLORS.scoreExcellent, mild: COLORS.info, moderate: COLORS.warning, severe: COLORS.danger }[level];
-  const warningIcon = { normal: '✅', mild: 'ℹ️', moderate: '⚠️', severe: '🚨' }[level];
+export function levelToMeta(level: DiagnosisLevel) {
+  return {
+    levelText:  { normal: '정상', mild: '경증 거북목', moderate: '중등도 거북목', severe: '중증 거북목' }[level],
+    badgeText:  { normal: '정상', mild: '경미', moderate: '주의', severe: '위험' }[level],
+    badgeColor: { normal: COLORS.scoreExcellent, mild: COLORS.info, moderate: COLORS.warning, severe: COLORS.danger }[level],
+    warningIcon:{ normal: '✅', mild: 'ℹ️', moderate: '⚠️', severe: '🚨' }[level],
+  };
+}
 
-  const description = level === 'normal'
-    ? `현재 목 각도 ${angle}°로 정상 범위(5-15°) 내에 있습니다. 자세 점수 ${score}점으로 좋은 상태를 유지하고 있습니다.`
-    : `현재 목 각도 ${angle}°로 정상 범위(5-15°)를 벗어났습니다. 자세 점수 ${score}점으로 장시간 유지 시 통증이 발생할 수 있습니다.`;
+const POSTURE_TYPE_LABEL: Record<string, string> = {
+  normal:       '정상 자세',
+  forward_head: '거북목 (전방 머리 자세)',
+  rounded_back: '굽은 등',
+  straight_neck:'일자목',
+  tilted:       '기울어진 자세',
+  unknown:      '감지 중',
+};
 
+// ── LLM 진단 ─────────────────────────────────────────────
+export interface LLMDiagnosis {
+  description: string;    // 현재 자세 상태 설명 2문장
+  improvementRate: string; // "+X% 또는 -X%"
+  riskMessage: string;    // 지속 시 위험/긍정 메시지
+  actionTip: string;      // 즉시 실천 팁
+}
+
+const DIAGNOSIS_SYSTEM_PROMPT = `당신은 거북목 교정 전문 의료 AI입니다. 사용자의 자세 감지 데이터를 분석하여 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
+
+{
+  "description": "감지된 자세 유형과 현재 상태에 대한 구체적인 설명 2문장 (수치 포함)",
+  "improvementRate": "+X% 또는 -X% (지난주 대비 개선율)",
+  "riskMessage": "현재 자세가 지속될 경우의 경고 또는 긍정 메시지 1문장",
+  "actionTip": "지금 당장 할 수 있는 교정 팁 1문장"
+}`;
+
+export async function analyzeDiagnosis(
+  postureType: string,
+  angle: number,
+  score: number,
+  weeklyStats: WeekStats[],
+  todayStats: DayStats | null,
+): Promise<LLMDiagnosis> {
+  const postureLabel = POSTURE_TYPE_LABEL[postureType] ?? postureType;
   const prevScore = weeklyStats.length >= 2 ? weeklyStats[weeklyStats.length - 2].avgScore : score;
   const latestScore = weeklyStats.length >= 1 ? weeklyStats[weeklyStats.length - 1].avgScore : score;
-  const diff = latestScore - prevScore;
-  const improvementRate = diff >= 0 ? `+${diff.toFixed(0)}%` : `${diff.toFixed(0)}%`;
 
-  return { level, levelText, badgeText, badgeColor, warningIcon, description, improvementRate };
+  const userContent = [
+    `감지된 자세: ${postureLabel}`,
+    `현재 목 각도: ${angle}°, 자세 점수: ${score}점`,
+    `지난주 평균: ${prevScore}점 → 이번주 평균: ${latestScore}점`,
+    todayStats
+      ? `오늘 불량 자세: ${todayStats.summary.badPostureCount}회, 교정: ${todayStats.summary.correctionCount}회`
+      : '',
+  ].filter(Boolean).join('\n');
+
+  const text = await callLLM(DIAGNOSIS_SYSTEM_PROMPT, userContent, 400);
+  return JSON.parse(text) as LLMDiagnosis;
 }
 
 // ── 단계별 운동 솔루션 (LLM) ─────────────────────────────
@@ -108,9 +153,12 @@ export async function analyzeExercises(
 const WEEKLY_SYSTEM_PROMPT = `당신은 거북목 교정 전문 AI입니다. 사용자의 주간 자세 데이터를 분석하여 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
 
 {
-  "body": "주간 분석 내용 2-3문장 (구체적 수치와 개선점 포함)",
+  "summary": "이번 주 자세 상태 종합 평가 2문장 (구체적 수치 포함)",
   "bestScore": 숫자,
-  "trend": "↑ X% 또는 ↓ X%"
+  "avgScore": 숫자,
+  "trend": "↑ X% 또는 ↓ X%",
+  "insight": "가장 주목할 만한 패턴이나 변화 1문장",
+  "recommendation": "다음 주를 위한 가장 중요한 개선 행동 1문장"
 }`;
 
 export async function analyzeWeeklyReport(
