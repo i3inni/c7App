@@ -13,7 +13,7 @@ import { useStore } from "../../store";
 import Button from "../../components/common/Button";
 import Input from "../../components/common/Input";
 import { COLORS, FONTS, SPACING } from "../../constants/theme";
-import { login, loginWithGoogle } from "../../services/authService";
+import { login, loginWithGoogle, resendVerificationEmail } from "../../services/authService";
 
 export default function LoginScreen() {
   const nav = useNavigation();
@@ -29,6 +29,27 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const user = await login(id, pw);
+      if (!user.emailVerified) {
+        Alert.alert(
+          '이메일 인증 필요',
+          '가입 시 발송된 인증 메일을 확인해주세요.',
+          [
+            {
+              text: '인증 메일 재발송',
+              onPress: async () => {
+                try {
+                  await resendVerificationEmail();
+                  Alert.alert('발송 완료', '인증 메일을 재발송했습니다.');
+                } catch {
+                  Alert.alert('오류', '메일 발송에 실패했습니다.');
+                }
+              },
+            },
+            { text: '확인', style: 'cancel' },
+          ],
+        );
+        return;
+      }
       setUser({ id: user.uid, nickname: user.email ?? id, isGuest: false });
       (nav as any).replace("MqttConnect");
     } catch (e: any) {

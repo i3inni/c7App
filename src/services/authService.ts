@@ -9,6 +9,7 @@ import {
   signInWithCredential,
   EmailAuthProvider,
   reauthenticateWithCredential,
+  sendEmailVerification,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
@@ -41,7 +42,16 @@ export const signUp = async (email: string, password: string, nickname: string) 
     createdAt: Date.now(),
   });
 
+  await sendEmailVerification(user);
+
   return user;
+};
+
+// ─── 이메일 인증 재발송 ───────────────────────────────────────────────────────
+export const resendVerificationEmail = async () => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('로그인 상태가 아닙니다.');
+  await sendEmailVerification(user);
 };
 
 // ─── 구글 로그인 ──────────────────────────────────────────────────────────────
