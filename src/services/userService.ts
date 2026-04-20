@@ -1,100 +1,145 @@
-import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { User, AppSettings } from '../constants/types';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
-const userDoc = (userId: string) => doc(db, 'users', userId);
+export interface UserAccount {
+  userId: string;
+  nickname: string;
+  email: string;
+  isMember: boolean;
+  createdAt: string;
+}
 
-// ── 유저 프로필 생성 ─────────────────────────────────
-export const createUserProfile = async (userId: string, data: Partial<User>) => {
-  await setDoc(userDoc(userId), {
+export interface UserBodyInfo {
+  height: number;
+  weight: number;
+  sittingTime?: number;
+  calibrationAngle?: number;
+}
+
+export interface UserDeviceSettings {
+  deviceId?: string;
+  vibrationEnabled?: boolean;
+  vibrationStrength?: string;
+  detectionAngle?: number;
+  powerSaveMode?: boolean;
+  targetScore?: number;
+}
+
+export interface UserNotificationSettings {
+  postureAlert: boolean;
+  reportAlert: boolean;
+}
+
+export interface UserDoc {
+  account: UserAccount;
+  bodyInfo: UserBodyInfo;
+  deviceSettings: UserDeviceSettings;
+  notificationSettings: UserNotificationSettings;
+}
+
+const userRef = (userId: string) => doc(db, 'users', userId);
+
+// 회원가입 완료 시 Firestore에 유저 문서를 처음 만들 때 씁니다.
+// data로 전달한 값이 없는 필드는 기본값으로 채워집니다.
+export const createUserDoc = async (userId: string, data: Partial<UserDoc>): Promise<void> => {
+  const defaults: UserDoc = {
     account: {
       userId,
-      nickname: data.nickname ?? '사용자',
-      email: data.email ?? null,
-      isMember: !data.isGuest,
+      nickname: '',
+      email: '',
+      isMember: true,
       createdAt: new Date().toISOString(),
+      ...data.account,
     },
     bodyInfo: {
-      height: data.height ?? null,
-      weight: data.weight ?? null,
-      sittingTime: data.sittingTime ?? null,
-      calibrationAngle: null,
+      height: 0,
+      weight: 0,
+      calibrationAngle: 0,
+      ...data.bodyInfo,
     },
     deviceSettings: {
-      deviceId: null,
-      vibrationEnabled: true,
-      vibrationStrength: '중',
-      detectionAngle: 30,
-      powerSaveMode: false,
       targetScore: 85,
+      ...data.deviceSettings,
     },
     notificationSettings: {
       postureAlert: true,
       reportAlert: true,
+      ...data.notificationSettings,
     },
-  }, { merge: true });
-};
-
-// ── 유저 프로필 조회 ─────────────────────────────────
-// 데이터 없는 경우 더미 기본값 반환
-export const getUserProfile = async (userId: string): Promise<User | null> => {
-  const snap = await getDoc(userDoc(userId));
-  if (!snap.exists()) return null;
-
-  const data = snap.data();
-  const account = data?.account;
-  const bodyInfo = data?.bodyInfo;
-
-  return {
-    id: account?.userId ?? userId,
-    nickname: account?.nickname ?? '사용자',
-    email: account?.email ?? undefined,
-    height: bodyInfo?.height ?? 170,
-    weight: bodyInfo?.weight ?? 65,
-    sittingTime: bodyInfo?.sittingTime ?? 8,
-    isGuest: !(account?.isMember ?? true),
   };
+  await setDoc(userRef(userId), defaults);
 };
 
-// ── 유저 프로필 수정 (닉네임, 신체정보 등) ─────────────
-export const updateUserProfile = async (userId: string, data: Partial<User>) => {
-  const payload: Record<string, unknown> = {};
-
-  const accountUpdate: Record<string, unknown> = {};
-  if (data.nickname !== undefined) accountUpdate.nickname = data.nickname;
-  if (data.email !== undefined) accountUpdate.email = data.email;
-  if (Object.keys(accountUpdate).length > 0) payload.account = accountUpdate;
-
-  const bodyUpdate: Record<string, unknown> = {};
-  if (data.height !== undefined) bodyUpdate.height = data.height;
-  if (data.weight !== undefined) bodyUpdate.weight = data.weight;
-  if (data.sittingTime !== undefined) bodyUpdate.sittingTime = data.sittingTime;
-  if (Object.keys(bodyUpdate).length > 0) payload.bodyInfo = bodyUpdate;
-
-  if (Object.keys(payload).length > 0) {
-    await setDoc(userDoc(userId), payload, { merge: true });
-  }
-};
-
-// ── 앱 설정 조회 (알림, 목표점수 등) ────────────────────
-// 데이터 없는 경우 더미 기본값 반환
-export const getUserSettings = async (userId: string): Promise<AppSettings | null> => {
-  const snap = await getDoc(userDoc(userId));
+// 내 정보 화면, 설정 화면 진입 시 저장된 값 전체를 불러올 때 씁니다.
+export const getUserDoc = async (userId: string): Promise<UserDoc | null> => {
+  const snap = await getDoc(userRef(userId));
   if (!snap.exists()) return null;
-
-  const data = snap.data();
-  const ns = data?.notificationSettings;
-  const ds = data?.deviceSettings;
-
-  return {
-    postureAlertEnabled: ns?.postureAlert ?? true,
-    reportAlertEnabled: ns?.reportAlert ?? true,
-    targetScore: ds?.targetScore ?? 85,
-  };
+  return snap.data() as UserDoc;
 };
 
-// ── 앱 설정 저장 → deviceService에 위임 ─────────────────
-// 실제 저장은 deviceService.saveNotificationSettings 사용
-export const updateUserSettings = async (_userId: string, _settings: Partial<AppSettings>) => {
-  // delegated to deviceService
+// 내 정보 화면에서 키 또는 체중을 수정하고 저장할 때 씁니다.
+export const updateBodyInfo = async (
+  userId: string,
+  data: Partial<UserBodyInfo>,
+): Promise<void> => {
+  const dotted = Object.fromEntries(
+    Object.entries(data).map(([k, v]) => [`bodyInfo.${k}`, v]),
+  );
+  await updateDoc(userRef(userId), dotted);
 };
+
+// 설정 화면에서 자세 알림 또는 리포트 알림 토글을 껐다 켤 때 씁니다.
+export const updateNotificationSettings = async (
+  userId: string,
+  data: Partial<UserNotificationSettings>,
+): Promise<void> => {
+  const dotted = Object.fromEntries(
+    Object.entries(data).map(([k, v]) => [`notificationSettings.${k}`, v]),
+  );
+  await updateDoc(userRef(userId), dotted);
+};
+
+// 홈 화면의 목표 설정 모달에서 목표 점수를 바꾸고 확인을 누를 때 씁니다.
+export const updateTargetScore = async (userId: string, targetScore: number): Promise<void> => {
+  await updateDoc(userRef(userId), { 'deviceSettings.targetScore': targetScore });
+};
+
+// 기기 설정 화면에서 영점 교정 각도를 저장할 때 씁니다.
+export const updateCalibrationAngle = async (userId: string, angle: number): Promise<void> => {
+  await updateDoc(userRef(userId), { 'bodyInfo.calibrationAngle': angle });
+};
+
+
+// ─────────────────────────────────────────────────────────────
+// 향후 연동 예정 — userService에서 직접 구현하지 않는 기능들
+// ─────────────────────────────────────────────────────────────
+//
+// [내 정보 화면]
+// - 연결/비연결 상태 실시간 표시 ✅
+//   → deviceService에서 실시간 기기 상태를 받아와 화면에 표시 예정
+// - 배터리 상태 표시 ❌
+//   → deviceService와 연결 예정 ❌
+// - 홈화면 전원 관리(전원 on/off, 절전 모드)
+//   → deviceService 제어 로직과 연결 예정
+//
+// [홈화면]
+// - 실시간 자세 점수 / 각도 ❌
+//   → statsService 또는 실시간 측정 로직과 연결 예정
+//
+// [설정 화면]
+// - 알림 on/off 저장: userService  ✅(updateNotificationSettings) 가 담당
+// - 실제 알림 생성 / 발송
+//   → 별도 알림 서비스와 연결 예정
+//
+// [개인정보/보안]
+// - 비밀번호 변경 ✅
+//   → authService에서 처리 예정
+// - 로그아웃 ✅
+//   → authService에서 처리 예정
+// - 회원탈퇴 (계정 삭제 + 관련 데이터 정리) ✅
+//   → authService에서 처리 예정
+//
+// [기록 관리]
+// - 기록 초기화 (자세 통계/스냅샷 삭제)
+//   → statsService에서 처리 예정
+// ─────────────────────────────────────────────────────────────
