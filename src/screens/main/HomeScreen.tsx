@@ -9,7 +9,7 @@ import { useStore } from '../../store';
 import Toggle from '../../components/common/Toggle';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import type { AppNotification } from '../../constants/types';
-import { deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
+import { getNotifications, deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
 import { updateTargetScore } from '../../services/userService';
 
 // ── SVG 아이콘 ────────────────────────────────────────

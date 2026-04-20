@@ -52,7 +52,8 @@ export default function SplashScreen() {
           sittingTime: data?.bodyInfo?.sittingTime ?? undefined,
           isGuest: false,
         });
-        goTo('MainTabs');
+        const hasBodyInfo = data?.bodyInfo?.height && data?.bodyInfo?.weight;
+        goTo(hasBodyInfo ? 'MainTabs' : 'InitBodyInfo');
       } catch {
         goTo('Login');
       }
