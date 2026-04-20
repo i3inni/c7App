@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../lib/firebase';
 import { useStore } from '../../store';
@@ -30,6 +30,12 @@ export default function SplashScreen() {
       unsubscribe();
 
       if (!firebaseUser) {
+        goTo('Login');
+        return;
+      }
+
+      if (!firebaseUser.emailVerified) {
+        await signOut(auth);
         goTo('Login');
         return;
       }

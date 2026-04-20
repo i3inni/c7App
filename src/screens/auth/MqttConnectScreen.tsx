@@ -140,7 +140,7 @@ export default function MqttConnectScreen() {
           <Text style={styles.connectingTitle}>CONNECTING BROKER...</Text>
           <Text style={styles.connectingSub}>토픽(posture/data/{deviceId || '1'})을 구독 중입니다.</Text>
         </View>
-        <TouchableOpacity style={styles.backToAuth} onPress={() => nav.goBack()}>
+        <TouchableOpacity style={styles.backToAuth} onPress={() => (nav as any).replace('Login')}>
           <Text style={styles.backToAuthText}>‹  BACK TO AUTH</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -186,7 +186,7 @@ export default function MqttConnectScreen() {
         />
       </View>
 
-      <TouchableOpacity style={styles.backToAuth} onPress={() => nav.goBack()}>
+      <TouchableOpacity style={styles.backToAuth} onPress={() => (nav as any).replace('Login')}>
         <Text style={styles.backToAuthText}>‹  BACK TO AUTH</Text>
       </TouchableOpacity>
     </SafeAreaView>

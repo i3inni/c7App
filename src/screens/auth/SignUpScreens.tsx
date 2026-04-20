@@ -9,7 +9,7 @@ import type { RootStackParamList } from '../../navigation/types';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
-import { checkEmailDuplicate, signUp } from '../../services/authService';
+import { checkEmailDuplicate, signUp, resendVerificationEmail } from '../../services/authService';
 
 // ── 공용 레이아웃 ───────────────────────────────────
 function SignUpLayout({
@@ -238,7 +238,7 @@ export function SignUpComplete({ route }: { route: RouteProp<RootStackParamList,
           </View>
           <Text style={styles.stageTitle}>회원가입 완료!</Text>
           <Text style={styles.stageSub}>
-            환영합니다, {nickname}님{"\n"}이제 로그인하여 C7 기기를 연결해보세요
+            환영합니다, {nickname}님{"\n"}인증 메일을 발송했습니다. 메일함을 확인 후 로그인해주세요.
           </Text>
 
           <View style={[styles.summaryBox, { width: '100%' }]}>
@@ -257,6 +257,19 @@ export function SignUpComplete({ route }: { route: RouteProp<RootStackParamList,
             onPress={() => (nav as any).replace("Login")}
             style={{ marginTop: SPACING.xl, width: "100%" }}
           />
+          <TouchableOpacity
+            style={{ alignSelf: 'center', marginTop: SPACING.base, paddingVertical: SPACING.xs }}
+            onPress={async () => {
+              try {
+                await resendVerificationEmail();
+                Alert.alert('발송 완료', '인증 메일을 재발송했습니다.');
+              } catch {
+                Alert.alert('오류', '메일 발송에 실패했습니다. 로그인 후 재시도해주세요.');
+              }
+            }}
+          >
+            <Text style={{ fontSize: FONTS.sizes.sm, color: COLORS.textSecondary }}>인증 메일 재발송</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
