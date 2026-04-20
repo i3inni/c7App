@@ -117,7 +117,7 @@ export async function analyzeDiagnosis(
     `현재 목 각도: ${angle}°, 자세 점수: ${score}점`,
     `지난주 평균: ${prevScore}점 → 이번주 평균: ${latestScore}점`,
     todayStats
-      ? `오늘 불량 자세: ${todayStats.summary.badPostureCount}회, 교정: ${todayStats.summary.correctionCount}회`
+      ? `오늘 불량 자세: ${todayStats.badPostureCount}회, 교정: ${todayStats.correctionCount}회`
       : '',
   ].filter(Boolean).join('\n');
 
