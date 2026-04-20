@@ -5,6 +5,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
+import { saveNotification } from '../../services/notificationService';
+import { updateDeviceConnection } from '../../services/deviceService';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
@@ -54,6 +56,20 @@ export default function MqttConnectScreen() {
       clearTimeout(t);
       anim.stop();
       setDevice({ mqttStatus: 'connected', deviceId });
+      if (user?.id) {
+        updateDeviceConnection(user.id, deviceId, true).catch(() => {});
+      }
+      if (user?.id) {
+        const notif = {
+          id: Date.now().toString(),
+          category: 'device' as const,
+          title: '기기 연결 완료',
+          body: `C7 기기(${deviceId})가 정상적으로 연결되었습니다.`,
+          timeAgo: '방금 전',
+          read: false,
+        };
+        saveNotification(user.id, notif).catch(() => {});
+      }
       (nav as any).replace(isGuest ? 'GuestDevice' : 'MainTabs');
     }, 2000);
 
