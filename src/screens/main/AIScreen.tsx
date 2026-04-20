@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator, ScrollView, StyleSheet, Text,
   TouchableOpacity, View,
@@ -24,9 +24,7 @@ const STEP_COLORS: Record<Step, string> = {
 export default function AIScreen() {
   const nav = useNavigation();
   const {
-    currentAngle, currentScore, currentPostureType, currentDiagnosisLevel,
-    todayStats, weeklyStats,
-    lastDiagnosis, setLastDiagnosis,
+    currentAngle, currentScore, todayStats, weeklyStats,
     lastExercisesAt, setLastExercises,
     lastDiagnosisAt,
     lastWeeklyReport, setLastWeeklyReport,
@@ -47,10 +45,6 @@ export default function AIScreen() {
   const nextExMs = lastExercisesAt ? Math.max(0, EXERCISE_INTERVAL - (now - lastExercisesAt)) : 0;
   const nextExMin = Math.floor(nextExMs / (60 * 1000));
 
-  // 레벨/배지: ML 모델 출력 우선, 없으면 각도 기반 폴백
-  const level = currentDiagnosisLevel ?? classifyLevel(currentAngle);
-  const { levelText, badgeText, badgeColor, warningIcon } = levelToMeta(level);
-
   const [activeStep, setActiveStep] = useState<Step>(1);
 
   // 진단 결과: LLM (캐시 우선, 버튼으로 갱신)
@@ -58,19 +52,10 @@ export default function AIScreen() {
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagError, setDiagError] = useState<string | null>(null);
 
-  const fetchDiagnosis = useCallback(async () => {
-    setDiagLoading(true);
-    setDiagError(null);
-    try {
-      const result = await analyzeDiagnosis(currentPostureType, currentAngle, currentScore, weeklyStats, todayStats);
-      setDiagnosis(result);
-      setLastDiagnosis(result);
-    } catch (e) {
-      setDiagError(e instanceof Error ? e.message : '진단 중 오류가 발생했습니다.');
-    } finally {
-      setDiagLoading(false);
-    }
-  }, [currentPostureType, currentAngle, currentScore, weeklyStats, todayStats]);
+  // 단계별 운동: LLM, 캐시 우선
+  const [exercises, setExercises] = useState<[ExerciseStep, ExerciseStep, ExerciseStep] | null>(null);
+  const [exLoading, setExLoading] = useState(false);
+  const [exError, setExError] = useState<string | null>(null);
 
   // 단계별 운동: LLM
   const [exercises, setExercises] = useState<[ExerciseStep, ExerciseStep, ExerciseStep] | null>(null);
@@ -89,7 +74,7 @@ export default function AIScreen() {
     } finally {
       setExLoading(false);
     }
-  }, [level, currentAngle, currentScore]);
+  }, [diagnosis.level, currentAngle, currentScore]);
 
   // 주간 리포트: 버튼 눌러야 분석
   const [report, setReport] = useState<WeeklyReport | null>(lastWeeklyReport);
@@ -296,6 +281,7 @@ export default function AIScreen() {
               )}
             </>
           )}
+
         </View>
 
         {/* 솔루션 타이머 뱃지 / 갱신 버튼 */}
@@ -598,6 +584,51 @@ const styles = StyleSheet.create({
   reportLoadingText: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.5)' },
   reportErrorText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
   exErrorText: { fontSize: FONTS.sizes.xs, color: COLORS.danger, lineHeight: 18 },
+
+  solutionBtn: {
+    backgroundColor: '#fff',
+    borderRadius: RADIUS.xl,
+    padding: SPACING.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...SHADOWS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary + '30',
+  },
+  solutionBtnInner: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  solutionBtnIcon: { fontSize: 28 },
+  solutionBtnTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text },
+  solutionBtnSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginTop: 2 },
+  solutionBtnArrow: { fontSize: 24, color: COLORS.primary, fontWeight: '700' },
+
+  reportAnalyzeBtn: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: RADIUS.xl,
+    padding: SPACING.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  reportAnalyzeBtnInner: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  reportAnalyzeBtnIcon: { fontSize: 28 },
+  reportAnalyzeBtnTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: '#fff' },
+  reportAnalyzeBtnSub: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
+  reportAnalyzeBtnArrow: { fontSize: 24, color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
+
+  anotherSolutionBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: SPACING.xs, marginTop: SPACING.sm,
+    backgroundColor: COLORS.bgSecondary,
+    borderRadius: RADIUS.full,
+    paddingVertical: SPACING.sm, paddingHorizontal: SPACING.base,
+    alignSelf: 'center',
+  },
+  anotherSolutionIcon: { fontSize: 14 },
+  anotherSolutionText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  cardDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: SPACING.sm },
 
   refreshInfo: {
     marginHorizontal: SPACING.base, marginTop: -SPACING.md, marginBottom: SPACING.md,

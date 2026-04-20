@@ -38,8 +38,8 @@ interface AppState {
   // AI
   lastDiagnosis: LLMDiagnosis | null;
   lastExercises: [ExerciseStep, ExerciseStep, ExerciseStep] | null;
-  lastExercisesAt: number | null;
-  lastDiagnosisAt: number | null;
+  lastExercisesAt: number | null; // timestamp (ms)
+  lastDiagnosisAt: number | null; // timestamp (ms)
   lastWeeklyReport: WeeklyReport | null;
 
   setLastDiagnosis: (d: LLMDiagnosis) => void;
@@ -100,10 +100,11 @@ export const useStore = create<AppState>()(
       currentAngle: 18.5,
       currentLevel: 'good',
       currentPostureType: 'forward_head',
-      currentDiagnosisLevel: null,
       todayStats: null,
       weeklyStats: [],
       snapshots: [],
+
+      notifications: [],
 
       notifications: [],
 
@@ -146,7 +147,7 @@ export const useStore = create<AppState>()(
       lastExercises: null,
       lastExercisesAt: null,
       lastDiagnosisAt: null,
-      setLastExercises: (e) => set({ lastExercises: e, lastExercisesAt: Date.now() }),
+      setLastExercises: (e) => set({ lastExercises: e, lastExercisesAt: Date.now(), lastDiagnosisAt: Date.now() }),
       lastWeeklyReport: null,
       setLastWeeklyReport: (r: WeeklyReport) => set({ lastWeeklyReport: r }),
 

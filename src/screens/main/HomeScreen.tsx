@@ -1,14 +1,15 @@
 import React, { useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder, Animated,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect, Line, G } from 'react-native-svg';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect, G } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
 import Toggle from '../../components/common/Toggle';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import type { AppNotification } from '../../constants/types';
+import { deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
 
 // ── SVG 아이콘 ────────────────────────────────────────
 function PersonIcon({ size = 22, color = COLORS.text }: { size?: number; color?: string }) {
@@ -435,53 +436,56 @@ const nIconStyles = StyleSheet.create({
 });
 
 // ── 스와이프 삭제 알림 아이템 ─────────────────────────
-function SwipeableNotifItem({ n, onRemove }: { n: AppNotification; onRemove: (id: string) => void }) {
-  const translateX = useRef(new Animated.Value(0)).current;
+const SCREEN_W = Dimensions.get('window').width;
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy),
-      onPanResponderMove: (_, gs) => {
-        if (gs.dx < 0) translateX.setValue(gs.dx);
-      },
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dx < -80) {
-          Animated.timing(translateX, {
-            toValue: -500,
-            duration: 180,
-            useNativeDriver: true,
-          }).start(() => onRemove(n.id));
-        } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 4,
-          }).start();
-        }
-      },
-    })
-  ).current;
+function SwipeableNotifItem({ n, onRemove }: { n: AppNotification; onRemove: (id: string) => void }) {
+  // 오버레이 좌우 패딩(SPACING.lg=20) 제외한 아이템 너비
+  const itemWidth = SCREEN_W - SPACING.lg * 2;
 
   return (
-    <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
-      <View style={nStyles.item}>
-        <NotifIcon category={n.category} />
-        <View style={nStyles.itemContent}>
-          <View style={nStyles.itemHeader}>
-            <Text style={nStyles.itemTitle} numberOfLines={1}>{n.title}</Text>
-            <Text style={nStyles.timeAgo}>{n.timeAgo}</Text>
+    <View style={{ marginBottom: SPACING.sm }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        decelerationRate="fast"
+        snapToOffsets={[0, 80]}
+        snapToEnd={false}
+      >
+        {/* 알림 내용 */}
+        <View style={[nStyles.item, { width: itemWidth, marginBottom: 0 }]}>
+          <NotifIcon category={n.category} />
+          <View style={nStyles.itemContent}>
+            <View style={nStyles.itemHeader}>
+              <Text style={nStyles.itemTitle} numberOfLines={1}>{n.title}</Text>
+              <Text style={nStyles.timeAgo}>{n.timeAgo}</Text>
+            </View>
+            <Text style={nStyles.itemBody}>{n.body}</Text>
           </View>
-          <Text style={nStyles.itemBody}>{n.body}</Text>
         </View>
-      </View>
-    </Animated.View>
+        {/* 왼쪽으로 밀면 나오는 삭제 버튼 */}
+        <TouchableOpacity style={nStyles.deleteBtn} onPress={() => onRemove(n.id)}>
+          <Text style={nStyles.deleteBtnText}>삭제</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
   );
 }
 
 // ── 알림 드로어 ──────────────────────────────────────
 function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { notifications, removeNotification, clearNotifications } = useStore();
+  const { notifications, removeNotification, clearNotifications, user } = useStore();
+
+  const handleRemove = (id: string) => {
+    removeNotification(id);                             // 로컬 즉시 반영
+    if (user?.id) deleteNotification(id).catch(() => {}); // Firestore 삭제
+  };
+
+  const handleClearAll = () => {
+    clearNotifications();                                        // 로컬 즉시 반영
+    if (user?.id) clearNotifFS(user.id).catch(() => {});         // Firestore 전체 삭제
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -512,7 +516,7 @@ function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: (
               <SwipeableNotifItem
                 key={n.id}
                 n={n}
-                onRemove={removeNotification}
+                onRemove={handleRemove}
               />
             ))}
           </ScrollView>
@@ -521,7 +525,7 @@ function NotificationDrawer({ visible, onClose }: { visible: boolean; onClose: (
         {/* 하단 버튼 */}
         {notifications.length > 0 && (
           <View style={nStyles.footer}>
-            <TouchableOpacity style={nStyles.clearBtn} onPress={clearNotifications}>
+            <TouchableOpacity style={nStyles.clearBtn} onPress={handleClearAll}>
               <Text style={nStyles.clearText}>모두 지우기</Text>
             </TouchableOpacity>
           </View>
@@ -592,6 +596,15 @@ const nStyles = StyleSheet.create({
     elevation: 3,
   },
   clearText: { fontSize: FONTS.sizes.base, color: COLORS.textSecondary, fontWeight: '700' },
+  deleteBtn: {
+    width: 80,
+    backgroundColor: COLORS.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: RADIUS.lg,
+    marginLeft: SPACING.sm,
+  },
+  deleteBtnText: { color: '#fff', fontWeight: '700', fontSize: FONTS.sizes.sm },
 });
 
 // ── 메인 홈 ──────────────────────────────────────────

@@ -43,20 +43,33 @@ export interface PostureSnapshot {
   durationMin: number;
 }
 
+export interface BadPostureLog {
+  time: string;     // "14:23"
+  angle: number;    // 22.5
+  duration: string; // "3분"
+}
+
 export interface DayStats {
-  date: string; // YYYY-MM-DD
-  dailyScore: number;
-  badPostureCount: number;
-  correctionCount: number;
-  avgAngle: number;
-  vibrationCount: number;
-  totalUsageTime: number; // 시간 단위 (e.g. 6.2)
+  uid?: string;
+  date: string; // "YYYY-MM-DD"
+  summary: {
+    dailyScore: number;
+    badPostureCount: number;
+    correctionCount: number;
+    totalUsageTime: string; // "6.2h"
+    avgAngle: number;
+  };
+  hourlyScores: Record<string, number>; // { "09_12": 88, ... }
+  badPostureLogs: BadPostureLog[];
 }
 
 export interface WeekStats {
-  weekLabel: string; // '1주' (표시용)
+  uid?: string;
+  weekLabel: string; // 표시용 ("1주")
   avgScore: number;
-  scoreChange?: number; // 전주 대비 변화
+  scoreChange: number;
+  targetSuccessDays?: string; // "3/7"
+  dailyBreakdown?: { day: string; score: number; change: number }[];
 }
 
 // ─── Notifications ────────────────────────────────
