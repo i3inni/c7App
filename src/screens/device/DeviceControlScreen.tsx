@@ -120,6 +120,8 @@ function DraggableSlider({
   color?: string;
 }) {
   const widthRef = useRef(0);
+  const pageXRef = useRef(0); // 슬라이더 트랙의 화면상 절대 x 좌표
+  const viewRef = useRef<View>(null);
   const ratio = Math.max(0, Math.min(1, (value - min) / (max - min)));
 
   const panResponder = useRef(
@@ -127,13 +129,20 @@ function DraggableSlider({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
-        if (widthRef.current === 0) return;
-        const r = Math.max(0, Math.min(1, evt.nativeEvent.locationX / widthRef.current));
+        // 터치 시작 시 트랙의 절대 위치 측정
+        viewRef.current?.measure((_x, _y, width, _h, pageX) => {
+          pageXRef.current = pageX;
+          widthRef.current = width;
+        });
+        const x = evt.nativeEvent.pageX - pageXRef.current;
+        const r = Math.max(0, Math.min(1, x / widthRef.current));
         onChange(Math.round(min + r * (max - min)));
       },
-      onPanResponderMove: (evt) => {
+      onPanResponderMove: (_evt, gestureState) => {
         if (widthRef.current === 0) return;
-        const r = Math.max(0, Math.min(1, evt.nativeEvent.locationX / widthRef.current));
+        // gestureState.moveX: 절대 화면 좌표 → 트랙 밖으로 나가도 안정적
+        const x = gestureState.moveX - pageXRef.current;
+        const r = Math.max(0, Math.min(1, x / widthRef.current));
         onChange(Math.round(min + r * (max - min)));
       },
     })
@@ -141,6 +150,7 @@ function DraggableSlider({
 
   return (
     <View
+      ref={viewRef}
       onLayout={(e) => { widthRef.current = e.nativeEvent.layout.width; }}
       style={dsStyles.track}
       {...panResponder.panHandlers}
