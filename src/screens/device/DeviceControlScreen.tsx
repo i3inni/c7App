@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -22,13 +22,20 @@ type Tab = "battery" | "power" | "sensor" | "vibration";
 function DeviceIllustration({
   highlight,
   onTabChange,
+  powerOn,
 }: {
   highlight: Tab;
   onTabChange: (tab: Tab) => void;
+  powerOn: boolean;
 }) {
-  const hl = (tab: Tab) => (highlight === tab ? COLORS.primary : "#9CA3AF");
-  const hlFill = (tab: Tab) =>
-    highlight === tab ? COLORS.primaryLight : "#F3F4F6";
+  const hl = (tab: Tab) => {
+    if (!powerOn && (tab === 'sensor' || tab === 'vibration')) return "#D1D5DB";
+    return highlight === tab ? COLORS.primary : "#9CA3AF";
+  };
+  const hlFill = (tab: Tab) => {
+    if (!powerOn && (tab === 'sensor' || tab === 'vibration')) return "#F3F4F6";
+    return highlight === tab ? COLORS.primaryLight : "#F3F4F6";
+  };
 
   return (
     <View style={illStyles.wrap}>
@@ -44,14 +51,14 @@ function DeviceIllustration({
         <Rect x={104} y={10} width={6} height={28} rx={3} fill="#D1D5DB" transform="rotate(15 107 24)" />
 
         {/* 센서 (상단) — 클릭 시 sensor 탭 */}
-        <G onPress={() => onTabChange("sensor")}>
+        <G onPress={() => powerOn && onTabChange("sensor")}>
           <Circle cx={80} cy={65} r={16} fill="transparent" />
           <Circle cx={80} cy={65} r={12} fill={hl("sensor")} opacity={0.9} />
           <Circle cx={80} cy={65} r={7} fill={hlFill("sensor")} />
         </G>
 
         {/* 진동 모듈 좌 — 클릭 시 vibration 탭 */}
-        <G onPress={() => onTabChange("vibration")}>
+        <G onPress={() => powerOn && onTabChange("vibration")}>
           <Rect x={34} y={91} width={38} height={38} rx={8} fill="transparent" />
           <Rect x={38} y={95} width={30} height={30} rx={8} fill={hlFill("vibration")} stroke={hl("vibration")} strokeWidth={1.5} />
           <Circle cx={53} cy={110} r={8} fill={hl("vibration")} opacity={0.3} />
@@ -313,6 +320,13 @@ export default function DeviceControlScreen() {
   const [sensorAngle, setSensorAngle] = useState(device.sensorAngle);
   const [vibIntensity, setVibIntensity] = useState(device.vibrationIntensity);
 
+  // 전원 꺼지면 센서/진동 탭에서 자동으로 전원 탭으로 이동
+  useEffect(() => {
+    if (!device.powerOn && (activeTab === 'sensor' || activeTab === 'vibration')) {
+      setActiveTab('power');
+    }
+  }, [device.powerOn]);
+
   // 로컬 상태 + Firestore 동시 저장 헬퍼
   const saveDevice = (partial: Parameters<typeof setDevice>[0]) => {
     setDevice(partial);
@@ -353,28 +367,34 @@ export default function DeviceControlScreen() {
         />
         {/* 하단 탭 네비게이션 역할 (4개 탭 선택) */}
         <View style={styles.tabBar}>
-          {tabs.map((t) => (
-            <TouchableOpacity
-              key={t.key}
-              style={[
-                styles.tabItem,
-                activeTab === t.key && styles.tabItemActive,
-              ]}
-              onPress={() => setActiveTab(t.key)}
-            >
-              <Text
+          {tabs.map((t) => {
+            const isDisabled = !device.powerOn && (t.key === 'sensor' || t.key === 'vibration');
+            return (
+              <TouchableOpacity
+                key={t.key}
                 style={[
-                  styles.tabText,
-                  activeTab === t.key && styles.tabTextActive,
+                  styles.tabItem,
+                  activeTab === t.key && styles.tabItemActive,
+                  isDisabled && styles.tabItemDisabled,
                 ]}
+                onPress={() => !isDisabled && setActiveTab(t.key)}
+                activeOpacity={isDisabled ? 1 : 0.7}
               >
-                {t.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === t.key && styles.tabTextActive,
+                    isDisabled && styles.tabTextDisabled,
+                  ]}
+                >
+                  {t.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
         {/* 기기 일러스트 */}
-        <DeviceIllustration highlight={activeTab} onTabChange={setActiveTab} />
+        <DeviceIllustration highlight={activeTab} onTabChange={setActiveTab} powerOn={device.powerOn} />
 
         {/* 탭 선택 (하단 스크롤 없이 탭별로 컨텐츠 전환) */}
         <View style={styles.contentCard}>
@@ -777,4 +797,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   tabTextActive: { color: COLORS.text },
+  tabItemDisabled: { opacity: 0.35 },
+  tabTextDisabled: { color: COLORS.textMuted },
 });
