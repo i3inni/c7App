@@ -204,17 +204,23 @@ function GoalModal({ visible, onClose }: { visible: boolean; onClose: () => void
   const { settings, updateSettings, user } = useStore();
   const [val, setVal] = useState(settings.targetScore);
   const trackWidthRef = useRef(1);
+  const pageXRef = useRef(0);
+  const sliderRef = useRef<View>(null);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => {
-        const r = Math.min(Math.max(e.nativeEvent.locationX / trackWidthRef.current, 0), 1);
-        setVal(Math.round(GOAL_MIN + r * (GOAL_MAX - GOAL_MIN)));
+      onPanResponderGrant: (_e, gestureState) => {
+        sliderRef.current?.measure((_x, _y, width, _h, pageX) => {
+          pageXRef.current = pageX;
+          trackWidthRef.current = width;
+          const r = Math.min(Math.max((gestureState.x0 - pageX) / width, 0), 1);
+          setVal(Math.round(GOAL_MIN + r * (GOAL_MAX - GOAL_MIN)));
+        });
       },
-      onPanResponderMove: (e) => {
-        const r = Math.min(Math.max(e.nativeEvent.locationX / trackWidthRef.current, 0), 1);
+      onPanResponderMove: (_e, gestureState) => {
+        const r = Math.min(Math.max((gestureState.moveX - pageXRef.current) / trackWidthRef.current, 0), 1);
         setVal(Math.round(GOAL_MIN + r * (GOAL_MAX - GOAL_MIN)));
       },
     })
@@ -251,8 +257,8 @@ function GoalModal({ visible, onClose }: { visible: boolean; onClose: () => void
 
           {/* 슬라이더 */}
           <View
+            ref={sliderRef}
             style={modalStyles.sliderOuter}
-            onLayout={e => { trackWidthRef.current = e.nativeEvent.layout.width; }}
             {...panResponder.panHandlers}
           >
             {/* 트랙 배경 */}
