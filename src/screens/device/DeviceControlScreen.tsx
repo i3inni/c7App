@@ -506,13 +506,16 @@ export default function DeviceControlScreen() {
               <View style={styles.vibRow}>
                 {(["약", "중", "강"] as const).map((l, i) => {
                   const v = [20, 30, 45][i];
+                  // 가장 가까운 프리셋에 해당하는 버튼 활성화
+                  const distances = [20, 30, 45].map((p) => Math.abs(sensorAngle - p));
+                  const isActive = distances.indexOf(Math.min(...distances)) === i;
                   return (
                     <TouchableOpacity
                       key={l}
-                      style={[styles.vibBtn, sensorAngle === v && styles.sensorBtnActive]}
+                      style={[styles.vibBtn, isActive && styles.sensorBtnActive]}
                       onPress={() => { setSensorAngle(v); saveDevice({ sensorAngle: v }); }}
                     >
-                      <Text style={[styles.vibBtnText, sensorAngle === v && styles.sensorBtnTextActive]}>
+                      <Text style={[styles.vibBtnText, isActive && styles.sensorBtnTextActive]}>
                         {l}
                       </Text>
                     </TouchableOpacity>
@@ -554,21 +557,18 @@ export default function DeviceControlScreen() {
               <View style={styles.vibRow}>
                 {(["약", "중", "강"] as const).map((l, i) => {
                   const v = [33, 66, 100][i];
+                  // deviceService intensityToStrength 기준과 동일한 범위 판정
+                  const isActive =
+                    i === 0 ? vibIntensity <= 33 :
+                    i === 1 ? vibIntensity > 33 && vibIntensity <= 66 :
+                              vibIntensity > 66;
                   return (
                     <TouchableOpacity
                       key={l}
-                      style={[
-                        styles.vibBtn,
-                        vibIntensity === v && styles.vibBtnActive,
-                      ]}
+                      style={[styles.vibBtn, isActive && styles.vibBtnActive]}
                       onPress={() => { setVibIntensity(v); saveDevice({ vibrationIntensity: v }); }}
                     >
-                      <Text
-                        style={[
-                          styles.vibBtnText,
-                          vibIntensity === v && styles.vibBtnTextActive,
-                        ]}
-                      >
+                      <Text style={[styles.vibBtnText, isActive && styles.vibBtnTextActive]}>
                         {l}
                       </Text>
                     </TouchableOpacity>
