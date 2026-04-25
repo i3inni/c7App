@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -22,13 +22,20 @@ type Tab = "battery" | "power" | "sensor" | "vibration";
 function DeviceIllustration({
   highlight,
   onTabChange,
+  powerOn,
 }: {
   highlight: Tab;
   onTabChange: (tab: Tab) => void;
+  powerOn: boolean;
 }) {
-  const hl = (tab: Tab) => (highlight === tab ? COLORS.primary : "#9CA3AF");
-  const hlFill = (tab: Tab) =>
-    highlight === tab ? COLORS.primaryLight : "#F3F4F6";
+  const hl = (tab: Tab) => {
+    if (!powerOn && (tab === 'sensor' || tab === 'vibration')) return "#D1D5DB";
+    return highlight === tab ? COLORS.primary : "#9CA3AF";
+  };
+  const hlFill = (tab: Tab) => {
+    if (!powerOn && (tab === 'sensor' || tab === 'vibration')) return "#F3F4F6";
+    return highlight === tab ? COLORS.primaryLight : "#F3F4F6";
+  };
 
   return (
     <View style={illStyles.wrap}>
@@ -44,14 +51,14 @@ function DeviceIllustration({
         <Rect x={104} y={10} width={6} height={28} rx={3} fill="#D1D5DB" transform="rotate(15 107 24)" />
 
         {/* 센서 (상단) — 클릭 시 sensor 탭 */}
-        <G onPress={() => onTabChange("sensor")}>
+        <G onPress={() => powerOn && onTabChange("sensor")}>
           <Circle cx={80} cy={65} r={16} fill="transparent" />
           <Circle cx={80} cy={65} r={12} fill={hl("sensor")} opacity={0.9} />
           <Circle cx={80} cy={65} r={7} fill={hlFill("sensor")} />
         </G>
 
         {/* 진동 모듈 좌 — 클릭 시 vibration 탭 */}
-        <G onPress={() => onTabChange("vibration")}>
+        <G onPress={() => powerOn && onTabChange("vibration")}>
           <Rect x={34} y={91} width={38} height={38} rx={8} fill="transparent" />
           <Rect x={38} y={95} width={30} height={30} rx={8} fill={hlFill("vibration")} stroke={hl("vibration")} strokeWidth={1.5} />
           <Circle cx={53} cy={110} r={8} fill={hl("vibration")} opacity={0.3} />
@@ -113,6 +120,8 @@ function DraggableSlider({
   color?: string;
 }) {
   const widthRef = useRef(0);
+  const pageXRef = useRef(0); // 슬라이더 트랙의 화면상 절대 x 좌표
+  const viewRef = useRef<View>(null);
   const ratio = Math.max(0, Math.min(1, (value - min) / (max - min)));
 
   const panResponder = useRef(
@@ -120,13 +129,20 @@ function DraggableSlider({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
-        if (widthRef.current === 0) return;
-        const r = Math.max(0, Math.min(1, evt.nativeEvent.locationX / widthRef.current));
+        // 터치 시작 시 트랙의 절대 위치 측정
+        viewRef.current?.measure((_x, _y, width, _h, pageX) => {
+          pageXRef.current = pageX;
+          widthRef.current = width;
+        });
+        const x = evt.nativeEvent.pageX - pageXRef.current;
+        const r = Math.max(0, Math.min(1, x / widthRef.current));
         onChange(Math.round(min + r * (max - min)));
       },
-      onPanResponderMove: (evt) => {
+      onPanResponderMove: (_evt, gestureState) => {
         if (widthRef.current === 0) return;
-        const r = Math.max(0, Math.min(1, evt.nativeEvent.locationX / widthRef.current));
+        // gestureState.moveX: 절대 화면 좌표 → 트랙 밖으로 나가도 안정적
+        const x = gestureState.moveX - pageXRef.current;
+        const r = Math.max(0, Math.min(1, x / widthRef.current));
         onChange(Math.round(min + r * (max - min)));
       },
     })
@@ -134,6 +150,7 @@ function DraggableSlider({
 
   return (
     <View
+      ref={viewRef}
       onLayout={(e) => { widthRef.current = e.nativeEvent.layout.width; }}
       style={dsStyles.track}
       {...panResponder.panHandlers}
@@ -313,6 +330,13 @@ export default function DeviceControlScreen() {
   const [sensorAngle, setSensorAngle] = useState(device.sensorAngle);
   const [vibIntensity, setVibIntensity] = useState(device.vibrationIntensity);
 
+  // 전원 꺼지면 센서/진동 탭에서 자동으로 전원 탭으로 이동
+  useEffect(() => {
+    if (!device.powerOn && (activeTab === 'sensor' || activeTab === 'vibration')) {
+      setActiveTab('power');
+    }
+  }, [device.powerOn]);
+
   // 로컬 상태 + Firestore 동시 저장 헬퍼
   const saveDevice = (partial: Parameters<typeof setDevice>[0]) => {
     setDevice(partial);
@@ -353,28 +377,34 @@ export default function DeviceControlScreen() {
         />
         {/* 하단 탭 네비게이션 역할 (4개 탭 선택) */}
         <View style={styles.tabBar}>
-          {tabs.map((t) => (
-            <TouchableOpacity
-              key={t.key}
-              style={[
-                styles.tabItem,
-                activeTab === t.key && styles.tabItemActive,
-              ]}
-              onPress={() => setActiveTab(t.key)}
-            >
-              <Text
+          {tabs.map((t) => {
+            const isDisabled = !device.powerOn && (t.key === 'sensor' || t.key === 'vibration');
+            return (
+              <TouchableOpacity
+                key={t.key}
                 style={[
-                  styles.tabText,
-                  activeTab === t.key && styles.tabTextActive,
+                  styles.tabItem,
+                  activeTab === t.key && styles.tabItemActive,
+                  isDisabled && styles.tabItemDisabled,
                 ]}
+                onPress={() => !isDisabled && setActiveTab(t.key)}
+                activeOpacity={isDisabled ? 1 : 0.7}
               >
-                {t.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === t.key && styles.tabTextActive,
+                    isDisabled && styles.tabTextDisabled,
+                  ]}
+                >
+                  {t.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
         {/* 기기 일러스트 */}
-        <DeviceIllustration highlight={activeTab} onTabChange={setActiveTab} />
+        <DeviceIllustration highlight={activeTab} onTabChange={setActiveTab} powerOn={device.powerOn} />
 
         {/* 탭 선택 (하단 스크롤 없이 탭별로 컨텐츠 전환) */}
         <View style={styles.contentCard}>
@@ -476,13 +506,16 @@ export default function DeviceControlScreen() {
               <View style={styles.vibRow}>
                 {(["약", "중", "강"] as const).map((l, i) => {
                   const v = [20, 30, 45][i];
+                  // 가장 가까운 프리셋에 해당하는 버튼 활성화
+                  const distances = [20, 30, 45].map((p) => Math.abs(sensorAngle - p));
+                  const isActive = distances.indexOf(Math.min(...distances)) === i;
                   return (
                     <TouchableOpacity
                       key={l}
-                      style={[styles.vibBtn, sensorAngle === v && styles.sensorBtnActive]}
+                      style={[styles.vibBtn, isActive && styles.sensorBtnActive]}
                       onPress={() => { setSensorAngle(v); saveDevice({ sensorAngle: v }); }}
                     >
-                      <Text style={[styles.vibBtnText, sensorAngle === v && styles.sensorBtnTextActive]}>
+                      <Text style={[styles.vibBtnText, isActive && styles.sensorBtnTextActive]}>
                         {l}
                       </Text>
                     </TouchableOpacity>
@@ -524,21 +557,18 @@ export default function DeviceControlScreen() {
               <View style={styles.vibRow}>
                 {(["약", "중", "강"] as const).map((l, i) => {
                   const v = [33, 66, 100][i];
+                  // deviceService intensityToStrength 기준과 동일한 범위 판정
+                  const isActive =
+                    i === 0 ? vibIntensity <= 33 :
+                    i === 1 ? vibIntensity > 33 && vibIntensity <= 66 :
+                              vibIntensity > 66;
                   return (
                     <TouchableOpacity
                       key={l}
-                      style={[
-                        styles.vibBtn,
-                        vibIntensity === v && styles.vibBtnActive,
-                      ]}
+                      style={[styles.vibBtn, isActive && styles.vibBtnActive]}
                       onPress={() => { setVibIntensity(v); saveDevice({ vibrationIntensity: v }); }}
                     >
-                      <Text
-                        style={[
-                          styles.vibBtnText,
-                          vibIntensity === v && styles.vibBtnTextActive,
-                        ]}
-                      >
+                      <Text style={[styles.vibBtnText, isActive && styles.vibBtnTextActive]}>
                         {l}
                       </Text>
                     </TouchableOpacity>
@@ -777,4 +807,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   tabTextActive: { color: COLORS.text },
+  tabItemDisabled: { opacity: 0.35 },
+  tabTextDisabled: { color: COLORS.textMuted },
 });
