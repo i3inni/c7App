@@ -4,11 +4,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect, G } from 'react-native-svg';
+import SpineVisualizer from '../../components/common/SpineVisualizer';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
 import Toggle from '../../components/common/Toggle';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
-import type { AppNotification } from '../../constants/types';
+import type { AppNotification, PostureType } from '../../constants/types';
 import { getNotifications, deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
 import { updateTargetScore } from '../../services/userService';
 
@@ -66,82 +67,34 @@ const batteryStyles = StyleSheet.create({
   pct: { fontSize: FONTS.sizes.sm, fontWeight: '700', color: COLORS.text },
 });
 
-// ── 게이지 컴포넌트 ──────────────────────────────────
-// SVG arc(A) 명령을 완전히 사용하지 않음 — sweep/large-arc 렌더링 버그 우회
-// 삼각함수로 상단 반원 좌표를 직접 계산한 뒤 L(lineto)로 연결
+// ── 가로 막대 게이지 ──────────────────────────────────
 function PostureGauge({ score, targetScore = 85 }: { score: number; targetScore?: number }) {
-  const R = 76, CX = 100, CY = 90, SW = 15, STEPS = 180;
+  const W = 280, H = 30;
+  const BAR_Y = 12, BAR_H = 10, PAD = 8;
+  const INNER = W - PAD * 2;
 
-  const ratio  = Math.min(Math.max(score / 100, 0), 1);
-  const tRatio = Math.min(Math.max(targetScore / 100, 0), 1);
-
-  // 상단 반원 좌표: i=0 → 왼쪽(π), i=STEPS → 오른쪽(0)
-  const pts: { x: number; y: number }[] = [];
-  for (let i = 0; i <= STEPS; i++) {
-    const angle = Math.PI * (1 - i / STEPS);
-    pts.push({
-      x: parseFloat((CX + R * Math.cos(angle)).toFixed(2)),
-      y: parseFloat((CY - R * Math.sin(angle)).toFixed(2)),
-    });
-  }
-
-  const mkPath = (ps: { x: number; y: number }[]) =>
-    `M ${ps[0].x} ${ps[0].y}` + ps.slice(1).map(p => ` L ${p.x} ${p.y}`).join('');
-
-  const scoreIdx  = Math.min(Math.round(ratio  * STEPS), STEPS);
-  const targetIdx = Math.min(Math.round(tRatio * STEPS), STEPS);
-  const S = pts[Math.max(scoreIdx, 0)];
-  const T = pts[targetIdx];
+  const ratio   = Math.min(Math.max(score / 100, 0), 1);
+  const tRatio  = Math.min(Math.max(targetScore / 100, 0), 1);
+  const fillW   = Math.max(ratio * INNER, BAR_H);
+  const targetX = PAD + tRatio * INNER;
 
   return (
-    <Svg width={260} height={128} viewBox="0 0 200 100">
+    <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
       <Defs>
-        <LinearGradient
-          id="gGrad"
-          gradientUnits="userSpaceOnUse"
-          x1={String(pts[0].x)} y1="0"
-          x2={String(pts[STEPS].x)} y2="0"
-        >
-          <Stop offset="0%"   stopColor={COLORS.gaugeGreen} />
+        <LinearGradient id="barGrad" x1="0" y1="0" x2="1" y2="0">
+          <Stop offset="0%"   stopColor={COLORS.gaugeRed} />
           <Stop offset="50%"  stopColor={COLORS.gaugeYellow} />
-          <Stop offset="100%" stopColor={COLORS.gaugeRed} />
+          <Stop offset="100%" stopColor={COLORS.gaugeGreen} />
         </LinearGradient>
       </Defs>
-
-      {/* 배경 반원 (회색) */}
+      <Rect x={PAD} y={BAR_Y} width={INNER} height={BAR_H} rx={BAR_H / 2} fill="#EAECF0" />
+      <Rect x={PAD} y={BAR_Y} width={fillW} height={BAR_H} rx={BAR_H / 2} fill="url(#barGrad)" />
       <Path
-        d={mkPath(pts)}
-        fill="none"
-        stroke="#EAECF0"
-        strokeWidth={SW}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d={`M ${targetX} ${BAR_Y - 2} L ${targetX - 3} ${BAR_Y - 7} L ${targetX + 3} ${BAR_Y - 7} Z`}
+        fill={COLORS.gaugeGreen}
       />
-
-      {/* 점수 아크 (그라디언트) */}
-      {scoreIdx > 0 && (
-        <Path
-          d={mkPath(pts.slice(0, scoreIdx + 1))}
-          fill="none"
-          stroke="url(#gGrad)"
-          strokeWidth={SW}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      )}
-
-      {/* 목표 마커 */}
-      <Circle cx={T.x} cy={T.y} r="5.5" fill="#fff" />
-      <Circle cx={T.x} cy={T.y} r="3.2" fill={COLORS.gaugeGreen} />
-
-      {/* 점수 마커 */}
-      {scoreIdx > 2 && (
-        <>
-          <Circle cx={S.x} cy={S.y} r="10"  fill="rgba(255,255,255,0.9)" />
-          <Circle cx={S.x} cy={S.y} r="6.5" fill="#D1D5DB" />
-          <Circle cx={S.x} cy={S.y} r="3.5" fill="#fff" />
-        </>
-      )}
+      <Circle cx={PAD + fillW - BAR_H / 2} cy={BAR_Y + BAR_H / 2} r={BAR_H / 2 + 2} fill="#fff" />
+      <Circle cx={PAD + fillW - BAR_H / 2} cy={BAR_Y + BAR_H / 2} r={BAR_H / 2 - 1} fill={COLORS.gaugeGreen} />
     </Svg>
   );
 }
@@ -636,16 +589,56 @@ const nStyles = StyleSheet.create({
 });
 
 // ── 메인 홈 ──────────────────────────────────────────
+const SCREEN_H = Dimensions.get('window').height;
+
 export default function HomeScreen() {
   const nav = useNavigation();
-  const { user, device, currentScore, currentAngle, currentLevel, settings, setDevice, notifications, setNotifications } = useStore();
+  const { user, device, currentScore, currentAngle, currentAngles, currentLevel, currentPostureType, settings, setDevice, notifications, setNotifications, setAngles, updatePosture } = useStore();
   const [showGoal, setShowGoal] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
+
+  // ── 더미 각도 0~30° 왕복 (테스트용) ──
+  useEffect(() => {
+    let t = 0;
+    const timer = setInterval(() => {
+      t += 0.03;
+      const c7 = 15 + Math.sin(t)                    * 15;
+      const t3 = 15 + Math.sin(t + Math.PI / 3)      * 15;
+      const t7 = 15 + Math.sin(t + Math.PI * 2 / 3)  * 15;
+
+      setAngles({ c7, t3, t7 });
+
+      const maxAngle = Math.max(c7, t3, t7);
+      const score = Math.max(20, Math.round(100 - maxAngle * 2.5));
+      const type: PostureType =
+        c7 > 14 ? 'forward_head' :
+        t7 > 14 || t3 > 14 ? 'rounded_back' :
+        maxAngle > 8 ? 'tilted' : 'normal';
+
+      updatePosture(score, c7, type);
+    }, 50);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 화면 높이의 52%를 척추에 할당 (viewBox 비율 1:2 → width = height/2)
+  const spineH = Math.round(SCREEN_H * 0.52);
+  const spineW = Math.round(spineH / 2);
 
   useEffect(() => {
     if (!user?.id) return;
     getNotifications(user.id).then(setNotifications).catch(() => {});
   }, [user?.id]);
+
+  const postureLabel: Record<string, string> = {
+    normal:        '바른 자세',
+    forward_head:  '거북목',
+    rounded_back:  '굽은등',
+    straight_neck: '일자목',
+    tilted:        '옆 기울어짐',
+    kyphosis:      '굽은등',
+    lateral_tilt:  '옆 기울어짐',
+    unknown:       '—',
+  };
 
   const levelLabel: Record<string, string> = {
     excellent: '우수',
@@ -704,30 +697,41 @@ export default function HomeScreen() {
 
         {/* ── 게이지 섹션 ── */}
         <View style={styles.gaugeSection}>
-          <TouchableOpacity onPress={() => setShowGoal(true)} activeOpacity={0.9}>
-            <PostureGauge score={currentScore} targetScore={settings.targetScore} />
-          </TouchableOpacity>
-
-          {/* 점수 오버레이 */}
+          {/* 점수 숫자 */}
           <View style={styles.scoreOverlay}>
             <Text style={styles.scoreNum}>{currentScore}</Text>
             <Text style={styles.scoreLabelText}>POSTURE SCORE</Text>
-            <TouchableOpacity onPress={() => setShowGoal(true)}>
-              <Text style={styles.targetText}>◎ Target: {settings.targetScore}+ 점</Text>
-            </TouchableOpacity>
           </View>
 
-          {/* 자세 피규어 */}
+          {/* 가로 막대 게이지 */}
+          <TouchableOpacity
+            onPress={() => setShowGoal(true)}
+            activeOpacity={0.85}
+            style={styles.barWrap}
+          >
+            <PostureGauge score={currentScore} targetScore={settings.targetScore} />
+            <TouchableOpacity onPress={() => setShowGoal(true)} style={styles.targetRow}>
+              <Text style={styles.targetText}>◎ Target: {settings.targetScore}+ 점</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+
+          {/* 척추 비주얼라이저 */}
           <View style={styles.figureWrap}>
-            <PostureFigure angle={currentAngle} />
+            <SpineVisualizer
+              angles={currentAngles}
+              width={spineW}
+              height={spineH}
+            />
           </View>
         </View>
 
         {/* ── 각도 + 상태 ── */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statKey}>CURRENT ANGLE</Text>
-            <Text style={[styles.statVal, { color: COLORS.text }]}>{currentAngle.toFixed(1)}°</Text>
+            <Text style={styles.statKey}>POSTURE</Text>
+            <Text style={[styles.statStatus, { color }]}>
+              {postureLabel[currentPostureType] ?? '—'}
+            </Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.statBox}>
@@ -745,7 +749,7 @@ export default function HomeScreen() {
               <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <Path
                   d="M12 2v10M6.3 5.3A8 8 0 1 0 17.7 5.3"
-                  stroke={device.powerOn ? COLORS.primary : '#fff'}
+                  stroke={device.powerOn ? COLORS.primary : COLORS.textSecondary}
                   strokeWidth="2" strokeLinecap="round"
                 />
               </Svg>
@@ -772,14 +776,14 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#fff' },
-  scrollContent: { paddingBottom: SPACING.xl },
+  scrollContent: { paddingBottom: SPACING.sm },
 
   // 헤더
   topBar: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SPACING.base,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.xs,
+    paddingTop: SPACING.xs,
+    paddingBottom: 2,
   },
   profileBtn: {
     width: 40, height: 40, borderRadius: 20,
@@ -813,48 +817,51 @@ const styles = StyleSheet.create({
   realtimeRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SPACING.base,
-    marginBottom: SPACING.xs,
-    marginTop: SPACING.base,
+    marginBottom: 2,
+    marginTop: SPACING.sm,
   },
   realDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.accent, marginRight: 6 },
   realtimeLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, fontWeight: '600', flex: 1, letterSpacing: 0.5 },
 
   // 게이지 섹션
-  gaugeSection: { alignItems: 'center' },
-  scoreOverlay: { alignItems: 'center', marginTop: -30 },
-  scoreNum: { fontSize: FONTS.sizes['5xl'], fontWeight: '800', color: COLORS.text, lineHeight: 56 },
+  gaugeSection: { alignItems: 'center', paddingHorizontal: SPACING.base },
+  scoreOverlay: { alignItems: 'center', marginTop: SPACING.xs, marginBottom: 2 },
+  scoreNum: { fontSize: FONTS.sizes['2xl'], fontWeight: '800', color: COLORS.text, lineHeight: 32 },
   scoreLabelText: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, fontWeight: '600', letterSpacing: 1 },
-  targetText: { fontSize: FONTS.sizes.sm, color: COLORS.primary, fontWeight: '600', marginTop: 4 },
-  figureWrap: { marginTop: SPACING.sm },
+  barWrap: { width: '100%', alignItems: 'center', marginBottom: 0 },
+  targetRow: { marginTop: 1 },
+  targetText: { fontSize: FONTS.sizes.xs, color: COLORS.primary, fontWeight: '600' },
+  figureWrap: { marginTop: -28, alignItems: 'center' },
 
   // 통계 행
   statsRow: {
     flexDirection: 'row',
     marginHorizontal: SPACING.base,
-    marginTop: SPACING.lg,
-    marginBottom: SPACING.sm,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
   },
   statBox: { flex: 1, alignItems: 'center' },
   divider: { width: 1, backgroundColor: COLORS.border },
-  statKey: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, fontWeight: '600', letterSpacing: 0.5, marginBottom: 4 },
-  statVal: { fontSize: FONTS.sizes['2xl'], fontWeight: '800' },
+  statKey: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
+  statVal: { fontSize: FONTS.sizes.base, fontWeight: '800' },
   statStatus: { fontSize: FONTS.sizes.base, fontWeight: '700' },
 
   // 전원 카드
   powerCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: COLORS.bgDark, borderRadius: RADIUS.xl,
-    marginHorizontal: SPACING.base, marginTop: SPACING.base, padding: SPACING.base,
+    backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.xl,
+    borderWidth: 1, borderColor: COLORS.border,
+    marginHorizontal: SPACING.base, marginTop: SPACING.sm, padding: SPACING.sm,
   },
   powerLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   powerIconBox: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: COLORS.border,
     alignItems: 'center', justifyContent: 'center',
   },
   powerIconBoxOn: {
-    backgroundColor: 'rgba(29,179,142,0.2)',
+    backgroundColor: 'rgba(29,179,142,0.15)',
   },
-  powerTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: '#fff' },
-  powerSub: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  powerTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text },
+  powerSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginTop: 2 },
 });
