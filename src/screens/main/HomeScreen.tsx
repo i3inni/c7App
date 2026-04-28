@@ -9,7 +9,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
 import Toggle from '../../components/common/Toggle';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
-import type { AppNotification, PostureType } from '../../constants/types';
+import type { AppNotification } from '../../constants/types';
 import { getNotifications, deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
 import { updateTargetScore } from '../../services/userService';
 
@@ -593,32 +593,10 @@ const SCREEN_H = Dimensions.get('window').height;
 
 export default function HomeScreen() {
   const nav = useNavigation();
-  const { user, device, currentScore, currentAngle, currentAngles, currentLevel, currentPostureType, settings, setDevice, notifications, setNotifications, setAngles, updatePosture } = useStore();
+  const { user, device, currentScore, currentAngle, currentAngles, currentLevel, currentPostureType, settings, setDevice, notifications, setNotifications } = useStore();
   const [showGoal, setShowGoal] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
 
-  // ── 더미 각도 0~30° 왕복 (테스트용) ──
-  useEffect(() => {
-    let t = 0;
-    const timer = setInterval(() => {
-      t += 0.03;
-      const c7 = 15 + Math.sin(t)                    * 15;
-      const t3 = 15 + Math.sin(t + Math.PI / 3)      * 15;
-      const t7 = 15 + Math.sin(t + Math.PI * 2 / 3)  * 15;
-
-      setAngles({ c7, t3, t7 });
-
-      const maxAngle = Math.max(c7, t3, t7);
-      const score = Math.max(20, Math.round(100 - maxAngle * 2.5));
-      const type: PostureType =
-        c7 > 14 ? 'forward_head' :
-        t7 > 14 || t3 > 14 ? 'rounded_back' :
-        maxAngle > 8 ? 'tilted' : 'normal';
-
-      updatePosture(score, c7, type);
-    }, 50);
-    return () => clearInterval(timer);
-  }, []);
 
   // 화면 높이의 52%를 척추에 할당 (viewBox 비율 1:2 → width = height/2)
   const spineH = Math.round(SCREEN_H * 0.52);

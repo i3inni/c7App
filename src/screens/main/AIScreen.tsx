@@ -34,8 +34,8 @@ export default function AIScreen() {
 
   const now = Date.now();
 
-  // 진단: 6시간
-  const DIAGNOSIS_INTERVAL = 6 * 60 * 60 * 1000;
+  // 진단: 1시간
+  const DIAGNOSIS_INTERVAL = 60 * 60 * 1000;
   const canRefresh = !lastDiagnosisAt || (now - lastDiagnosisAt) >= DIAGNOSIS_INTERVAL;
   const nextRefreshMs = lastDiagnosisAt ? Math.max(0, DIAGNOSIS_INTERVAL - (now - lastDiagnosisAt)) : 0;
   const nextRefreshHour = Math.floor(nextRefreshMs / (60 * 60 * 1000));
@@ -49,7 +49,9 @@ export default function AIScreen() {
 
   // 레벨/배지: ML 모델 출력 우선, 없으면 각도 기반 폴백
   const level = currentDiagnosisLevel ?? classifyLevel(currentAngle);
-  const { levelText, badgeText, badgeColor, warningIcon } = levelToMeta(level);
+  // 표시용 레벨: 마지막 진단 결과 고정 (실시간 각도 변화에 흔들리지 않음)
+  const displayLevel = lastDiagnosis?.level ?? level;
+  const { levelText, badgeText, badgeColor, warningIcon } = levelToMeta(displayLevel);
 
   const [activeStep, setActiveStep] = useState<Step>(1);
 
@@ -156,10 +158,6 @@ export default function AIScreen() {
 
             <View style={styles.diagStats}>
               <View style={styles.diagStat}>
-                <Text style={styles.diagStatLabel}>현재 각도</Text>
-                <Text style={[styles.diagStatVal, { color: COLORS.warning }]}>{currentAngle}°</Text>
-              </View>
-              <View style={styles.diagStat}>
                 <Text style={styles.diagStatLabel}>정상 범위</Text>
                 <Text style={styles.diagStatVal}>5-15°</Text>
               </View>
@@ -219,7 +217,7 @@ export default function AIScreen() {
         {!canRefresh && (
           <View style={styles.refreshInfo}>
             <Text style={styles.refreshInfoText}>
-              🕐 다음 진단 갱신까지 {nextRefreshHour}시간 {nextRefreshMin}분
+              🕐 다음 진단 갱신까지 {nextRefreshHour > 0 ? `${nextRefreshHour}시간 ` : ''}{nextRefreshMin}분
             </Text>
           </View>
         )}
