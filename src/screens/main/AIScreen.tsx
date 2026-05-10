@@ -3,6 +3,7 @@ import {
   ActivityIndicator, ScrollView, StyleSheet, Text,
   TouchableOpacity, View,
 } from 'react-native';
+import Icon, { ANALYSIS_ICON_MAP } from '../../components/Icon';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
@@ -51,7 +52,7 @@ export default function AIScreen() {
   const level = currentDiagnosisLevel ?? classifyLevel(currentAngle);
   // 표시용 레벨: 마지막 진단 결과 고정 (실시간 각도 변화에 흔들리지 않음)
   const displayLevel = lastDiagnosis?.level ?? level;
-  const { levelText, badgeText, badgeColor, warningIcon } = levelToMeta(displayLevel);
+  const { levelText, badgeText, badgeColor, warningIconName, warningIconColor } = levelToMeta(displayLevel);
 
   const [activeStep, setActiveStep] = useState<Step>(1);
 
@@ -129,7 +130,7 @@ export default function AIScreen() {
         {/* AI 카드 */}
         <View style={styles.aiCard}>
           <View style={styles.aiIconBox}>
-            <Text style={styles.aiIcon}>🩺</Text>
+            <Icon name="plus-circle" size={26} color={COLORS.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <View style={styles.aiTitleRow}>
@@ -143,13 +144,13 @@ export default function AIScreen() {
         {/* 오늘의 진단 결과 */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionIcon}>📋</Text>
+            <Icon name="clipboard" size={16} color={COLORS.text} />
             <Text style={styles.sectionTitle}>오늘의 진단 결과</Text>
           </View>
 
           <View style={styles.diagCard}>
             <View style={styles.diagTop}>
-              <Text style={styles.diagWarningIcon}>{warningIcon}</Text>
+              <Icon name={warningIconName} size={18} color={warningIconColor} />
               <Text style={styles.diagTitle}>{levelText}</Text>
               <View style={[styles.cautionBadge, { backgroundColor: `${badgeColor}20` }]}>
                 <Text style={[styles.cautionText, { color: badgeColor }]}>{badgeText}</Text>
@@ -173,7 +174,7 @@ export default function AIScreen() {
             {!diagnosis && !diagLoading && !diagError && (
               <TouchableOpacity style={styles.diagFetchBtn} onPress={fetchDiagnosis} activeOpacity={0.85}>
                 <View style={styles.diagFetchBtnInner}>
-                  <Text style={styles.diagFetchBtnIcon}>🩺</Text>
+                  <Icon name="plus-circle" size={26} color={COLORS.primary} />
                   <View>
                     <Text style={styles.diagFetchBtnTitle}>AI 진단 받기</Text>
                     <Text style={styles.diagFetchBtnSub}>자세 데이터 기반 상세 분석</Text>
@@ -192,7 +193,10 @@ export default function AIScreen() {
 
             {diagError && !diagLoading && (
               <View style={{ gap: SPACING.sm, marginTop: SPACING.sm }}>
-                <Text style={styles.exErrorText}>⚠️ {diagError}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Icon name="alert" size={14} color={COLORS.danger} />
+                  <Text style={styles.exErrorText}>{diagError}</Text>
+                </View>
                 <TouchableOpacity style={styles.analyzeBtn} onPress={fetchDiagnosis}>
                   <Text style={styles.analyzeBtnText}>다시 진단받기</Text>
                 </TouchableOpacity>
@@ -203,10 +207,16 @@ export default function AIScreen() {
               <>
                 <Text style={styles.diagDesc}>{diagnosis.description}</Text>
                 <View style={styles.diagRiskBox}>
-                  <Text style={styles.diagRiskText}>⚠️ {diagnosis.riskMessage}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4 }}>
+                    <Icon name="alert" size={13} color={COLORS.danger} />
+                    <Text style={[styles.diagRiskText, { flex: 1 }]}>{diagnosis.riskMessage}</Text>
+                  </View>
                 </View>
                 <View style={styles.diagTipBox}>
-                  <Text style={styles.diagTipText}>💡 {diagnosis.actionTip}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4 }}>
+                    <Icon name="zap" size={13} color={COLORS.primary} />
+                    <Text style={[styles.diagTipText, { flex: 1 }]}>{diagnosis.actionTip}</Text>
+                  </View>
                 </View>
               </>
             )}
@@ -216,23 +226,24 @@ export default function AIScreen() {
         {/* 다음 진단 가능 시간 */}
         {!canRefresh && (
           <View style={styles.refreshInfo}>
-            <Text style={styles.refreshInfoText}>
-              🕐 다음 진단 갱신까지 {nextRefreshHour > 0 ? `${nextRefreshHour}시간 ` : ''}{nextRefreshMin}분
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Icon name="clock" size={12} color={COLORS.textMuted} />
+              <Text style={styles.refreshInfoText}>다음 진단 갱신까지 {nextRefreshHour > 0 ? `${nextRefreshHour}시간 ` : ''}{nextRefreshMin}분</Text>
+            </View>
           </View>
         )}
 
         {/* 단계별 솔루션 */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionIcon}>💡</Text>
+            <Icon name="zap" size={16} color={COLORS.text} />
             <Text style={styles.sectionTitle}>단계별 솔루션</Text>
           </View>
 
           {!exercises && !exLoading && !exError && canRefreshEx && (
             <TouchableOpacity style={styles.solutionBtn} onPress={fetchExercises} activeOpacity={0.85}>
               <View style={styles.solutionBtnInner}>
-                <Text style={styles.solutionBtnIcon}>🏋️</Text>
+                <Icon name="activity" size={28} color={COLORS.primary} />
                 <View>
                   <Text style={styles.solutionBtnTitle}>맞춤 운동 솔루션 받기</Text>
                   <Text style={styles.solutionBtnSub}>진단 결과 기반 3단계 교정 운동 추천</Text>
@@ -251,7 +262,10 @@ export default function AIScreen() {
 
           {exError && !exLoading && (
             <View style={{ gap: SPACING.sm }}>
-              <Text style={styles.exErrorText}>⚠️ {exError}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Icon name="alert" size={14} color={COLORS.danger} />
+                <Text style={styles.exErrorText}>{exError}</Text>
+              </View>
               <TouchableOpacity style={styles.analyzeBtn} onPress={fetchExercises}>
                 <Text style={styles.analyzeBtnText}>다시 받기</Text>
               </TouchableOpacity>
@@ -276,7 +290,7 @@ export default function AIScreen() {
               {ex && (
                 <View style={[styles.exCard, { borderLeftColor: stepColor, borderLeftWidth: 3 }]}>
                   <View style={styles.exTop}>
-                    <Text style={styles.exActivityIcon}>📈</Text>
+                    <Icon name="trending-up" size={18} color={stepColor} />
                     <View style={[styles.exBadge, { backgroundColor: stepColor }]}>
                       <Text style={styles.exBadgeText}>STEP {activeStep}</Text>
                     </View>
@@ -288,7 +302,10 @@ export default function AIScreen() {
                     <Text style={[styles.repsVal, { color: stepColor }]}>{ex.reps}</Text>
                   </View>
                   <View style={styles.tipBox}>
-                    <Text style={styles.tipText}>💡 Tip: {ex.tip}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4 }}>
+                    <Icon name="zap" size={12} color={COLORS.textSecondary} />
+                    <Text style={[styles.tipText, { flex: 1 }]}>Tip: {ex.tip}</Text>
+                  </View>
                   </View>
                 </View>
               )}
@@ -300,11 +317,17 @@ export default function AIScreen() {
         {exercises && !exLoading && (
           canRefreshEx ? (
             <TouchableOpacity style={styles.refreshInfo} onPress={fetchExercises}>
-              <Text style={styles.refreshInfoText}>🔄 새 솔루션 받기</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Icon name="refresh-cw" size={12} color={COLORS.textMuted} />
+                <Text style={styles.refreshInfoText}>새 솔루션 받기</Text>
+              </View>
             </TouchableOpacity>
           ) : (
             <View style={styles.refreshInfo}>
-              <Text style={styles.refreshInfoText}>🕐 다음 솔루션 갱신까지 {nextExMin}분</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Icon name="clock" size={12} color={COLORS.textMuted} />
+                <Text style={styles.refreshInfoText}>다음 솔루션 갱신까지 {nextExMin}분</Text>
+              </View>
             </View>
           )
         )}
@@ -314,7 +337,7 @@ export default function AIScreen() {
           <View style={styles.reportCard}>
             <View style={styles.reportHeader}>
               <View style={styles.reportIconBox}>
-                <Text style={styles.reportIcon}>🛡️</Text>
+                <Icon name="shield" size={20} color="rgba(255,255,255,0.8)" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.reportTitle}>주간 건강 리포트</Text>
@@ -325,7 +348,7 @@ export default function AIScreen() {
             {!report && !reportLoading && !reportError && (
               <TouchableOpacity style={styles.reportAnalyzeBtn} onPress={fetchReport} activeOpacity={0.85}>
                 <View style={styles.reportAnalyzeBtnInner}>
-                  <Text style={styles.reportAnalyzeBtnIcon}>📊</Text>
+                  <Icon name="bar-chart" size={28} color="rgba(255,255,255,0.8)" />
                   <View>
                     <Text style={styles.reportAnalyzeBtnTitle}>주간 리포트 분석하기</Text>
                     <Text style={styles.reportAnalyzeBtnSub}>7일간의 자세 데이터 AI 분석</Text>
@@ -344,7 +367,10 @@ export default function AIScreen() {
 
             {reportError && !reportLoading && (
               <View style={{ gap: SPACING.sm }}>
-                <Text style={styles.reportErrorText}>⚠️ {reportError}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Icon name="alert" size={14} color={COLORS.danger} />
+                  <Text style={styles.reportErrorText}>{reportError}</Text>
+                </View>
                 <TouchableOpacity style={styles.analyzeBtn} onPress={fetchReport}>
                   <Text style={styles.analyzeBtnText}>다시 분석하기</Text>
                 </TouchableOpacity>
@@ -394,7 +420,7 @@ export default function AIScreen() {
                   return (
                     <View key={i} style={[styles.analysisCard, { borderLeftColor: statusColor }]}>
                       <View style={styles.analysisTop}>
-                        <Text style={styles.analysisIcon}>{a.icon}</Text>
+                        <Icon name={ANALYSIS_ICON_MAP[a.icon] ?? 'info'} size={14} color={statusColor} />
                         <Text style={styles.analysisLabel}>{a.label}</Text>
                         <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                       </View>
@@ -407,14 +433,20 @@ export default function AIScreen() {
                 <Text style={styles.sectionLabel}>지난주 대비</Text>
                 <View style={styles.comparisonRow}>
                   <View style={styles.comparisonCol}>
-                    <Text style={styles.comparisonHeader}>✅ 개선</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: SPACING.xs }}>
+                      <Icon name="check-circle" size={12} color="#4ADE80" />
+                      <Text style={styles.comparisonHeader}>개선</Text>
+                    </View>
                     {report.comparison?.improvements?.map((t, i) => (
                       <Text key={i} style={styles.comparisonItem}>· {t}</Text>
                     ))}
                   </View>
                   <View style={styles.comparisonDivider} />
                   <View style={styles.comparisonCol}>
-                    <Text style={[styles.comparisonHeader, { color: '#F87171' }]}>📉 악화</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: SPACING.xs }}>
+                      <Icon name="trending-down" size={12} color="#F87171" />
+                      <Text style={[styles.comparisonHeader, { color: '#F87171' }]}>악화</Text>
+                    </View>
                     {report.comparison?.regressions?.map((t, i) => (
                       <Text key={i} style={[styles.comparisonItem, { color: 'rgba(248,113,113,0.8)' }]}>· {t}</Text>
                     ))}
@@ -490,7 +522,6 @@ const styles = StyleSheet.create({
     width: 48, height: 48, borderRadius: RADIUS.md,
     backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
   },
-  aiIcon: { fontSize: 24 },
   aiTitleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
   aiTitle: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
   aiBadge: { backgroundColor: COLORS.primary, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
@@ -499,12 +530,10 @@ const styles = StyleSheet.create({
 
   section: { paddingHorizontal: SPACING.base, marginBottom: SPACING.base },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginBottom: SPACING.sm },
-  sectionIcon: { fontSize: 16 },
   sectionTitle: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
 
   diagCard: { backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: SPACING.base, ...SHADOWS.sm },
   diagTop: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginBottom: SPACING.sm },
-  diagWarningIcon: { fontSize: 18 },
   diagTitle: { flex: 1, fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
   cautionBadge: { borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2 },
   cautionText: { fontSize: FONTS.sizes.xs, fontWeight: '700' },
@@ -526,7 +555,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary + '30',
   },
   diagFetchBtnInner: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  diagFetchBtnIcon: { fontSize: 24 },
   diagFetchBtnTitle: { fontSize: FONTS.sizes.sm, fontWeight: '700', color: COLORS.text },
   diagFetchBtnSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginTop: 2 },
   diagFetchBtnArrow: { fontSize: 20, color: COLORS.primary, fontWeight: '700' },
@@ -573,7 +601,6 @@ const styles = StyleSheet.create({
 
   exCard: { backgroundColor: '#F8FAFF', borderRadius: RADIUS.xl, padding: SPACING.base, ...SHADOWS.sm },
   exTop: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginBottom: SPACING.sm },
-  exActivityIcon: { fontSize: 18 },
   exBadge: { borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 2 },
   exBadgeText: { fontSize: 10, color: '#fff', fontWeight: '700' },
   exTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text },
@@ -596,7 +623,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary + '30',
   },
   solutionBtnInner: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  solutionBtnIcon: { fontSize: 28 },
   solutionBtnTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text },
   solutionBtnSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginTop: 2 },
   solutionBtnArrow: { fontSize: 24, color: COLORS.primary, fontWeight: '700' },
@@ -607,7 +633,6 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center',
   },
-  reportIcon: { fontSize: 18 },
   reportTitle: { fontSize: FONTS.sizes.base, fontWeight: '700', color: '#fff' },
   reportSub: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.4)' },
   reportBody: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.7)', lineHeight: 20, marginBottom: SPACING.base },
@@ -660,7 +685,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
   },
   reportAnalyzeBtnInner: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  reportAnalyzeBtnIcon: { fontSize: 28 },
   reportAnalyzeBtnTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: '#fff' },
   reportAnalyzeBtnSub: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
   reportAnalyzeBtnArrow: { fontSize: 24, color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
@@ -686,7 +710,6 @@ const styles = StyleSheet.create({
     padding: SPACING.sm, marginBottom: SPACING.xs, borderLeftWidth: 3,
   },
   analysisTop: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginBottom: 4 },
-  analysisIcon: { fontSize: 14 },
   analysisLabel: { flex: 1, fontSize: FONTS.sizes.xs, fontWeight: '700', color: 'rgba(255,255,255,0.6)' },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   analysisText: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.75)', lineHeight: 18 },
@@ -697,7 +720,7 @@ const styles = StyleSheet.create({
   },
   comparisonCol: { flex: 1 },
   comparisonDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: SPACING.sm },
-  comparisonHeader: { fontSize: FONTS.sizes.xs, fontWeight: '700', color: '#4ADE80', marginBottom: SPACING.xs },
+  comparisonHeader: { fontSize: FONTS.sizes.xs, fontWeight: '700', color: '#4ADE80' },
   comparisonItem: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.65)', lineHeight: 18, marginBottom: 2 },
 
   riskBox: { marginTop: SPACING.xs },

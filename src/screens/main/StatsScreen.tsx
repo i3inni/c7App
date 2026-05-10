@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Polyline, Circle, Line, Text as SvgText, Path } from 'react-native-svg';
+import Icon from '../../components/Icon';
 import { useStore } from '../../store';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import { getTodayStats, getWeeklyStats } from '../../services/statsService';
@@ -86,7 +87,7 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
                 <Text style={dtStyles.improveText}>평균 각도 {todayStats.summary.avgAngle}°</Text>
               </View>
             </View>
-            <Text style={{ fontSize: 28 }}>📈</Text>
+            <Icon name="trending-up" size={28} color="#7EE8A2" />
           </View>
 
           {/* 시간대별 점수 */}
@@ -119,7 +120,7 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
               return (
                 <View key={i} style={[dtStyles.badCard, { backgroundColor: isDanger ? '#FFF0F3' : '#FFF7EC' }]}>
                   <View style={dtStyles.badLeft}>
-                    <Text style={{ fontSize: 14, marginRight: 6 }}>⏰</Text>
+                    <Icon name="clock" size={14} color={isDanger ? COLORS.accent : COLORS.warning} />
                     <Text style={[dtStyles.badTime, { color: isDanger ? COLORS.accent : COLORS.warning }]}>{b.time}</Text>
                   </View>
                   <Text style={dtStyles.badDetail}>각도: {b.angle}°    지속시간: {b.duration}</Text>
@@ -135,13 +136,13 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
           <Text style={dtStyles.sectionTitle}>활동 요약</Text>
           <View style={dtStyles.summaryGrid}>
             {[
-              { icon: '📈', label: '교정 횟수', val: `${todayStats.summary.correctionCount}회` },
-              { icon: '⏰', label: '사용 시간', val: todayStats.summary.totalUsageTime },
-              { icon: '🔴', label: '평균 각도', val: `${todayStats.summary.avgAngle}°` },
-              { icon: '⚠️', label: '불량 자세', val: `${todayStats.summary.badPostureCount}회` },
+              { iconName: 'trending-up', iconColor: COLORS.primary,  label: '교정 횟수', val: `${todayStats.summary.correctionCount}회` },
+              { iconName: 'clock',       iconColor: COLORS.primary,  label: '사용 시간', val: todayStats.summary.totalUsageTime },
+              { iconName: 'target',      iconColor: COLORS.accent,   label: '평균 각도', val: `${todayStats.summary.avgAngle}°` },
+              { iconName: 'alert',       iconColor: COLORS.warning,  label: '불량 자세', val: `${todayStats.summary.badPostureCount}회` },
             ].map((s, i) => (
               <View key={i} style={dtStyles.summaryCard}>
-                <Text style={dtStyles.summaryIcon}>{s.icon}</Text>
+                <Icon name={s.iconName} size={24} color={s.iconColor} />
                 <Text style={dtStyles.summaryLabel}>{s.label}</Text>
                 <Text style={dtStyles.summaryVal}>{s.val}</Text>
               </View>
@@ -193,7 +194,6 @@ const dtStyles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: RADIUS.lg, padding: SPACING.base,
     alignItems: 'center', ...SHADOWS.sm,
   },
-  summaryIcon: { fontSize: 24, marginBottom: SPACING.xs },
   summaryLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, textAlign: 'center' },
   summaryVal: { fontSize: FONTS.sizes.xl, fontWeight: '800', color: COLORS.text, marginTop: 4 },
 });
@@ -225,7 +225,7 @@ function WeekDetailModal({ visible, onClose }: { visible: boolean; onClose: () =
                 </Text>
               </View>
             </View>
-            <Text style={{ fontSize: 28 }}>📊</Text>
+            <Icon name="bar-chart" size={28} color="#FCD34D" />
           </View>
 
           <Text style={dtStyles.sectionTitle}>주차별 점수</Text>
@@ -333,22 +333,27 @@ export default function StatsScreen() {
   const [monthOffset, setMonthOffset] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const chartData = weeklyStats.map(w => ({ label: w.weekLabel, score: w.avgScore }));
+  const latestWeek = weeklyStats.length > 0 ? weeklyStats[weeklyStats.length - 1] : null;
+  const weeklyChartData = (latestWeek?.dailyBreakdown ?? []).map(d => ({ label: d.day, score: d.score }));
+  const monthlyChartData = weeklyStats.map(w => ({ label: w.weekLabel, score: w.avgScore }));
+  const chartData = tab === 'weekly' ? weeklyChartData : monthlyChartData;
   const dailyScore = todayStats?.summary?.dailyScore ?? 0;
   const todayLabel = todayStats?.summary ? scoreToLabel(dailyScore) : '--';
   const todayBadgeColor = scoreToBadgeColor(dailyScore);
 
   useEffect(() => {
     if (!user || user.isGuest) return;
+    getTodayStats(user.id).then(today => { if (today) setTodayStats(today); }).catch(() => {});
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || user.isGuest) return;
     setLoading(true);
-    Promise.all([getTodayStats(user.id), getWeeklyStats(user.id)])
-      .then(([today, weekly]) => {
-        if (today) setTodayStats(today);
-        setWeeklyStats(weekly);
-      })
+    getWeeklyStats(user.id, monthOffset)
+      .then(weekly => setWeeklyStats(weekly))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [user?.id]);
+  }, [user?.id, monthOffset]);
 
   return (
     <SafeAreaView style={s.safe}>
@@ -372,7 +377,7 @@ export default function StatsScreen() {
             <>
               <View style={s.todayScoreRow}>
                 <View style={[s.todayIconBox, { backgroundColor: todayBadgeColor }]}>
-                  <Text style={s.todayIcon}>◉</Text>
+                  <Icon name="activity" size={22} color="#fff" />
                 </View>
                 <View style={{ flex: 1, marginLeft: SPACING.sm }}>
                   <Text style={s.todayScoreSub}>오늘 점수</Text>
@@ -387,7 +392,7 @@ export default function StatsScreen() {
               <View style={s.todayMiniRow}>
                 <View style={s.todayMiniBox}>
                   <View style={[s.miniIconCircle, { backgroundColor: '#FEF3C7' }]}>
-                    <Text style={s.miniIcon}>⚠️</Text>
+                    <Icon name="alert" size={18} color={COLORS.warning} />
                   </View>
                   <View>
                     <Text style={s.miniLabel}>불량 자세</Text>
@@ -396,7 +401,7 @@ export default function StatsScreen() {
                 </View>
                 <View style={s.todayMiniBox}>
                   <View style={[s.miniIconCircle, { backgroundColor: '#D1FAE5' }]}>
-                    <Text style={s.miniIcon}>⏰</Text>
+                    <Icon name="clock" size={18} color={COLORS.primary} />
                   </View>
                   <View>
                     <Text style={s.miniLabel}>교정 횟수</Text>
@@ -428,7 +433,9 @@ export default function StatsScreen() {
           </View>
 
           <View style={{ marginTop: SPACING.sm }}>
-            <Text style={s.chartSub}>평균 점수의 주별 추이</Text>
+            <Text style={s.chartSub}>
+              {tab === 'weekly' ? '이번 주 요일별 점수' : '평균 점수의 주별 추이'}
+            </Text>
             {chartData.length >= 2 ? (
               <LineChart data={chartData} targetScore={settings.targetScore} width={width - SPACING.base * 4} height={160} />
             ) : (
@@ -438,17 +445,19 @@ export default function StatsScreen() {
             )}
           </View>
 
-          <View style={s.monthNav}>
-            <TouchableOpacity onPress={() => setMonthOffset(p => p + 1)}>
-              <Text style={s.navArrow}>‹</Text>
-            </TouchableOpacity>
-            <View style={{ alignItems: 'center' }}>
-              <Text style={s.monthLabel}>{monthOffset === 0 ? '이번 달' : `${monthOffset}개월 전`}</Text>
+          {tab === 'monthly' && (
+            <View style={s.monthNav}>
+              <TouchableOpacity onPress={() => setMonthOffset(p => p + 1)}>
+                <Text style={s.navArrow}>‹</Text>
+              </TouchableOpacity>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={s.monthLabel}>{monthOffset === 0 ? '이번 달' : `${monthOffset}개월 전`}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setMonthOffset(p => Math.max(0, p - 1))}>
+                <Text style={s.navArrow}>›</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => setMonthOffset(p => Math.max(0, p - 1))}>
-              <Text style={s.navArrow}>›</Text>
-            </TouchableOpacity>
-          </View>
+          )}
 
           <TouchableOpacity onPress={() => setShowWeekDetail(true)} style={s.weekMoreBtn}>
             <Text style={s.moreBtnText}>자세 측정 지표 더보기  ›</Text>
@@ -475,7 +484,7 @@ const s = StyleSheet.create({
   todayCard: { backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: SPACING.base, ...SHADOWS.md },
   todayScoreRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.base },
   todayIconBox: { width: 48, height: 48, borderRadius: RADIUS.lg, alignItems: 'center', justifyContent: 'center' },
-  todayIcon: { fontSize: 22, color: '#fff' },
+
   todayScoreSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
   todayScoreNum: { fontSize: FONTS.sizes['3xl'], fontWeight: '800', color: COLORS.text },
   goodBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -487,10 +496,10 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md, padding: SPACING.sm,
   },
   miniIconCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  miniIcon: { fontSize: 16 },
+
   miniLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginBottom: 2 },
-  miniVal: { fontSize: FONTS.sizes.lg, fontWeight: '800', color: COLORS.text },
-  miniUnit: { fontSize: FONTS.sizes.sm, fontWeight: '400', color: COLORS.textSecondary },
+  miniVal:   { fontSize: FONTS.sizes.lg, fontWeight: '800', color: COLORS.text },
+  miniUnit:  { fontSize: FONTS.sizes.sm, fontWeight: '400', color: COLORS.textSecondary },
   moreBtn: { alignSelf: 'center', paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm },
   moreBtnText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, fontWeight: '600' },
   weekMoreBtn: { alignSelf: 'center', marginTop: SPACING.sm, paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm },

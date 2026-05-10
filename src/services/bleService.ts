@@ -1,11 +1,26 @@
 import { BleManager, Device, BleError } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid } from 'react-native';
-import { toByteArray } from 'base64-js';
+import { toByteArray, fromByteArray } from 'base64-js';
 
-// ─── 기기 UUID 설정 (하드웨어팀에게 받아서 채울 것) ───────────────────────
-export const C7_SERVICE_UUID = 'XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX';
-export const C7_CHARACTERISTIC_UUID = 'XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX';
+// ─── C7AI BLE UUID (esp32/main.ino 과 반드시 일치) ───────────────────────────
+export const C7_SERVICE_UUID     = '4FAFC201-1FB5-459E-8FCC-C5C9C331914B';
+
+// MAC 주소 (read) → deviceId 확정에 사용. WiFi MAC과 동일한 값.
+export const C7_MAC_CHAR_UUID    = 'BEB5483E-36E1-4688-B7F5-EA07361B26A8';
+
+// userId (write) → 앱이 ESP32로 현재 사용자 ID를 전달. ESP32는 MQTT payload에 포함.
+export const C7_USERID_CHAR_UUID = 'BEB5483D-36E1-4688-B7F5-EA07361B26A8';
+
+// 자세 데이터 (notify) → WiFi fallback 시 ESP32가 실시간으로 앱으로 전송.
+export const C7_DATA_CHAR_UUID   = 'BEB5483F-36E1-4688-B7F5-EA07361B26A8';
 // ─────────────────────────────────────────────────────────────────────────────
+
+export interface PostureFrame {
+  sensor: 'C7' | 'T3' | 'T7';
+  pitch: number;
+  roll: number;
+  userId: string;
+}
 
 const manager = new BleManager();
 
@@ -24,73 +39,115 @@ export const requestBluetoothPermissions = async (): Promise<boolean> => {
   );
 };
 
-// 주변 BLE 기기 스캔
-// onDeviceFound: 기기 발견 시 콜백
-// onError: 에러 시 콜백
+// C7AI 서비스 UUID로 필터링해 스캔 (C7AI 기기만 보임)
 export const startScan = (
   onDeviceFound: (device: Device) => void,
   onError: (error: BleError) => void
 ) => {
-  manager.startDeviceScan(null, null, (error, device) => {
-    if (error) {
-      onError(error);
-      return;
+  manager.startDeviceScan(
+    [C7_SERVICE_UUID],
+    { allowDuplicates: false },
+    (error, device) => {
+      if (error) { onError(error); return; }
+      if (device) onDeviceFound(device);
     }
-    if (device) {
-      onDeviceFound(device);
-    }
-  });
+  );
 };
 
-// 스캔 중단
 export const stopScan = () => {
   manager.stopDeviceScan();
 };
 
-// 기기 연결
 export const connectToDevice = async (deviceId: string): Promise<Device> => {
   const device = await manager.connectToDevice(deviceId);
   await device.discoverAllServicesAndCharacteristics();
   return device;
 };
 
-// 기기 연결 해제
 export const disconnectDevice = async (deviceId: string) => {
   await manager.cancelDeviceConnection(deviceId);
 };
 
-// 자세 데이터 실시간 구독
-// onData: 각도값 수신 시 콜백
-export const subscribePostureData = (
-  device: Device,
-  onData: (angle: number) => void,
-  onError: (error: BleError) => void
-) => {
-  device.monitorCharacteristicForService(
+/**
+ * ESP32에서 WiFi MAC 주소를 읽어 deviceId로 반환합니다.
+ * 반환값 예시: "a4cf12987711" (소문자, 콜론 없음)
+ *
+ * 로그인 없이도 deviceId를 확정할 수 있어 비회원 지원의 핵심입니다.
+ */
+export const readDeviceId = async (device: Device): Promise<string> => {
+  const char = await device.readCharacteristicForService(
     C7_SERVICE_UUID,
-    C7_CHARACTERISTIC_UUID,
-    (error, characteristic) => {
-      if (error) {
-        onError(error);
-        return;
-      }
-      if (characteristic?.value) {
-        const angle = parsePostureData(characteristic.value);
-        onData(angle);
-      }
-    }
+    C7_MAC_CHAR_UUID,
+  );
+  if (!char.value) throw new Error('MAC characteristic 값 없음');
+  const bytes = toByteArray(char.value);
+  return new TextDecoder().decode(bytes);
+};
+
+/**
+ * 현재 사용자 ID를 ESP32로 전달합니다.
+ * ESP32는 이 값을 MQTT payload의 userId 필드에 포함해 전송합니다.
+ * BLE 연결 직후 그리고 userId 변경 시(로그인/로그아웃) 호출합니다.
+ */
+export const sendUserId = async (device: Device, userId: string): Promise<void> => {
+  const bytes = new TextEncoder().encode(userId);
+  const base64 = fromByteArray(bytes);
+  await device.writeCharacteristicWithResponseForService(
+    C7_SERVICE_UUID,
+    C7_USERID_CHAR_UUID,
+    base64,
   );
 };
 
-// 기기에서 받은 raw 데이터 → 각도값 변환
-// TODO: 하드웨어팀에게 데이터 포맷 확인 후 파싱 로직 구현
-const parsePostureData = (base64Value: string): number => {
-  const bytes = toByteArray(base64Value);
-  // TODO: 실제 데이터 포맷에 맞게 수정
-  return bytes[0];
+/**
+ * BLE fallback 모드에서 실시간 자세 프레임을 구독합니다.
+ * WiFi/MQTT 연결 실패 시 ESP32가 이 characteristic으로 데이터를 notify합니다.
+ * 각 notify는 단일 센서 JSON: { sensor, pitch, roll, userId }
+ *
+ * 반환값: 구독 해제 함수 (컴포넌트 unmount 시 호출)
+ */
+export const subscribeFallbackData = (
+  device: Device,
+  onFrame: (frame: PostureFrame) => void,
+  onError: (error: BleError) => void
+): (() => void) => {
+  const subscription = device.monitorCharacteristicForService(
+    C7_SERVICE_UUID,
+    C7_DATA_CHAR_UUID,
+    (error, characteristic) => {
+      if (error) { onError(error); return; }
+      if (characteristic?.value) {
+        const frame = parseFallbackFrame(characteristic.value);
+        if (frame) onFrame(frame);
+      }
+    }
+  );
+  return () => subscription.remove();
 };
 
-// BleManager 정리 (앱 종료 시 호출)
+const parseFallbackFrame = (base64Value: string): PostureFrame | null => {
+  try {
+    const bytes = toByteArray(base64Value);
+    const json = new TextDecoder().decode(bytes);
+    const data = JSON.parse(json);
+    if (
+      (data.sensor === 'C7' || data.sensor === 'T3' || data.sensor === 'T7') &&
+      typeof data.pitch === 'number' &&
+      typeof data.roll === 'number'
+    ) {
+      return {
+        sensor:  data.sensor,
+        pitch:   data.pitch,
+        roll:    data.roll,
+        userId:  data.userId ?? 'unknown',
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export const destroyBleManager = () => {
   manager.destroy();
 };
