@@ -14,9 +14,11 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.c7ai.posture",
+      "buildNumber": "1",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "BLE 기기 연결을 위해 블루투스 권한이 필요합니다.",
-        "NSBluetoothPeripheralUsageDescription": "BLE 기기 연결을 위해 블루투스 권한이 필요합니다."
+        "NSBluetoothPeripheralUsageDescription": "BLE 기기 연결을 위해 블루투스 권한이 필요합니다.",
+        "UIBackgroundModes": ["bluetooth-central"]
       }
     },
     "android": {
@@ -34,7 +36,8 @@
       ]
     },
     "plugins": [
-      "expo-notifications"
+      "expo-notifications",
+      "react-native-ble-plx"
     ]
   }
 }
