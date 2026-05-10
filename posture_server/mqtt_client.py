@@ -38,10 +38,12 @@ from firestore_writer import (
 
 load_dotenv()
 
-MQTT_HOST = os.getenv("MQTT_SERVER", "")
-MQTT_PORT = int(os.getenv("MQTT_PORT", "8883"))
-MQTT_USER = os.getenv("MQTT_USER", "")
-MQTT_PASS = os.getenv("MQTT_PASS", "")
+MQTT_HOST = os.getenv("MQTT_SERVER", "").strip()
+MQTT_PORT = int(os.getenv("MQTT_PORT", "8883").strip())
+MQTT_USER = os.getenv("MQTT_USER", "").strip()
+MQTT_PASS = os.getenv("MQTT_PASS", "").strip()
+
+print(f"MQTT 설정: host={repr(MQTT_HOST)} port={MQTT_PORT} user={repr(MQTT_USER)}")
 
 SUB_TOPIC = "posture/+/raw"
 
