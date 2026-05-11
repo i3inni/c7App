@@ -84,6 +84,7 @@ async def _handle_complete_frame(
     r: list[float],
 ) -> None:
     if not ml.is_ready:
+        print(f"⚠️  [{device_id}] ML 모델 미준비 — 추론 건너뜀")
         return
 
     await _ensure_calibration(device_id, user_id)
@@ -144,11 +145,12 @@ async def mqtt_listener() -> None:
                 await client.subscribe(SUB_TOPIC)
                 print(f"✅ MQTT 구독: {MQTT_HOST}:{MQTT_PORT} / {SUB_TOPIC}")
 
+                _msg_count = 0
                 async for msg in client.messages:
                     try:
-                        # posture/{deviceId}/raw → deviceId 추출
                         parts = str(msg.topic).split("/")
                         if len(parts) != 3:
+                            print(f"⚠️  알 수 없는 토픽: {msg.topic}")
                             continue
                         device_id = parts[1]
 
@@ -159,14 +161,24 @@ async def mqtt_listener() -> None:
                         user_id = data.get("userId", "unknown")
 
                         if sensor not in ("C7", "T3", "T7"):
+                            print(f"⚠️  [{device_id}] 알 수 없는 센서: {sensor}")
                             continue
+
+                        # 첫 메시지 및 100개마다 수신 확인 로그
+                        _msg_count += 1
+                        if _msg_count == 1:
+                            print(f"📡 첫 메시지 수신 — device={device_id} user={user_id} sensor={sensor}")
+                        elif _msg_count % 100 == 0:
+                            print(f"📡 {_msg_count}번째 메시지 — device={device_id} user={user_id}")
 
                         buf_key = (device_id, user_id)
                         if buf_key not in _buffers:
                             _buffers[buf_key] = SensorBuffer()
+                            print(f"🆕 새 버퍼 생성: device={device_id} user={user_id}")
 
                         buf = _buffers[buf_key]
                         if buf.is_expired:
+                            print(f"⏱️  [{device_id}] 버퍼 만료 → 초기화")
                             buf.clear()
 
                         buf.update(sensor, pitch, roll)
@@ -174,13 +186,21 @@ async def mqtt_listener() -> None:
                         if buf.is_complete:
                             p, r = buf.extract()
                             buf.clear()
+                            print(f"✅ 완성 프레임 → 추론: device={device_id} user={user_id} pitch={[round(x,1) for x in p]}")
                             asyncio.create_task(
                                 _handle_complete_frame(client, device_id, user_id, p, r)
                             )
 
-                    except (json.JSONDecodeError, KeyError, ValueError):
-                        pass
+                    except json.JSONDecodeError as e:
+                        print(f"⚠️  JSON 파싱 오류: {e} | raw={msg.payload[:80]}")
+                    except (KeyError, ValueError) as e:
+                        print(f"⚠️  데이터 오류: {e} | payload={msg.payload[:80]}")
+                    except Exception as e:
+                        print(f"❌ 예상치 못한 오류: {type(e).__name__}: {e}")
 
         except aiomqtt.MqttError as e:
             print(f"⚠️  MQTT 연결 끊김: {e} — 5초 후 재연결")
+            await asyncio.sleep(5)
+        except Exception as e:
+            print(f"❌ MQTT 루프 오류: {type(e).__name__}: {e} — 5초 후 재연결")
             await asyncio.sleep(5)

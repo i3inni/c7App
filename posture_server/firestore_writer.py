@@ -102,7 +102,8 @@ def _update_stats_sync(
     corrected: bool,
 ) -> None:
     if not _db: return
-    ref = _db.collection("daily_stats").document(_today_doc_id(user_id))
+    doc_id = _today_doc_id(user_id)
+    ref = _db.collection("daily_stats").document(doc_id)
     bucket = _hour_bucket()
 
     snap = ref.get()
@@ -132,6 +133,7 @@ def _update_stats_sync(
             "summary._totalUsageMin":   usage_min,
             f"hourlyScores.{bucket}":   hourly[bucket],
         })
+        print(f"📊 Firestore 업데이트: {doc_id} | score={new_score} angle={new_angle} bad={is_bad} n={n}")
     else:
         ref.set({
             "userId": user_id,
@@ -148,6 +150,7 @@ def _update_stats_sync(
             "hourlyScores":   {bucket: float(score)},
             "badPostureLogs": [],
         })
+        print(f"📊 Firestore 신규 문서 생성: {doc_id} | score={score} angle={angle}")
 
 
 def _add_bad_log_sync(user_id: str, angle: float) -> None:
@@ -184,8 +187,13 @@ async def update_daily_stats(
     is_bad: bool,
     corrected: bool,
 ) -> None:
-    if not _db: return
-    await asyncio.to_thread(_update_stats_sync, user_id, score, angle, is_bad, corrected)
+    if not _db:
+        print(f"⚠️  Firestore 비활성화 — 쓰기 건너뜀 (user={user_id})")
+        return
+    try:
+        await asyncio.to_thread(_update_stats_sync, user_id, score, angle, is_bad, corrected)
+    except Exception as e:
+        print(f"❌ Firestore 쓰기 실패: {type(e).__name__}: {e} (user={user_id})")
 
 
 async def on_alert_started(

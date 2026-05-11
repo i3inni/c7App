@@ -18,7 +18,7 @@ export type RootStackParamList = {
   SignUpStep3: { userId: string; password: string };
   SignUpComplete: { userId: string; password: string; nickname: string };
   MqttConnect: undefined;
-  WifiProvision: { device: Device };
+  WifiProvision: { device: Device; mode?: 'setup' | 'manage' };
   InitBodyInfo: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   MyInfo: undefined;

@@ -223,18 +223,27 @@ export const sendWifiCredentials = async (
   );
 };
 
+export type WifiStatusEvent =
+  | { type: 'success' }
+  | { type: 'fail' }
+  | { type: 'disconnected' }
+  | { type: 'connected'; ssid: string };
+
 export const subscribeWifiStatus = (
   device: Device,
-  onStatus: (status: 'success' | 'fail') => void,
+  onStatus: (event: WifiStatusEvent) => void,
 ): (() => void) => {
   const sub = device.monitorCharacteristicForService(
     C7_SERVICE_UUID,
     C7_WIFI_STATUS_CHAR_UUID,
     (err, char) => {
       if (err || !char?.value) return;
-      const status = Array.from(toByteArray(char.value))
+      const msg = Array.from(toByteArray(char.value))
         .map(b => String.fromCharCode(b)).join('');
-      if (status === 'success' || status === 'fail') onStatus(status);
+      if (msg === 'success')      onStatus({ type: 'success' });
+      else if (msg === 'fail')    onStatus({ type: 'fail' });
+      else if (msg === 'disconnected') onStatus({ type: 'disconnected' });
+      else if (msg.startsWith('connected:')) onStatus({ type: 'connected', ssid: msg.slice(10) });
     }
   );
   return () => sub.remove();
@@ -245,5 +254,13 @@ export const triggerWifiScan = async (device: Device): Promise<void> => {
     C7_SERVICE_UUID,
     C7_WIFI_SCAN_CHAR_UUID,
     strToBase64('scan'),
+  );
+};
+
+export const sendDisconnectCommand = async (device: Device): Promise<void> => {
+  await device.writeCharacteristicWithResponseForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_SCAN_CHAR_UUID,
+    strToBase64(JSON.stringify({ cmd: 'disconnect' })),
   );
 };

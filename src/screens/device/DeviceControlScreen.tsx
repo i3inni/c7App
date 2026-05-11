@@ -345,7 +345,7 @@ export default function DeviceControlScreen() {
     }
     try {
       const connected = await connectToDevice(device.bleDeviceId);
-      (nav as any).navigate('WifiProvision', { device: connected });
+      (nav as any).navigate('WifiProvision', { device: connected, mode: 'manage' });
     } catch {
       (nav as any).replace('MqttConnect');
     }
