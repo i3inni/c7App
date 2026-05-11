@@ -11,13 +11,13 @@
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useStore } from '../store';
-import { DayStats, PostureType } from '../constants/types';
+import { DayStats } from '../constants/types';
 
 let unsubscribe: Unsubscribe | null = null;
 
 function todayDocId(userId: string): string {
   const d = new Date();
-  const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const ymd = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
   return `${userId}_${ymd}`;
 }
 
@@ -27,6 +27,7 @@ export const startPostureListener = (deviceId: string, userId: string): void => 
   const docId = todayDocId(userId);
   const ref   = doc(db, 'daily_stats', docId);
 
+  setListenerDeviceId(deviceId);
   useStore.getState().setDevice({ deviceId, mqttStatus: 'connected' });
 
   unsubscribe = onSnapshot(ref, (snap) => {
@@ -38,12 +39,10 @@ export const startPostureListener = (deviceId: string, userId: string): void => 
     const angle = summary.avgAngle  ?? 0;
     useStore.getState().updatePosture(score, angle);
 
-    const c7 = summary.c7Angle ?? null;
-    const t3 = summary.t3Angle ?? null;
-    const t7 = summary.t7Angle ?? null;
-    if (c7 !== null && t3 !== null && t7 !== null) {
-      useStore.getState().setAngles({ c7, t3, t7 });
-    }
+    const c7 = summary.c7Angle ?? angle;
+    const t3 = summary.t3Angle ?? 0;
+    const t7 = summary.t7Angle ?? 0;
+    useStore.getState().setAngles({ c7, t3, t7 });
 
     useStore.getState().setTodayStats({
       uid:          data.uid,

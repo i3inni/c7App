@@ -9,7 +9,10 @@ import { DayStats, WeekStats } from '../constants/types';
 // ── 날짜 헬퍼 ─────────────────────────────────────────
 
 function toYYYYMMDD(date: Date): string {
-  return date.toISOString().split('T')[0].replace(/-/g, '');
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}${m}${d}`;
 }
 
 /**
