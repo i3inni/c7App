@@ -9,8 +9,10 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import Svg, { Path, Line } from 'react-native-svg';
 import { Device } from 'react-native-ble-plx';
 import {
-  subscribeWifiStatus, sendWifiCredentials, triggerWifiScan, readWifiList,
+  subscribeWifiStatus, sendWifiCredentials, triggerWifiScan, subscribeWifiList,
+  readDeviceId, WifiNetwork,
 } from '../../services/bleService';
+import { startMqttListener } from '../../services/mqttService';
 import { useStore } from '../../store';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
@@ -24,8 +26,9 @@ export default function WifiProvisionScreen() {
   const { device } = route.params;
   const { setDevice } = useStore();
 
-  const [wifiList, setWifiList] = useState<string[]>([]);
-  const [selected, setSelected] = useState('');
+  const [wifiList, setWifiList]         = useState<WifiNetwork[]>([]);
+  const [selected, setSelected]         = useState('');
+  const [selectedSecured, setSelectedSecured] = useState(false);
   const selectedRef = useRef('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -33,30 +36,29 @@ export default function WifiProvisionScreen() {
   const [debugMsg, setDebugMsg] = useState('시작');
 
   useEffect(() => {
-    // 2초마다 WiFi 목록 직접 읽기
-    const poll = setInterval(async () => {
-      try {
-        const ssids = await readWifiList(device);
-        setDebugMsg(`읽음: ${ssids.length}개`);
-        if (ssids.length > 0) {
-          setWifiList(ssids);
-          setStatus('idle');
-          clearInterval(poll);
-        }
-      } catch (e: any) {
-        setDebugMsg(`에러: ${e?.message ?? '알 수 없음'}`);
+    const unsubList = subscribeWifiList(device, (networks) => {
+      setDebugMsg(`수신: ${networks.length}개`);
+      if (networks.length > 0) {
+        setWifiList(networks);
+        setStatus('idle');
       }
-    }, 2000);
+    });
 
-    const unsubStatus = subscribeWifiStatus(device, (s) => {
+    const unsubStatus = subscribeWifiStatus(device, async (s) => {
       setStatus(s);
       if (s === 'success') {
-        setDevice({ connectedSsid: selectedRef.current });
+        let deviceId: string | undefined;
+        try { deviceId = await readDeviceId(device); } catch {}
+        setDevice({
+          connectedSsid: selectedRef.current,
+          ...(deviceId ? { deviceId } : {}),
+        });
+        if (deviceId) startMqttListener(deviceId);
         setTimeout(() => (nav as any).replace('MainTabs'), 1500);
       }
     });
 
-    return () => { clearInterval(poll); unsubStatus(); };
+    return () => { unsubList(); unsubStatus(); };
   }, [device]);
 
   const handleRescan = async () => {
@@ -71,7 +73,8 @@ export default function WifiProvisionScreen() {
   };
 
   const handleConnect = async () => {
-    if (!selected || !password) return;
+    if (!selected) return;
+    if (selectedSecured && !password) return;
     Keyboard.dismiss();
     setStatus('sending');
     try {
@@ -120,64 +123,88 @@ export default function WifiProvisionScreen() {
         {status !== 'scanning' && (
           <FlatList
             data={wifiList}
-            keyExtractor={item => item}
+            keyExtractor={item => item.ssid}
             contentContainerStyle={s.list}
             ListEmptyComponent={
               <View style={s.emptyBox}>
                 <Text style={s.emptyText}>주변 WiFi가 없습니다</Text>
               </View>
             }
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[s.item, selected === item && s.itemSelected]}
-                onPress={() => { setSelected(item); selectedRef.current = item; setPassword(''); }}
-                activeOpacity={0.7}
-              >
-                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" style={{ marginRight: 10 }}>
-                  <Path d="M1.42 9a16 16 0 0 1 21.16 0" stroke={selected === item ? COLORS.primary : COLORS.textMuted} strokeWidth={2} strokeLinecap="round" />
-                  <Path d="M5 12.55a11 11 0 0 1 14.08 0" stroke={selected === item ? COLORS.primary : COLORS.textMuted} strokeWidth={2} strokeLinecap="round" />
-                  <Path d="M8.53 16.11a6 6 0 0 1 6.95 0" stroke={selected === item ? COLORS.primary : COLORS.textMuted} strokeWidth={2} strokeLinecap="round" />
-                  <Line x1="12" y1="20" x2="12.01" y2="20" stroke={selected === item ? COLORS.primary : COLORS.textMuted} strokeWidth={2} strokeLinecap="round" />
-                </Svg>
-                <Text style={[s.itemText, selected === item && s.itemTextSelected]}>
-                  {item}
-                </Text>
-                {selected === item && (
-                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" style={{ marginLeft: 'auto' }}>
-                    <Path d="M20 6L9 17l-5-5" stroke={COLORS.primary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            renderItem={({ item }) => {
+              const isSelected = selected === item.ssid;
+              const stroke = isSelected ? COLORS.primary : COLORS.textMuted;
+              return (
+                <TouchableOpacity
+                  style={[s.item, isSelected && s.itemSelected]}
+                  onPress={() => {
+                    setSelected(item.ssid);
+                    setSelectedSecured(item.secured);
+                    selectedRef.current = item.ssid;
+                    setPassword('');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  {/* WiFi 아이콘 */}
+                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" style={{ marginRight: 10 }}>
+                    <Path d="M1.42 9a16 16 0 0 1 21.16 0" stroke={stroke} strokeWidth={2} strokeLinecap="round" />
+                    <Path d="M5 12.55a11 11 0 0 1 14.08 0" stroke={stroke} strokeWidth={2} strokeLinecap="round" />
+                    <Path d="M8.53 16.11a6 6 0 0 1 6.95 0" stroke={stroke} strokeWidth={2} strokeLinecap="round" />
+                    <Line x1="12" y1="20" x2="12.01" y2="20" stroke={stroke} strokeWidth={2} strokeLinecap="round" />
                   </Svg>
-                )}
-              </TouchableOpacity>
-            )}
+
+                  <Text style={[s.itemText, isSelected && s.itemTextSelected]}>
+                    {item.ssid}
+                  </Text>
+
+                  {/* 자물쇠 아이콘 (비밀번호 있는 네트워크) */}
+                  {item.secured && (
+                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" style={{ marginRight: 6 }}>
+                      <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2Z" stroke={isSelected ? COLORS.primary : COLORS.textMuted} strokeWidth={2} />
+                      <Path d="M7 11V7a5 5 0 0 1 10 0v4" stroke={isSelected ? COLORS.primary : COLORS.textMuted} strokeWidth={2} strokeLinecap="round" />
+                    </Svg>
+                  )}
+
+                  {/* 선택 체크 */}
+                  {isSelected && (
+                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                      <Path d="M20 6L9 17l-5-5" stroke={COLORS.primary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                  )}
+                </TouchableOpacity>
+              );
+            }}
           />
         )}
 
-        {/* 비밀번호 입력 + 연결 버튼 */}
+        {/* 하단: 선택된 네트워크 연결 패널 */}
         {selected !== '' && status !== 'scanning' && (
           <View style={s.bottom}>
             <Text style={s.selectedLabel}>
               선택된 네트워크: <Text style={s.selectedSsid}>{selected}</Text>
             </Text>
 
-            <View style={s.inputWrap}>
-              <TextInput
-                style={s.input}
-                placeholder="비밀번호"
-                placeholderTextColor={COLORS.textMuted}
-                secureTextEntry={!showPass}
-                value={password}
-                onChangeText={setPassword}
-                autoFocus
-              />
-              <TouchableOpacity onPress={() => setShowPass(p => !p)} style={s.eyeBtn}>
-                <Text style={s.eyeText}>{showPass ? '숨김' : '표시'}</Text>
-              </TouchableOpacity>
-            </View>
+            {/* 비밀번호 입력 (잠긴 네트워크만) */}
+            {selectedSecured && (
+              <View style={s.inputWrap}>
+                <TextInput
+                  style={s.input}
+                  placeholder="비밀번호"
+                  placeholderTextColor={COLORS.textMuted}
+                  secureTextEntry={!showPass}
+                  value={password}
+                  onChangeText={setPassword}
+                  autoFocus
+                />
+                <TouchableOpacity onPress={() => setShowPass(p => !p)} style={s.eyeBtn}>
+                  <Text style={s.eyeText}>{showPass ? '숨김' : '표시'}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <TouchableOpacity
-              style={[s.btn, (!password || status === 'sending') && s.btnDisabled]}
+              style={[s.btn, ((selectedSecured && !password) || status === 'sending') && s.btnDisabled]}
               onPress={handleConnect}
-              disabled={!password || status === 'sending'}
+              disabled={(selectedSecured && !password) || status === 'sending'}
               activeOpacity={0.8}
             >
               {status === 'sending'

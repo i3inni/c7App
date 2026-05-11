@@ -28,6 +28,11 @@ export interface PostureFrame {
   userId: string;
 }
 
+export interface WifiNetwork {
+  ssid: string;
+  secured: boolean;
+}
+
 const manager = new BleManager();
 
 // 안드로이드 블루투스 권한 요청
@@ -65,7 +70,7 @@ export const stopScan = () => {
 };
 
 export const connectToDevice = async (deviceId: string): Promise<Device> => {
-  const device = await manager.connectToDevice(deviceId);
+  const device = await manager.connectToDevice(deviceId, { requestMTU: 512 });
   await device.discoverAllServicesAndCharacteristics();
   return device;
 };
@@ -87,7 +92,7 @@ export const readDeviceId = async (device: Device): Promise<string> => {
   );
   if (!char.value) throw new Error('MAC characteristic 값 없음');
   const bytes = toByteArray(char.value);
-  return new TextDecoder().decode(bytes);
+  return Array.from(bytes).map(b => String.fromCharCode(b)).join('');
 };
 
 /**
@@ -95,13 +100,17 @@ export const readDeviceId = async (device: Device): Promise<string> => {
  * ESP32는 이 값을 MQTT payload의 userId 필드에 포함해 전송합니다.
  * BLE 연결 직후 그리고 userId 변경 시(로그인/로그아웃) 호출합니다.
  */
+const strToBase64 = (str: string): string => {
+  const bytes = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i) & 0xff;
+  return fromByteArray(bytes);
+};
+
 export const sendUserId = async (device: Device, userId: string): Promise<void> => {
-  const bytes = new TextEncoder().encode(userId);
-  const base64 = fromByteArray(bytes);
   await device.writeCharacteristicWithResponseForService(
     C7_SERVICE_UUID,
     C7_USERID_CHAR_UUID,
-    base64,
+    strToBase64(userId),
   );
 };
 
@@ -134,7 +143,7 @@ export const subscribeFallbackData = (
 const parseFallbackFrame = (base64Value: string): PostureFrame | null => {
   try {
     const bytes = toByteArray(base64Value);
-    const json = new TextDecoder().decode(bytes);
+    const json = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
     const data = JSON.parse(json);
     if (
       (data.sensor === 'C7' || data.sensor === 'T3' || data.sensor === 'T7') &&
@@ -165,28 +174,38 @@ export const readWifiList = async (device: Device): Promise<string[]> => {
     C7_SERVICE_UUID,
     C7_WIFI_LIST_CHAR_UUID,
   );
-  if (!char.value) return [];
-  try {
-    const json = new TextDecoder().decode(toByteArray(char.value));
-    return JSON.parse(json);
-  } catch {
-    return [];
-  }
+  if (!char.value) throw new Error('WiFi list 값 없음(null)');
+  const bytes = toByteArray(char.value);
+  const json = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+  const parsed = JSON.parse(json); // parse 실패 시 에러 전파 → 폴링에서 에러 메시지로 표시됨
+  return Array.isArray(parsed) ? parsed : [];
 };
 
+// Arduino 프로토콜: "SCAN_START" → "SSID:<name>:<0|1>" × N → "SCAN_END"
+// 0 = 오픈 네트워크, 1 = 비밀번호 필요
+// lastIndexOf(':') 로 파싱해서 SSID에 ':' 포함돼도 안전
 export const subscribeWifiList = (
   device: Device,
-  onList: (ssids: string[]) => void,
+  onList: (networks: WifiNetwork[]) => void,
 ): (() => void) => {
+  let buffer: WifiNetwork[] = [];
   const sub = device.monitorCharacteristicForService(
     C7_SERVICE_UUID,
     C7_WIFI_LIST_CHAR_UUID,
     (err, char) => {
       if (err || !char?.value) return;
-      try {
-        const json = new TextDecoder().decode(toByteArray(char.value));
-        onList(JSON.parse(json));
-      } catch {}
+      const msg = Array.from(toByteArray(char.value))
+        .map(b => String.fromCharCode(b)).join('');
+      if (msg === 'SCAN_START') { buffer = []; return; }
+      if (msg === 'SCAN_END')   { onList([...buffer]); buffer = []; return; }
+      if (msg.startsWith('SSID:')) {
+        const content   = msg.slice(5);                          // "MyNetwork:1"
+        const lastColon = content.lastIndexOf(':');
+        if (lastColon === -1) return;
+        const ssid    = content.slice(0, lastColon);
+        const secured = content.slice(lastColon + 1) !== '0';
+        buffer.push({ ssid, secured });
+      }
     }
   );
   return () => sub.remove();
@@ -197,12 +216,10 @@ export const sendWifiCredentials = async (
   ssid: string,
   password: string,
 ): Promise<void> => {
-  const payload = JSON.stringify({ ssid, password });
-  const base64  = fromByteArray(new TextEncoder().encode(payload));
   await device.writeCharacteristicWithResponseForService(
     C7_SERVICE_UUID,
     C7_WIFI_CRED_CHAR_UUID,
-    base64,
+    strToBase64(JSON.stringify({ ssid, password })),
   );
 };
 
@@ -215,18 +232,18 @@ export const subscribeWifiStatus = (
     C7_WIFI_STATUS_CHAR_UUID,
     (err, char) => {
       if (err || !char?.value) return;
-      const status = new TextDecoder().decode(toByteArray(char.value));
-      onStatus(status as 'success' | 'fail');
+      const status = Array.from(toByteArray(char.value))
+        .map(b => String.fromCharCode(b)).join('');
+      if (status === 'success' || status === 'fail') onStatus(status);
     }
   );
   return () => sub.remove();
 };
 
 export const triggerWifiScan = async (device: Device): Promise<void> => {
-  const base64 = fromByteArray(new TextEncoder().encode('scan'));
   await device.writeCharacteristicWithResponseForService(
     C7_SERVICE_UUID,
     C7_WIFI_SCAN_CHAR_UUID,
-    base64,
+    strToBase64('scan'),
   );
 };

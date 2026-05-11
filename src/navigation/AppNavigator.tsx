@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -27,6 +27,8 @@ import {
 } from '../screens/profile/ProfileScreens';
 
 import { COLORS } from '../constants/theme';
+import { useStore } from '../store';
+import { startMqttListener, getMqttDeviceId } from '../services/mqttService';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import '../navigation/types'; // 전역 RootParamList 등록
 
@@ -117,6 +119,15 @@ const tabStyles = StyleSheet.create({
 
 // ── 메인 탭 ──────────────────────────────────────────
 function MainTabs() {
+  const deviceId = useStore(s => s.device.deviceId);
+
+  // 앱 재시작 후 deviceId가 있는데 MQTT 리스너가 없으면 재연결
+  useEffect(() => {
+    if (deviceId && getMqttDeviceId() !== deviceId) {
+      startMqttListener(deviceId);
+    }
+  }, [deviceId]);
+
   return (
     <Tab.Navigator
       tabBar={props => <TabBar {...props} />}
