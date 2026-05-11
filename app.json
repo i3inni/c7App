@@ -18,7 +18,11 @@
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "BLE 기기 연결을 위해 블루투스 권한이 필요합니다.",
         "NSBluetoothPeripheralUsageDescription": "BLE 기기 연결을 위해 블루투스 권한이 필요합니다.",
-        "UIBackgroundModes": ["bluetooth-central"]
+        "UIBackgroundModes": ["bluetooth-central"],
+        "CFBundleURLTypes": [
+          { "CFBundleURLSchemes": ["com.c7ai.posture"] },
+          { "CFBundleURLSchemes": ["com.googleusercontent.apps.1049899981613-le8ig8o9vs5497fj7a5ghkrpdlfcq90e"] }
+        ]
       }
     },
     "android": {

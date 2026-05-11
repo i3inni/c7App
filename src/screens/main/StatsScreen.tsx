@@ -3,7 +3,8 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Modal,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import Svg, { Polyline, Circle, Line, Text as SvgText, Path } from 'react-native-svg';
 import Icon from '../../components/Icon';
 import { useStore } from '../../store';
@@ -57,6 +58,7 @@ function LineChart({
 // ── 오늘 요약 상세 모달 ──────────────────────────────
 function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { todayStats } = useStore();
+  const insets = useSafeAreaInsets();
   if (!todayStats || !todayStats.summary) return null;
 
   const hourlyLabels: Record<string, string> = {
@@ -71,7 +73,7 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
 
   return (
     <Modal visible={visible} animationType="slide">
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+      <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: insets.top }}>
         <View style={dtStyles.header}>
           <Text style={dtStyles.title}>오늘의 상세 분석</Text>
           <TouchableOpacity onPress={onClose}><Text style={dtStyles.close}>✕</Text></TouchableOpacity>
@@ -149,7 +151,7 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
             ))}
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -201,6 +203,7 @@ const dtStyles = StyleSheet.create({
 // ── 주간 상세 모달 ────────────────────────────────────
 function WeekDetailModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { weeklyStats } = useStore();
+  const insets = useSafeAreaInsets();
 
   const avgScore = weeklyStats.length > 0
     ? (weeklyStats.reduce((s, w) => s + w.avgScore, 0) / weeklyStats.length).toFixed(1)
@@ -209,7 +212,7 @@ function WeekDetailModal({ visible, onClose }: { visible: boolean; onClose: () =
 
   return (
     <Modal visible={visible} animationType="slide">
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+      <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: insets.top }}>
         <View style={dtStyles.header}>
           <Text style={dtStyles.title}>주간 상세 분석</Text>
           <TouchableOpacity onPress={onClose}><Text style={dtStyles.close}>✕</Text></TouchableOpacity>
@@ -288,7 +291,7 @@ function WeekDetailModal({ visible, onClose }: { visible: boolean; onClose: () =
             </>
           )}
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -326,6 +329,7 @@ function scoreToBadgeColor(score: number): string {
 
 // ── 메인 STATS 화면 ──────────────────────────────────
 export default function StatsScreen() {
+  const nav = useNavigation();
   const { user, todayStats, weeklyStats, settings, setTodayStats, setWeeklyStats } = useStore();
   const [tab, setTab] = useState<'weekly' | 'monthly'>('monthly');
   const [showTodayDetail, setShowTodayDetail] = useState(false);
@@ -356,10 +360,21 @@ export default function StatsScreen() {
   }, [user?.id, monthOffset]);
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={['top', 'left', 'right']}>
       <View style={s.topBar}>
-        <Text style={s.pageTitle}>활동 기록</Text>
-        {loading && <ActivityIndicator size="small" color={COLORS.primary} />}
+        <TouchableOpacity onPress={() => nav.navigate('HOME' as never)} style={s.backBtn}>
+          <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+            <Path d="M19 12H5" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M12 19l-7-7 7-7" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
+        <View style={s.headerCenter}>
+          <Text style={s.pageTitle}>활동 기록</Text>
+          <Text style={s.pageSub}>Posture Statistics</Text>
+        </View>
+        <View style={{ width: 36, alignItems: 'center', justifyContent: 'center' }}>
+          {loading && <ActivityIndicator size="small" color={COLORS.primary} />}
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: SPACING.base, paddingBottom: 32 }}>
@@ -477,7 +492,10 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.base, paddingVertical: SPACING.md,
   },
-  pageTitle: { fontSize: FONTS.sizes.xl, fontWeight: '700', color: COLORS.text },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  pageTitle: { fontSize: FONTS.sizes.lg, fontWeight: '700', color: COLORS.text },
+  pageSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
+  backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', ...SHADOWS.sm },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm },
   sectionTitle: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
   targetLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },

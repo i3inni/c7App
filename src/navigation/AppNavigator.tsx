@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
 // Screens
@@ -75,8 +75,9 @@ function TabIcon({ name, color, size = 22 }: { name: string; color: string; size
 }
 
 function TabBar({ state, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={tabStyles.container}>
+    <View style={[tabStyles.container, { paddingBottom: insets.bottom + 8 }]}>
       {state.routes.map((route, index: number) => {
         const focused = state.index === index;
         const color = focused ? COLORS.accent : COLORS.textMuted;
@@ -105,7 +106,7 @@ const tabStyles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopWidth: 0.5,
     borderTopColor: '#E5E7EB',
-    paddingBottom: 8,
+    paddingBottom: 0,
     paddingTop: 6,
   },
   tab: { flex: 1, alignItems: 'center', paddingVertical: 4 },

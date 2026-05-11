@@ -637,7 +637,7 @@ export default function HomeScreen() {
   const isConnected = device.mqttStatus === 'connected';
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
         {/* ── 상단 헤더 ── */}

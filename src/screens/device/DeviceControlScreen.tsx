@@ -354,12 +354,15 @@ export default function DeviceControlScreen() {
     device.battery > 30 ? COLORS.warning : COLORS.accent;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       {/* 헤더 */}
       <View style={styles.header}>
         {!isGuest && (
           <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
-            <Text style={styles.backIcon}>‹</Text>
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+              <Path d="M19 12H5" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M12 19l-7-7 7-7" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
           </TouchableOpacity>
         )}
         <View style={styles.headerCenter}>
@@ -624,15 +627,14 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
     ...SHADOWS.sm,
   },
-  backIcon: { fontSize: 22, color: COLORS.text },
   headerCenter: { flex: 1, alignItems: "center" },
   headerTitle: {
     fontSize: FONTS.sizes.lg,

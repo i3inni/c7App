@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert,
+  KeyboardAvoidingView, Platform, Keyboard,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -314,62 +315,72 @@ export function BodyInfoScreen() {
 
       {/* 키 바텀시트 */}
       <Modal visible={showHeight} transparent animationType="slide">
-        <View style={bsStyles.overlay}>
-          <View style={bsStyles.sheet}>
-            <View style={bsStyles.handle} />
-            <Text style={bsStyles.sheetTitle}>키 설정</Text>
-            <TextInput
-              style={bsStyles.input}
-              value={heightVal}
-              onChangeText={setHeightVal}
-              keyboardType="numeric"
-              autoFocus
-            />
-            <Text style={bsStyles.unit}>cm</Text>
-            <Button
-              label="완료"
-              onPress={async () => {
-                const h = Number(heightVal);
-                updateUser({ height: h });
-                setShowHeight(false);
-                if (user?.id && user.id !== 'guest') {
-                  try { await updateBodyInfo(user.id, { height: h }); }
-                  catch { Alert.alert('저장 실패', '키 정보를 저장하지 못했습니다.'); }
-                }
-              }}
-            />
-          </View>
-        </View>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <TouchableOpacity style={bsStyles.overlay} activeOpacity={1} onPress={() => { Keyboard.dismiss(); setShowHeight(false); }}>
+            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+              <View style={bsStyles.sheet}>
+                <View style={bsStyles.handle} />
+                <Text style={bsStyles.sheetTitle}>키 설정</Text>
+                <TextInput
+                  style={bsStyles.input}
+                  value={heightVal}
+                  onChangeText={setHeightVal}
+                  keyboardType="numeric"
+                  autoFocus
+                />
+                <Text style={bsStyles.unit}>cm</Text>
+                <Button
+                  label="완료"
+                  onPress={async () => {
+                    const h = Number(heightVal);
+                    updateUser({ height: h });
+                    setShowHeight(false);
+                    Keyboard.dismiss();
+                    if (user?.id && user.id !== 'guest') {
+                      try { await updateBodyInfo(user.id, { height: h }); }
+                      catch { Alert.alert('저장 실패', '키 정보를 저장하지 못했습니다.'); }
+                    }
+                  }}
+                />
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 체중 바텀시트 */}
       <Modal visible={showWeight} transparent animationType="slide">
-        <View style={bsStyles.overlay}>
-          <View style={bsStyles.sheet}>
-            <View style={bsStyles.handle} />
-            <Text style={bsStyles.sheetTitle}>체중 설정</Text>
-            <TextInput
-              style={bsStyles.input}
-              value={weightVal}
-              onChangeText={setWeightVal}
-              keyboardType="numeric"
-              autoFocus
-            />
-            <Text style={bsStyles.unit}>kg</Text>
-            <Button
-              label="완료"
-              onPress={async () => {
-                const w = Number(weightVal);
-                updateUser({ weight: w });
-                setShowWeight(false);
-                if (user?.id && user.id !== 'guest') {
-                  try { await updateBodyInfo(user.id, { weight: w }); }
-                  catch { Alert.alert('저장 실패', '체중 정보를 저장하지 못했습니다.'); }
-                }
-              }}
-            />
-          </View>
-        </View>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <TouchableOpacity style={bsStyles.overlay} activeOpacity={1} onPress={() => { Keyboard.dismiss(); setShowWeight(false); }}>
+            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+              <View style={bsStyles.sheet}>
+                <View style={bsStyles.handle} />
+                <Text style={bsStyles.sheetTitle}>체중 설정</Text>
+                <TextInput
+                  style={bsStyles.input}
+                  value={weightVal}
+                  onChangeText={setWeightVal}
+                  keyboardType="numeric"
+                  autoFocus
+                />
+                <Text style={bsStyles.unit}>kg</Text>
+                <Button
+                  label="완료"
+                  onPress={async () => {
+                    const w = Number(weightVal);
+                    updateUser({ weight: w });
+                    setShowWeight(false);
+                    Keyboard.dismiss();
+                    if (user?.id && user.id !== 'guest') {
+                      try { await updateBodyInfo(user.id, { weight: w }); }
+                      catch { Alert.alert('저장 실패', '체중 정보를 저장하지 못했습니다.'); }
+                    }
+                  }}
+                />
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

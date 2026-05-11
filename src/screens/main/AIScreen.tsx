@@ -3,6 +3,7 @@ import {
   ActivityIndicator, ScrollView, StyleSheet, Text,
   TouchableOpacity, View,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import Icon, { ANALYSIS_ICON_MAP } from '../../components/Icon';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -117,14 +118,21 @@ export default function AIScreen() {
   const stepColor = STEP_COLORS[activeStep];
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
         {/* 헤더 */}
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
-            <Text style={styles.backIcon}>‹</Text>
+          <TouchableOpacity onPress={() => nav.navigate('HOME' as never)} style={styles.backBtn}>
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+              <Path d="M19 12H5" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M12 19l-7-7 7-7" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>거북목 진단사</Text>
+          <View style={styles.headerCenter}>
+            <Text style={styles.pageTitle}>거북목 진단사</Text>
+            <Text style={styles.pageSub}>AI Posture Analysis</Text>
+          </View>
+          <View style={{ width: 36 }} />
         </View>
 
         {/* AI 카드 */}
@@ -503,14 +511,12 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F5F6F8' },
   topBar: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SPACING.base, paddingVertical: SPACING.md, gap: SPACING.sm,
+    paddingHorizontal: SPACING.base, paddingVertical: SPACING.md,
   },
-  backBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', ...SHADOWS.sm,
-  },
-  backIcon: { fontSize: 22, color: COLORS.text },
-  pageTitle: { flex: 1, fontSize: FONTS.sizes.lg, fontWeight: '700', color: COLORS.text },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  pageTitle: { fontSize: FONTS.sizes.lg, fontWeight: '700', color: COLORS.text },
+  pageSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
+  backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', ...SHADOWS.sm },
 
   aiCard: {
     flexDirection: 'row', alignItems: 'center',
