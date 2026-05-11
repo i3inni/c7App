@@ -59,7 +59,7 @@ function BatteryIndicator({ level }: { level: number }) {
         {/* 채우기 */}
         <Rect x="2.5" y="3.5" width={String(fillW)} height={String(H - 5)} rx="1.5" fill={fillColor} />
       </Svg>
-      <Text style={batteryStyles.pct}>{level}%</Text>
+      <Text style={batteryStyles.pct}>{level > 0 ? `${level}%` : '--'}</Text>
     </View>
   );
 }
@@ -632,7 +632,8 @@ export default function HomeScreen() {
     caution: COLORS.scoreCaution,
     danger: COLORS.scoreDanger,
   };
-  const color = levelColor[currentLevel] ?? COLORS.textSecondary;
+  const hasData = currentScore > 0;
+  const color = hasData ? (levelColor[currentLevel] ?? COLORS.textSecondary) : COLORS.textMuted;
   const unread = notifications.filter(n => !n.read).length;
   const isConnected = device.mqttStatus === 'connected';
 
@@ -677,7 +678,7 @@ export default function HomeScreen() {
         <View style={styles.gaugeSection}>
           {/* 점수 숫자 */}
           <View style={styles.scoreOverlay}>
-            <Text style={styles.scoreNum}>{currentScore}</Text>
+            <Text style={styles.scoreNum}>{hasData ? currentScore : '--'}</Text>
             <Text style={styles.scoreLabelText}>POSTURE SCORE</Text>
           </View>
 
@@ -708,14 +709,14 @@ export default function HomeScreen() {
           <View style={styles.statBox}>
             <Text style={styles.statKey}>POSTURE</Text>
             <Text style={[styles.statStatus, { color }]}>
-              {postureLabel[currentPostureType] ?? '—'}
+              {hasData ? (postureLabel[currentPostureType] ?? '—') : '—'}
             </Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.statBox}>
             <Text style={styles.statKey}>STATUS</Text>
             <Text style={[styles.statStatus, { color }]}>
-              ⚠ {levelLabel[currentLevel]}
+              {hasData ? `⚠ ${levelLabel[currentLevel]}` : '—'}
             </Text>
           </View>
         </View>

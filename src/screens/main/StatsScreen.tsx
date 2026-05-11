@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Modal,
-  ActivityIndicator,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -336,6 +336,7 @@ export default function StatsScreen() {
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const latestWeek = weeklyStats.length > 0 ? weeklyStats[weeklyStats.length - 1] : null;
   const weeklyChartData = (latestWeek?.dailyBreakdown ?? []).map(d => ({ label: d.day, score: d.score }));
@@ -345,19 +346,21 @@ export default function StatsScreen() {
   const todayLabel = todayStats?.summary ? scoreToLabel(dailyScore) : '--';
   const todayBadgeColor = scoreToBadgeColor(dailyScore);
 
-  useEffect(() => {
+  const fetchAll = async (isRefresh = false) => {
     if (!user || user.isGuest) return;
-    getTodayStats(user.id).then(today => { if (today) setTodayStats(today); }).catch(() => {});
-  }, [user?.id]);
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    try {
+      const [today, weekly] = await Promise.all([
+        getTodayStats(user.id),
+        getWeeklyStats(user.id, monthOffset),
+      ]);
+      if (today) setTodayStats(today);
+      setWeeklyStats(weekly);
+    } catch {}
+    if (isRefresh) setRefreshing(false); else setLoading(false);
+  };
 
-  useEffect(() => {
-    if (!user || user.isGuest) return;
-    setLoading(true);
-    getWeeklyStats(user.id, monthOffset)
-      .then(weekly => setWeeklyStats(weekly))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [user?.id, monthOffset]);
+  useEffect(() => { fetchAll(); }, [user?.id, monthOffset]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'left', 'right']}>
@@ -377,7 +380,18 @@ export default function StatsScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: SPACING.base, paddingBottom: 32 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: SPACING.base, paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchAll(true)}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
         {/* 오늘 요약 */}
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>오늘의 요약</Text>

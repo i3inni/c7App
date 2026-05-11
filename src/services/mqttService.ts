@@ -11,7 +11,7 @@
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useStore } from '../store';
-import { PostureType } from '../constants/types';
+import { DayStats, PostureType } from '../constants/types';
 
 let unsubscribe: Unsubscribe | null = null;
 
@@ -36,7 +36,6 @@ export const startPostureListener = (deviceId: string, userId: string): void => 
 
     const score = summary.dailyScore ?? 0;
     const angle = summary.avgAngle  ?? 0;
-
     useStore.getState().updatePosture(score, angle);
 
     const c7 = summary.c7Angle ?? null;
@@ -45,6 +44,20 @@ export const startPostureListener = (deviceId: string, userId: string): void => 
     if (c7 !== null && t3 !== null && t7 !== null) {
       useStore.getState().setAngles({ c7, t3, t7 });
     }
+
+    useStore.getState().setTodayStats({
+      uid:          data.uid,
+      date:         data.date ?? '',
+      summary: {
+        dailyScore:      summary.dailyScore      ?? 0,
+        badPostureCount: summary.badPostureCount ?? 0,
+        correctionCount: summary.correctionCount ?? 0,
+        totalUsageTime:  summary.totalUsageTime  ?? '0.0h',
+        avgAngle:        summary.avgAngle        ?? 0,
+      },
+      hourlyScores:  data.hourlyScores  ?? {},
+      badPostureLogs: data.badPostureLogs ?? [],
+    } as DayStats);
   }, () => {
     useStore.getState().setDevice({ mqttStatus: 'error' });
   });
