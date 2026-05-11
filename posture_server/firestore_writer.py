@@ -46,6 +46,10 @@ except Exception as e:
 NOTIF_COOLDOWN = 300.0  # 초
 _last_notif_ts: dict[str, float] = {}  # "{deviceId}:{userId}" → 마지막 알림 시각
 
+# Firestore 쓰기 throttle — 500ms마다 쓰면 하루 할당량 초과
+STATS_WRITE_INTERVAL = 10.0  # 초: userId당 최대 1회/10초
+_last_stats_write_ts: dict[str, float] = {}  # userId → 마지막 write 시각
+
 
 # ── 헬퍼 ────────────────────────────────────────────────
 
@@ -204,6 +208,13 @@ async def update_daily_stats(
     if not _db:
         print(f"⚠️  Firestore 비활성화 — 쓰기 건너뜀 (user={user_id})")
         return
+
+    now = asyncio.get_event_loop().time()
+    last = _last_stats_write_ts.get(user_id, 0.0)
+    if now - last < STATS_WRITE_INTERVAL:
+        return
+    _last_stats_write_ts[user_id] = now
+
     try:
         await asyncio.to_thread(_update_stats_sync, user_id, score, angle, is_bad, corrected, sensor_angles)
     except Exception as e:
