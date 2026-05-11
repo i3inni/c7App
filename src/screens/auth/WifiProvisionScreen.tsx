@@ -168,7 +168,29 @@ export default function WifiProvisionScreen() {
               {mode === 'manage' ? '연결 변경 또는 해제' : '연결할 네트워크를 선택하세요'}
             </Text>
           </View>
-          <View style={{ width: 40 }} />
+          <TouchableOpacity
+            onPress={handleRescan}
+            style={[s.backBtn, (status === 'scanning' || status === 'sending') && s.scanBtnDisabled]}
+            disabled={status === 'scanning' || status === 'sending'}
+          >
+            {status === 'scanning'
+              ? <ActivityIndicator size="small" color={COLORS.primary} />
+              : (
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M1 4v6h6"
+                    stroke={COLORS.primary} strokeWidth={2}
+                    strokeLinecap="round" strokeLinejoin="round"
+                  />
+                  <Path
+                    d="M3.51 15a9 9 0 1 0 .49-4.95L1 10"
+                    stroke={COLORS.primary} strokeWidth={2}
+                    strokeLinecap="round" strokeLinejoin="round"
+                  />
+                </Svg>
+              )
+            }
+          </TouchableOpacity>
         </View>
 
         {/* 현재 연결 상태 카드 (관리 모드 or 연결 정보 있을 때) */}
@@ -389,6 +411,7 @@ const s = StyleSheet.create({
   btnDisabled: { backgroundColor: COLORS.textMuted },
   btnText:     { color: '#fff', fontWeight: '700', fontSize: FONTS.sizes.base },
 
+  scanBtnDisabled: { opacity: 0.4 },
   rescanBtn:   { alignSelf: 'flex-end', marginHorizontal: SPACING.base, marginBottom: SPACING.xs, paddingHorizontal: SPACING.base, paddingVertical: SPACING.xs, backgroundColor: '#fff', borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border },
   rescanText:  { fontSize: FONTS.sizes.sm, color: COLORS.primary, fontWeight: '600' },
 

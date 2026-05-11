@@ -38,6 +38,13 @@ export const startPostureListener = (deviceId: string, userId: string): void => 
     const angle = summary.avgAngle  ?? 0;
 
     useStore.getState().updatePosture(score, angle);
+
+    const c7 = summary.c7Angle ?? null;
+    const t3 = summary.t3Angle ?? null;
+    const t7 = summary.t7Angle ?? null;
+    if (c7 !== null && t3 !== null && t7 !== null) {
+      useStore.getState().setAngles({ c7, t3, t7 });
+    }
   }, () => {
     useStore.getState().setDevice({ mqttStatus: 'error' });
   });

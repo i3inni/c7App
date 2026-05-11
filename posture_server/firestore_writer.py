@@ -100,6 +100,7 @@ def _update_stats_sync(
     angle: float,
     is_bad: bool,
     corrected: bool,
+    sensor_angles: dict | None = None,  # {"c7": float, "t3": float, "t7": float}
 ) -> None:
     if not _db: return
     doc_id = _today_doc_id(user_id)
@@ -123,7 +124,7 @@ def _update_stats_sync(
         prev_h = hourly.get(bucket, float(score))
         hourly[bucket] = round(prev_h * 0.8 + score * 0.2, 1)
 
-        ref.update({
+        update_data = {
             "summary.dailyScore":       new_score,
             "summary.avgAngle":         new_angle,
             "summary.badPostureCount":  s.get("badPostureCount", 0) + (1 if is_bad    else 0),
@@ -132,21 +133,33 @@ def _update_stats_sync(
             "summary._sampleCount":     n,
             "summary._totalUsageMin":   usage_min,
             f"hourlyScores.{bucket}":   hourly[bucket],
-        })
+        }
+        if sensor_angles:
+            update_data["summary.c7Angle"] = round(sensor_angles["c7"], 1)
+            update_data["summary.t3Angle"] = round(sensor_angles["t3"], 1)
+            update_data["summary.t7Angle"] = round(sensor_angles["t7"], 1)
+
+        ref.update(update_data)
         print(f"📊 Firestore 업데이트: {doc_id} | score={new_score} angle={new_angle} bad={is_bad} n={n}")
     else:
+        summary = {
+            "dailyScore":       float(score),
+            "badPostureCount":  1 if is_bad else 0,
+            "correctionCount":  0,
+            "totalUsageTime":   "0.0h",
+            "avgAngle":         angle,
+            "_sampleCount":     1,
+            "_totalUsageMin":   0.5 / 60,
+        }
+        if sensor_angles:
+            summary["c7Angle"] = round(sensor_angles["c7"], 1)
+            summary["t3Angle"] = round(sensor_angles["t3"], 1)
+            summary["t7Angle"] = round(sensor_angles["t7"], 1)
+
         ref.set({
             "userId": user_id,
             "date":   datetime.now().strftime("%Y-%m-%d"),
-            "summary": {
-                "dailyScore":       float(score),
-                "badPostureCount":  1 if is_bad else 0,
-                "correctionCount":  0,
-                "totalUsageTime":   "0.0h",
-                "avgAngle":         angle,
-                "_sampleCount":     1,
-                "_totalUsageMin":   0.5 / 60,
-            },
+            "summary":        summary,
             "hourlyScores":   {bucket: float(score)},
             "badPostureLogs": [],
         })
@@ -186,12 +199,13 @@ async def update_daily_stats(
     angle: float,
     is_bad: bool,
     corrected: bool,
+    sensor_angles: dict | None = None,
 ) -> None:
     if not _db:
         print(f"⚠️  Firestore 비활성화 — 쓰기 건너뜀 (user={user_id})")
         return
     try:
-        await asyncio.to_thread(_update_stats_sync, user_id, score, angle, is_bad, corrected)
+        await asyncio.to_thread(_update_stats_sync, user_id, score, angle, is_bad, corrected, sensor_angles)
     except Exception as e:
         print(f"❌ Firestore 쓰기 실패: {type(e).__name__}: {e} (user={user_id})")
 

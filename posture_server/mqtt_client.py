@@ -99,7 +99,13 @@ async def _handle_complete_frame(
 
     _prev_severity[key] = result["severity"]
 
-    await update_daily_stats(user_id, score, angle, is_bad, corrected)
+    dp = result["diff_pitch"]  # [C7, T7, T3] 순서 (sensor_buffer._ORDER 기준)
+    sensor_angles = {
+        "c7": dp[0],
+        "t7": dp[1],
+        "t3": dp[2],
+    }
+    await update_daily_stats(user_id, score, angle, is_bad, corrected, sensor_angles)
 
     result_payload = json.dumps({
         "deviceId": device_id,
