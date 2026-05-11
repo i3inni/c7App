@@ -14,6 +14,7 @@ export type MqttStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 
 
 export interface DeviceState {
   deviceId: string | null;
+  bleDeviceId: string | null;  // BLE 연결용 peripheral ID
   mqttStatus: MqttStatus;
   battery: number;           // 0-100
   powerOn: boolean;
@@ -21,6 +22,7 @@ export interface DeviceState {
   vibrationIntensity: number; // 0-100
   sensorAngle: number;        // calibration angle
   powerSaveMode: boolean;
+  connectedSsid: string | null;
 }
 
 // ─── Posture / Sensor ─────────────────────────────

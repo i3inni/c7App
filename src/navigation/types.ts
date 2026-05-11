@@ -1,4 +1,5 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
+import { Device } from 'react-native-ble-plx';
 
 // ── BottomTab 파라미터 ────────────────────────────────
 export type MainTabParamList = {
@@ -17,6 +18,7 @@ export type RootStackParamList = {
   SignUpStep3: { userId: string; password: string };
   SignUpComplete: { userId: string; password: string; nickname: string };
   MqttConnect: undefined;
+  WifiProvision: { device: Device };
   InitBodyInfo: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   MyInfo: undefined;

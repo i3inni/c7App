@@ -90,6 +90,7 @@ export const useStore = create<AppState>()(
 
       device: {
         deviceId: null,
+        bleDeviceId: null,
         mqttStatus: 'idle',
         battery: 75,
         powerOn: true,
@@ -97,6 +98,7 @@ export const useStore = create<AppState>()(
         vibrationIntensity: 66,
         sensorAngle: 30,
         powerSaveMode: false,
+        connectedSsid: null,
       },
 
       currentScore: 60,

@@ -15,6 +15,7 @@ import Toggle from "../../components/common/Toggle";
 import ConfirmModal from "../../components/common/ConfirmModal";
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from "../../constants/theme";
 import { saveDeviceSettings, updateDeviceConnection } from '../../services/deviceService';
+import { connectToDevice } from '../../services/bleService';
 
 type Tab = "battery" | "power" | "sensor" | "vibration";
 
@@ -337,6 +338,19 @@ export default function DeviceControlScreen() {
     }
   }, [device.powerOn]);
 
+  const handleChangeWifi = async () => {
+    if (!device.bleDeviceId) {
+      (nav as any).replace('MqttConnect');
+      return;
+    }
+    try {
+      const connected = await connectToDevice(device.bleDeviceId);
+      (nav as any).navigate('WifiProvision', { device: connected });
+    } catch {
+      (nav as any).replace('MqttConnect');
+    }
+  };
+
   // 로컬 상태 + Firestore 동시 저장 헬퍼
   const saveDevice = (partial: Parameters<typeof setDevice>[0]) => {
     setDevice(partial);
@@ -582,6 +596,24 @@ export default function DeviceControlScreen() {
           )}
         </View>
 
+        {/* WiFi 카드 */}
+        <View style={styles.wifiCard}>
+          <View style={styles.wifiRow}>
+            <View>
+              <Text style={styles.wifiLabel}>연결된 WiFi</Text>
+              <Text style={styles.wifiSsid}>
+                {device.connectedSsid ?? '정보 없음'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.wifiChangeBtn}
+              onPress={handleChangeWifi}
+            >
+              <Text style={styles.wifiChangeBtnText}>WiFi 변경</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* MQTT 카드 */}
         <MqttCard onDisconnect={() => setShowDisconnect(true)} />
       </ScrollView>
@@ -811,4 +843,23 @@ const styles = StyleSheet.create({
   tabTextActive: { color: COLORS.text },
   tabItemDisabled: { opacity: 0.35 },
   tabTextDisabled: { color: COLORS.textMuted },
+
+  wifiCard: {
+    backgroundColor: '#fff',
+    borderRadius: RADIUS.xl,
+    marginHorizontal: SPACING.base,
+    marginBottom: SPACING.sm,
+    padding: SPACING.base,
+    ...SHADOWS.sm,
+  },
+  wifiRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  wifiLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginBottom: 2 },
+  wifiSsid: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
+  wifiChangeBtn: {
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.base,
+    paddingVertical: SPACING.xs,
+  },
+  wifiChangeBtnText: { fontSize: FONTS.sizes.sm, fontWeight: '700', color: COLORS.primary },
 });

@@ -9,13 +9,13 @@ import { useStore } from '../../store';
 import { saveNotification } from '../../services/notificationService';
 import { updateDeviceConnection } from '../../services/deviceService';
 import {
-  requestBluetoothPermissions, startScan, stopScan,
+  requestBluetoothPermissions, startScan, stopScan, connectToDevice,
 } from '../../services/bleService';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
-type Step = 'input' | 'scanning' | 'connecting' | 'error';
+type Step = 'input' | 'scanning' | 'connecting' | 'ble_connecting' | 'error';
 type ErrorType = 'timeout' | 'auth' | 'network' | 'ble';
 
 const CONNECT_TIMEOUT_MS = 10000;
@@ -66,13 +66,19 @@ export default function MqttConnectScreen() {
     }, 10000);
   };
 
-  // BLE 기기 선택 → 해당 기기 ID로 연결
-  const handleSelectDevice = (device: Device) => {
+  // BLE 기기 선택 → WiFi 프로비저닝 화면으로 이동
+  const handleSelectDevice = async (device: Device) => {
     stopScan();
     if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
-    setDeviceId(device.id);
-    connectMqtt(device.id);
-    setStep('connecting');
+    setStep('ble_connecting');
+    try {
+      const connected = await connectToDevice(device.id);
+      setDevice({ bleDeviceId: device.id });
+      (nav as any).replace('WifiProvision', { device: connected });
+    } catch {
+      setErrorType('ble');
+      setStep('error');
+    }
   };
 
   useEffect(() => {
@@ -215,6 +221,27 @@ export default function MqttConnectScreen() {
         <TouchableOpacity style={styles.backToAuth} onPress={() => (nav as any).replace('Login')}>
           <Text style={styles.backToAuthText}>‹  BACK TO AUTH</Text>
         </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // ── BLE 기기 연결 중 ──────────────────────────────
+  if (step === 'ble_connecting') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.header}>
+          <Text style={styles.mainTitle}>MQTT CONNECT</Text>
+          <Text style={styles.subTitle}>BLE 기기 연결 중...</Text>
+        </View>
+        <View style={styles.centerArea}>
+          <View style={styles.outerCircle}>
+            <View style={styles.cloudCard}>
+              <Text style={styles.cloudIcon}>📡</Text>
+            </View>
+          </View>
+          <Text style={styles.connectingTitle}>연결 중...</Text>
+          <Text style={styles.connectingSub}>BLE 기기에 연결하고 있습니다.</Text>
+        </View>
       </SafeAreaView>
     );
   }

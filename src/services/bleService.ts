@@ -13,6 +13,12 @@ export const C7_USERID_CHAR_UUID = 'BEB5483D-36E1-4688-B7F5-EA07361B26A8';
 
 // 자세 데이터 (notify) → WiFi fallback 시 ESP32가 실시간으로 앱으로 전송.
 export const C7_DATA_CHAR_UUID   = 'BEB5483F-36E1-4688-B7F5-EA07361B26A8';
+
+// WiFi Provisioning
+export const C7_WIFI_LIST_CHAR_UUID   = 'BEB54840-36E1-4688-B7F5-EA07361B26A8';
+export const C7_WIFI_CRED_CHAR_UUID   = 'BEB54841-36E1-4688-B7F5-EA07361B26A8';
+export const C7_WIFI_STATUS_CHAR_UUID = 'BEB54842-36E1-4688-B7F5-EA07361B26A8';
+export const C7_WIFI_SCAN_CHAR_UUID   = 'BEB54843-36E1-4688-B7F5-EA07361B26A8';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface PostureFrame {
@@ -150,4 +156,77 @@ const parseFallbackFrame = (base64Value: string): PostureFrame | null => {
 
 export const destroyBleManager = () => {
   manager.destroy();
+};
+
+// ─── WiFi Provisioning ────────────────────────────────────────────────────────
+
+export const readWifiList = async (device: Device): Promise<string[]> => {
+  const char = await device.readCharacteristicForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_LIST_CHAR_UUID,
+  );
+  if (!char.value) return [];
+  try {
+    const json = new TextDecoder().decode(toByteArray(char.value));
+    return JSON.parse(json);
+  } catch {
+    return [];
+  }
+};
+
+export const subscribeWifiList = (
+  device: Device,
+  onList: (ssids: string[]) => void,
+): (() => void) => {
+  const sub = device.monitorCharacteristicForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_LIST_CHAR_UUID,
+    (err, char) => {
+      if (err || !char?.value) return;
+      try {
+        const json = new TextDecoder().decode(toByteArray(char.value));
+        onList(JSON.parse(json));
+      } catch {}
+    }
+  );
+  return () => sub.remove();
+};
+
+export const sendWifiCredentials = async (
+  device: Device,
+  ssid: string,
+  password: string,
+): Promise<void> => {
+  const payload = JSON.stringify({ ssid, password });
+  const base64  = fromByteArray(new TextEncoder().encode(payload));
+  await device.writeCharacteristicWithResponseForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_CRED_CHAR_UUID,
+    base64,
+  );
+};
+
+export const subscribeWifiStatus = (
+  device: Device,
+  onStatus: (status: 'success' | 'fail') => void,
+): (() => void) => {
+  const sub = device.monitorCharacteristicForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_STATUS_CHAR_UUID,
+    (err, char) => {
+      if (err || !char?.value) return;
+      const status = new TextDecoder().decode(toByteArray(char.value));
+      onStatus(status as 'success' | 'fail');
+    }
+  );
+  return () => sub.remove();
+};
+
+export const triggerWifiScan = async (device: Device): Promise<void> => {
+  const base64 = fromByteArray(new TextEncoder().encode('scan'));
+  await device.writeCharacteristicWithResponseForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_SCAN_CHAR_UUID,
+    base64,
+  );
 };
