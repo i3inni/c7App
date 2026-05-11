@@ -12,7 +12,7 @@ import {
   subscribeWifiStatus, sendWifiCredentials, triggerWifiScan, subscribeWifiList,
   readDeviceId, WifiNetwork,
 } from '../../services/bleService';
-import { startMqttListener } from '../../services/mqttService';
+import { startPostureListener } from '../../services/mqttService';
 import { useStore } from '../../store';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
@@ -24,7 +24,7 @@ export default function WifiProvisionScreen() {
   const nav   = useNavigation();
   const route = useRoute<RouteProp<{ WifiProvision: RouteParams }, 'WifiProvision'>>();
   const { device } = route.params;
-  const { setDevice } = useStore();
+  const { setDevice, user } = useStore();
 
   const [wifiList, setWifiList]         = useState<WifiNetwork[]>([]);
   const [selected, setSelected]         = useState('');
@@ -53,7 +53,7 @@ export default function WifiProvisionScreen() {
           connectedSsid: selectedRef.current,
           ...(deviceId ? { deviceId } : {}),
         });
-        if (deviceId) startMqttListener(deviceId);
+        if (deviceId) startPostureListener(deviceId, user?.id ?? 'unknown');
         setTimeout(() => (nav as any).replace('MainTabs'), 1500);
       }
     });

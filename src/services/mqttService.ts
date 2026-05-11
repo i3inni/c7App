@@ -1,98 +1,54 @@
 /**
- * HiveMQ WebSocket MQTT 클라이언트
+ * 실시간 자세 데이터 리스너
  *
- * 흐름: posture_server(Railway) → posture/{deviceId}/result publish
- *       → 앱 구독 → Zustand store 업데이트 (score, angle, postureType, diagnosisLevel)
+ * 흐름: ESP32 → HiveMQ → FastAPI(Railway) → Firestore daily_stats
+ *       → 앱 onSnapshot → Zustand store 업데이트
  *
- * 연결 방식: WSS (port 8884) — React Native에서 TCP 직접 연결 불가능하므로 WebSocket 사용
+ * FastAPI 서버가 MQTT를 구독하고 Firestore에 기록하므로
+ * 앱은 MQTT 클라이언트 없이 Firestore만 구독하면 됨.
  */
 
-import mqtt, { MqttClient } from 'mqtt';
+import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { useStore } from '../store';
-import { DiagnosisLevel } from './aiService';
 import { PostureType } from '../constants/types';
 
-const MQTT_URL  = 'wss://53ceba2180d1435eb327eff55f0bf860.s1.eu.hivemq.cloud:8884/mqtt';
-const MQTT_USER = 'esp32';
-const MQTT_PASS = 'Carefull123';
+let unsubscribe: Unsubscribe | null = null;
 
-// server severity → app DiagnosisLevel 매핑
-const SEVERITY_MAP: Record<string, DiagnosisLevel> = {
-  normal:  'normal',
-  warning: 'moderate',
-  severe:  'severe',
-};
+function todayDocId(userId: string): string {
+  const d = new Date();
+  const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  return `${userId}_${ymd}`;
+}
 
-let client: MqttClient | null = null;
-let currentDeviceId = '';
+export const startPostureListener = (deviceId: string, userId: string): void => {
+  stopPostureListener();
 
-export const startMqttListener = (deviceId: string): void => {
-  if (client) stopMqttListener();
-  currentDeviceId = deviceId;
+  const docId = todayDocId(userId);
+  const ref   = doc(db, 'daily_stats', docId);
 
-  useStore.getState().setDevice({ mqttStatus: 'connecting' });
+  useStore.getState().setDevice({ deviceId, mqttStatus: 'connected' });
 
-  client = mqtt.connect(MQTT_URL, {
-    username:        MQTT_USER,
-    password:        MQTT_PASS,
-    clientId:        `rn-${deviceId}-${Date.now()}`,
-    rejectUnauthorized: false,
-    reconnectPeriod: 5000,
-    connectTimeout:  15000,
-  });
+  unsubscribe = onSnapshot(ref, (snap) => {
+    if (!snap.exists()) return;
+    const data    = snap.data();
+    const summary = data.summary ?? {};
 
-  client.on('connect', () => {
-    console.log('[MQTT] 연결됨:', deviceId);
-    client!.subscribe(`posture/${deviceId}/result`);
-    client!.subscribe(`posture/${deviceId}/alert`);
-    useStore.getState().setDevice({ mqttStatus: 'connected' });
-  });
+    const score = summary.dailyScore ?? 0;
+    const angle = summary.avgAngle  ?? 0;
 
-  client.on('message', (topic: string, payload: Buffer) => {
-    try {
-      const data = JSON.parse(payload.toString());
-      const store = useStore.getState();
-
-      if (topic.endsWith('/result')) {
-        // diff_pitch 순서: [C7, T7, T3]
-        const [c7, t7, t3] = data.diff_pitch ?? [0, 0, 0];
-        store.updatePosture(
-          data.score ?? 0,
-          c7,
-          data.pose_en as PostureType,
-        );
-        store.setAngles({ c7, t7, t3 });
-        store.setDiagnosisLevel(SEVERITY_MAP[data.severity] ?? null);
-
-      } else if (topic.endsWith('/alert')) {
-        store.addNotification({
-          id:       `alert-${Date.now()}`,
-          category: 'posture',
-          title:    '자세 경고',
-          body:     `${data.pose_kr ?? '불량 자세'} 자세가 감지되었습니다.`,
-          timeAgo:  '방금',
-          read:     false,
-        });
-      }
-    } catch {}
-  });
-
-  client.on('error', (err) => {
-    console.warn('[MQTT] 에러:', err.message);
+    useStore.getState().updatePosture(score, angle);
+  }, () => {
     useStore.getState().setDevice({ mqttStatus: 'error' });
   });
-
-  client.on('close', () => {
-    useStore.getState().setDevice({ mqttStatus: 'disconnected' });
-  });
 };
 
-export const stopMqttListener = (): void => {
-  if (client) {
-    client.end(true);
-    client = null;
-    currentDeviceId = '';
-  }
+export const stopPostureListener = (): void => {
+  unsubscribe?.();
+  unsubscribe = null;
 };
 
-export const getMqttDeviceId = (): string => currentDeviceId;
+// AppNavigator에서 재연결 여부 판단용
+let currentDeviceId = '';
+export const setListenerDeviceId = (id: string) => { currentDeviceId = id; };
+export const getListenerDeviceId = (): string => currentDeviceId;
