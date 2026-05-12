@@ -59,7 +59,10 @@ export default function SplashScreen() {
           isGuest: false,
         });
         const hasBodyInfo = data?.bodyInfo?.height && data?.bodyInfo?.weight;
-        goTo(hasBodyInfo ? 'MainTabs' : 'InitBodyInfo');
+        if (!hasBodyInfo) { goTo('InitBodyInfo'); return; }
+        const hasDevice = !!useStore.getState().device.deviceId;
+        if (!hasDevice) { await signOut(auth); goTo('Login'); return; }
+        goTo('MainTabs');
       } catch {
         goTo('Login');
       }

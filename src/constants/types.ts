@@ -11,6 +11,7 @@ export interface User {
 
 // ─── Device / MQTT ────────────────────────────────
 export type MqttStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+export type PowerMode = 'on' | 'eco' | 'off';
 
 export interface DeviceState {
   deviceId: string | null;
@@ -18,6 +19,7 @@ export interface DeviceState {
   mqttStatus: MqttStatus;
   battery: number;           // 0-100
   powerOn: boolean;
+  powerMode: PowerMode;
   vibrationEnabled: boolean;
   vibrationIntensity: number; // 0-100
   sensorAngle: number;        // calibration angle

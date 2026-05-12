@@ -12,6 +12,7 @@ import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import type { AppNotification } from '../../constants/types';
 import { getNotifications, deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
 import { updateTargetScore } from '../../services/userService';
+import { connectToDevice, sendPowerMode } from '../../services/bleService';
 
 // ── SVG 아이콘 ────────────────────────────────────────
 function PersonIcon({ size = 22, color = COLORS.text }: { size?: number; color?: string }) {
@@ -740,7 +741,16 @@ export default function HomeScreen() {
           </View>
           <Toggle
             value={device.powerOn}
-            onToggle={(v) => setDevice({ powerOn: v })}
+            onToggle={async (v) => {
+              const mode = v ? 'on' : 'off';
+              setDevice({ powerOn: v, powerMode: mode });
+              if (device.bleDeviceId) {
+                try {
+                  const ble = await connectToDevice(device.bleDeviceId);
+                  await sendPowerMode(ble, mode);
+                } catch {}
+              }
+            }}
             activeColor={COLORS.primary}
           />
         </View>

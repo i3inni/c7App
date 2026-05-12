@@ -31,11 +31,13 @@ export default function WifiProvisionScreen() {
   const [password, setPassword]               = useState('');
   const [showPass, setShowPass]               = useState(false);
   const [status, setStatus]                   = useState<Status>('scanning');
-  const [currentSsid, setCurrentSsid]         = useState<string | null>(null);
+  const [currentSsid, setCurrentSsid]         = useState<string | null>(useStore.getState().device.connectedSsid);
   const selectedRef = useRef('');
 
   useEffect(() => {
     console.log('[WiFi] 화면 마운트, mode:', mode, 'device:', device.id);
+
+    triggerWifiScan(device).catch(() => {});
 
     const unsubList = subscribeWifiList(device, (networks) => {
       console.log('[WiFi] 목록 수신:', networks.map(n => `${n.ssid}(${n.secured ? '잠김' : '열림'})`).join(', '));

@@ -94,6 +94,7 @@ export const useStore = create<AppState>()(
         mqttStatus: 'idle',
         battery: 0,
         powerOn: true,
+        powerMode: 'on' as const,
         vibrationEnabled: true,
         vibrationIntensity: 66,
         sensorAngle: 30,
@@ -121,7 +122,11 @@ export const useStore = create<AppState>()(
 
       // Auth
       setUser: (user) => set({ user, isLoggedIn: !!user }),
-      logout: () => set({ user: null, isLoggedIn: false }),
+      logout: () => set((s) => ({
+        user: null,
+        isLoggedIn: false,
+        device: { ...s.device, deviceId: null, bleDeviceId: null, mqttStatus: 'idle', connectedSsid: null },
+      })),
       updateUser: (partial) =>
         set((s) => ({ user: s.user ? { ...s.user, ...partial } : null })),
 

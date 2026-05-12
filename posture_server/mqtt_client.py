@@ -29,7 +29,7 @@ import aiomqtt
 from dotenv import load_dotenv
 
 from sensor_buffer import SensorBuffer
-from posture_engine import ml, run_inference, apply_calibration, compute_score
+from posture_engine import ml, run_inference, apply_calibration
 from firestore_writer import (
     update_daily_stats,
     on_alert_started,
@@ -92,7 +92,7 @@ async def _handle_complete_frame(
     key = (device_id, user_id)
     prev_sev  = _prev_severity.get(key, "normal")
     result    = run_inference(device_id, user_id, p, r)
-    score     = compute_score(result["severity"], result["diff_pitch"][0])
+    score     = result["score"]
     angle     = result["diff_pitch"][0]
     is_bad    = result["is_bad_posture"]
     corrected = (prev_sev != "normal") and (result["severity"] == "normal")

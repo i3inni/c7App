@@ -19,6 +19,7 @@ export const C7_WIFI_LIST_CHAR_UUID   = 'BEB54840-36E1-4688-B7F5-EA07361B26A8';
 export const C7_WIFI_CRED_CHAR_UUID   = 'BEB54841-36E1-4688-B7F5-EA07361B26A8';
 export const C7_WIFI_STATUS_CHAR_UUID = 'BEB54842-36E1-4688-B7F5-EA07361B26A8';
 export const C7_WIFI_SCAN_CHAR_UUID   = 'BEB54843-36E1-4688-B7F5-EA07361B26A8';
+export const C7_POWER_CHAR_UUID       = 'BEB54844-36E1-4688-B7F5-EA07361B26A8';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface PostureFrame {
@@ -257,10 +258,47 @@ export const triggerWifiScan = async (device: Device): Promise<void> => {
   );
 };
 
+export interface PowerStatus {
+  mode: 'on' | 'eco' | 'off';
+  cpu: number;
+  interval: number;
+}
+
+export const sendPowerMode = async (
+  device: Device,
+  mode: 'on' | 'eco' | 'off',
+): Promise<void> => {
+  await device.writeCharacteristicWithResponseForService(
+    C7_SERVICE_UUID,
+    C7_POWER_CHAR_UUID,
+    strToBase64(mode),
+  );
+};
+
+export const subscribePowerStatus = (
+  device: Device,
+  onStatus: (status: PowerStatus) => void,
+): (() => void) => {
+  const sub = device.monitorCharacteristicForService(
+    C7_SERVICE_UUID,
+    C7_POWER_CHAR_UUID,
+    (err, char) => {
+      if (err || !char?.value) return;
+      try {
+        const json = Array.from(toByteArray(char.value))
+          .map(b => String.fromCharCode(b)).join('');
+        const data = JSON.parse(json);
+        if (data.mode && data.cpu && data.interval) onStatus(data as PowerStatus);
+      } catch {}
+    }
+  );
+  return () => sub.remove();
+};
+
 export const sendDisconnectCommand = async (device: Device): Promise<void> => {
   await device.writeCharacteristicWithResponseForService(
     C7_SERVICE_UUID,
     C7_WIFI_SCAN_CHAR_UUID,
-    strToBase64(JSON.stringify({ cmd: 'disconnect' })),
+    strToBase64('disconnect'),
   );
 };

@@ -14,6 +14,7 @@ import Input from '../../components/common/Input';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import { updateNotificationSettings, updateBodyInfo } from '../../services/userService';
 import { logout as authLogout, changePassword, deleteAccount } from '../../services/authService';
+import { connectToDevice, sendPowerMode } from '../../services/bleService';
 import { clearAllStats } from '../../services/statsService';
 import { clearNotifications } from '../../services/notificationService';
 
@@ -221,6 +222,12 @@ export function MyInfoScreen() {
         confirmVariant="dark"
         onConfirm={async () => {
           try {
+            if (device.bleDeviceId) {
+              try {
+                const ble = await connectToDevice(device.bleDeviceId);
+                await sendPowerMode(ble, 'ble_off' as any);
+              } catch {}
+            }
             await authLogout();
             logout();
             setShowLogout(false);

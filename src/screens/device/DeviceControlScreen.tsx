@@ -15,7 +15,8 @@ import Toggle from "../../components/common/Toggle";
 import ConfirmModal from "../../components/common/ConfirmModal";
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from "../../constants/theme";
 import { saveDeviceSettings, updateDeviceConnection } from '../../services/deviceService';
-import { connectToDevice } from '../../services/bleService';
+import { connectToDevice, sendPowerMode, subscribePowerStatus, PowerStatus } from '../../services/bleService';
+import { PowerMode } from '../../constants/types';
 
 type Tab = "battery" | "power" | "sensor" | "vibration";
 
@@ -330,6 +331,8 @@ export default function DeviceControlScreen() {
   const [showDisconnect, setShowDisconnect] = useState(false);
   const [sensorAngle, setSensorAngle] = useState(device.sensorAngle);
   const [vibIntensity, setVibIntensity] = useState(device.vibrationIntensity);
+  const [powerSending, setPowerSending] = useState(false);
+  const [powerFeedback, setPowerFeedback] = useState<{ cpu: number; interval: number } | null>(null);
 
   // 전원 꺼지면 센서/진동 탭에서 자동으로 전원 탭으로 이동
   useEffect(() => {
@@ -337,6 +340,28 @@ export default function DeviceControlScreen() {
       setActiveTab('power');
     }
   }, [device.powerOn]);
+
+  const handlePowerMode = async (mode: PowerMode) => {
+    if (!device.bleDeviceId || powerSending) return;
+    setPowerSending(true);
+    setPowerFeedback(null);
+    try {
+      const connected = await connectToDevice(device.bleDeviceId);
+      const unsub = subscribePowerStatus(connected, (status: PowerStatus) => {
+        unsub();
+        setPowerFeedback({ cpu: status.cpu, interval: status.interval });
+        saveDevice({
+          powerMode: status.mode,
+          powerOn: status.mode !== 'off',
+          powerSaveMode: status.mode === 'eco',
+        });
+        setPowerSending(false);
+      });
+      await sendPowerMode(connected, mode);
+    } catch {
+      setPowerSending(false);
+    }
+  };
 
   const handleChangeWifi = async () => {
     if (!device.bleDeviceId) {
@@ -467,22 +492,51 @@ export default function DeviceControlScreen() {
           {activeTab === "power" && (
             <>
               <Text style={styles.cardTitle}>전원 관리</Text>
-              <Text style={styles.cardSub}>디바이스 on/off 제어</Text>
-              <View style={styles.rowItem}>
-                <Text style={styles.rowLabel}>디바이스 전원</Text>
-                <Toggle
-                  value={device.powerOn}
-                  onToggle={(v) => saveDevice({ powerOn: v })}
-                  activeColor="#3B82F6"
-                />
+              <Text style={styles.cardSub}>디바이스 모드 제어</Text>
+              <View style={styles.powerModeRow}>
+                {([
+                  { mode: 'on'  as PowerMode, label: '일반', desc: '5초 / 240MHz', color: '#3B82F6' },
+                  { mode: 'eco' as PowerMode, label: '절전', desc: '15초 / 80MHz', color: COLORS.primary },
+                  { mode: 'off' as PowerMode, label: '끄기', desc: '전송 중단',    color: COLORS.accent },
+                ] as const).map(({ mode, label, desc, color }) => {
+                  const isActive = device.powerMode === mode;
+                  return (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[styles.powerModeBtn, isActive && { borderColor: color, backgroundColor: color + '15' }]}
+                      onPress={() => handlePowerMode(mode)}
+                      disabled={powerSending}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.powerModeBtnLabel, isActive && { color }]}>{label}</Text>
+                      <Text style={styles.powerModeBtnDesc}>{desc}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-              <View style={styles.powerNote}>
-                <Text style={styles.powerNoteText}>
-                  {device.powerOn
-                    ? '↓ 디바이스 셧다운 시 모든 센서와 모듈 동작이 종료됩니다'
-                    : '디바이스가 꺼진 상태입니다. 전원을 켜서 측정을 시작하세요.'}
-                </Text>
-              </View>
+              {powerSending && (
+                <View style={styles.powerNote}>
+                  <Text style={styles.powerNoteText}>ESP32에 명령 전송 중...</Text>
+                </View>
+              )}
+              {powerFeedback && !powerSending && (
+                <View style={styles.powerNote}>
+                  <Text style={styles.powerNoteText}>
+                    적용됨 — CPU {powerFeedback.cpu}MHz / {powerFeedback.interval}초 간격
+                  </Text>
+                </View>
+              )}
+              {!powerSending && !powerFeedback && (
+                <View style={styles.powerNote}>
+                  <Text style={styles.powerNoteText}>
+                    {device.powerMode === 'off'
+                      ? '데이터 전송이 중단된 상태입니다.'
+                      : device.powerMode === 'eco'
+                      ? '절전 모드: 배터리를 아끼며 측정 중입니다.'
+                      : '일반 모드: 실시간 자세 측정 중입니다.'}
+                  </Text>
+                </View>
+              )}
             </>
           )}
 
@@ -843,6 +897,31 @@ const styles = StyleSheet.create({
   tabTextActive: { color: COLORS.text },
   tabItemDisabled: { opacity: 0.35 },
   tabTextDisabled: { color: COLORS.textMuted },
+
+  powerModeRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.base,
+  },
+  powerModeBtn: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.base,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  powerModeBtnLabel: {
+    fontSize: FONTS.sizes.base,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  powerModeBtnDesc: {
+    fontSize: FONTS.sizes.xs,
+    color: COLORS.textMuted,
+  },
 
   wifiCard: {
     backgroundColor: '#fff',
