@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -80,21 +80,33 @@ function TabIcon({ name, color, size = 22 }: { name: string; color: string; size
 
 function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const powerOn = useStore(s => s.device.powerOn);
   return (
     <View style={[tabStyles.container, { paddingBottom: insets.bottom + 8 }]}>
       {state.routes.map((route, index: number) => {
         const focused = state.index === index;
-        const color = focused ? COLORS.accent : COLORS.textMuted;
+        const isConfigDisabled = route.name === 'CONFIG' && !powerOn;
+        const color = isConfigDisabled
+          ? '#C9CFD8'
+          : focused
+            ? COLORS.accent
+            : COLORS.textMuted;
 
         return (
           <TouchableOpacity
             key={route.key}
             style={tabStyles.tab}
-            onPress={() => navigation.navigate(route.name)}
+            onPress={() => {
+              if (isConfigDisabled) {
+                Alert.alert('전원 꺼짐', '기기 전원이 꺼져 있어 CONFIG 탭에 들어갈 수 없습니다.');
+                return;
+              }
+              navigation.navigate(route.name);
+            }}
             activeOpacity={0.7}
           >
             <TabIcon name={route.name} color={color} size={22} />
-            <Text style={[tabStyles.label, focused && tabStyles.labelActive]}>
+            <Text style={[tabStyles.label, focused && !isConfigDisabled && tabStyles.labelActive, isConfigDisabled && tabStyles.labelDisabled]}>
               {route.name}
             </Text>
           </TouchableOpacity>
@@ -116,6 +128,7 @@ const tabStyles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', paddingVertical: 4 },
   label: { fontSize: 10, color: COLORS.textMuted, fontWeight: '600', marginTop: 3 },
   labelActive: { color: COLORS.accent },
+  labelDisabled: { color: '#C9CFD8' },
 });
 
 // ── 메인 탭 ──────────────────────────────────────────

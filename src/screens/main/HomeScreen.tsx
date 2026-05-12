@@ -42,6 +42,47 @@ function BellIcon({ size = 22, color = COLORS.text }: { size?: number; color?: s
   );
 }
 
+function WifiStatusIcon({
+  size = 18,
+  active = false,
+}: {
+  size?: number;
+  active?: boolean;
+}) {
+  const color = active ? COLORS.primary : '#C0C8D0';
+  const opacity = active ? 1 : 0.55;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" opacity={opacity}>
+      <Path d="M2 8.5C7.5 4 16.5 4 22 8.5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <Path d="M5 12c4-3 10-3 14 0" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <Path d="M8.5 15.5c2-1.5 5-1.5 7 0" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <Circle cx="12" cy="19" r="1.6" fill={color} />
+    </Svg>
+  );
+}
+
+function BluetoothStatusIcon({
+  size = 18,
+  active = false,
+}: {
+  size?: number;
+  active?: boolean;
+}) {
+  const color = active ? COLORS.primary : '#C0C8D0';
+  const opacity = active ? 1 : 0.55;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" opacity={opacity}>
+      <Path
+        d="M12 3v18l6-5-4.5-4L18 8l-6-5Zm0 9-6-5m6 5-6 5"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 // ── 배터리 인디케이터 ──────────────────────────────────
 function BatteryIndicator({ level }: { level: number }) {
   const W = 30;
@@ -637,6 +678,8 @@ export default function HomeScreen() {
   const color = hasData ? (levelColor[currentLevel] ?? COLORS.textSecondary) : COLORS.textMuted;
   const unread = notifications.filter(n => !n.read).length;
   const isConnected = device.mqttStatus === 'connected';
+  const isBleConnected = device.bleConnected;
+  const isWifiConnected = device.wifiConnected || isConnected;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -650,12 +693,6 @@ export default function HomeScreen() {
 
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{user?.nickname ?? '사용자'} 님</Text>
-            <View style={styles.connRow}>
-              <View style={[styles.connDot, { backgroundColor: isConnected ? COLORS.connected : COLORS.disconnected }]} />
-              <Text style={[styles.connText, { color: isConnected ? COLORS.connected : COLORS.disconnected }]}>
-                {isConnected ? 'CONNECTED' : 'DISCONNECTED'}
-              </Text>
-            </View>
           </View>
 
           <TouchableOpacity onPress={() => setShowNotif(true)} style={styles.bellBtn}>
@@ -672,6 +709,10 @@ export default function HomeScreen() {
         <View style={styles.realtimeRow}>
           <View style={styles.realDot} />
           <Text style={styles.realtimeLabel}>REAL-TIME VISUAL</Text>
+          <View style={styles.statusIcons}>
+            <BluetoothStatusIcon active={isBleConnected} />
+            <WifiStatusIcon active={isWifiConnected} />
+          </View>
           <BatteryIndicator level={device.battery} />
         </View>
 
@@ -781,9 +822,6 @@ const styles = StyleSheet.create({
   },
   userInfo: { flex: 1, marginLeft: SPACING.sm, alignItems: 'center' },
   userName: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
-  connRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  connDot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
-  connText: { fontSize: FONTS.sizes.xs, fontWeight: '700', letterSpacing: 0.5 },
   bellBtn: {
     width: 40, height: 40, borderRadius: 12,
     backgroundColor: '#fff',
@@ -811,6 +849,12 @@ const styles = StyleSheet.create({
   },
   realDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.accent, marginRight: 6 },
   realtimeLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, fontWeight: '600', flex: 1, letterSpacing: 0.5 },
+  statusIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginRight: 10,
+  },
 
   // 게이지 섹션
   gaugeSection: { alignItems: 'center', paddingHorizontal: SPACING.base },

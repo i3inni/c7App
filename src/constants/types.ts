@@ -16,6 +16,8 @@ export type PowerMode = 'on' | 'eco' | 'off';
 export interface DeviceState {
   deviceId: string | null;
   bleDeviceId: string | null;  // BLE 연결용 peripheral ID
+  bleConnected: boolean;
+  wifiConnected: boolean;
   mqttStatus: MqttStatus;
   battery: number;           // 0-100
   powerOn: boolean;

@@ -91,6 +91,8 @@ export const useStore = create<AppState>()(
       device: {
         deviceId: null,
         bleDeviceId: null,
+        bleConnected: false,
+        wifiConnected: false,
         mqttStatus: 'idle',
         battery: 0,
         powerOn: true,
@@ -125,7 +127,15 @@ export const useStore = create<AppState>()(
       logout: () => set((s) => ({
         user: null,
         isLoggedIn: false,
-        device: { ...s.device, deviceId: null, bleDeviceId: null, mqttStatus: 'idle', connectedSsid: null },
+        device: {
+          ...s.device,
+          deviceId: null,
+          bleDeviceId: null,
+          bleConnected: false,
+          wifiConnected: false,
+          mqttStatus: 'idle',
+          connectedSsid: null,
+        },
       })),
       updateUser: (partial) =>
         set((s) => ({ user: s.user ? { ...s.user, ...partial } : null })),
@@ -196,7 +206,7 @@ export const useStore = create<AppState>()(
       onRehydrateStorage: () => (state) => {
         if (state) {
           // 앱 재시작 시 MQTT 연결 상태는 초기화 (기기 설정값은 유지)
-          state.device = { ...state.device, mqttStatus: 'idle' };
+          state.device = { ...state.device, mqttStatus: 'idle', bleConnected: false };
         }
       },
     }

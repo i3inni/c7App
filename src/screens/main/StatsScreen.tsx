@@ -13,6 +13,48 @@ import { getTodayStats, getWeeklyStats } from '../../services/statsService';
 
 const { width } = Dimensions.get('window');
 
+function getLocalOffsetHours(): number {
+  return -new Date().getTimezoneOffset() / 60;
+}
+
+function formatKoreanHour(hour: number): string {
+  const period = hour < 12 ? '오전' : '오후';
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${period} ${displayHour}`;
+}
+
+function parseHourlyBucket(key: string): { start: number; end: number } | null {
+  const match = key.match(/^(\d{2})_(\d{2})$/);
+  if (!match) return null;
+  return { start: Number(match[1]), end: Number(match[2]) };
+}
+
+function formatHourlyBucketToKst(key: string): string {
+  const bucket = parseHourlyBucket(key);
+  if (!bucket) return key;
+  const offset = getLocalOffsetHours();
+  const start = (bucket.start + offset + 24) % 24;
+  const end = (bucket.end + offset + 24) % 24;
+  return `${formatKoreanHour(start)}-${formatKoreanHour(end)}시`;
+}
+
+function getHourlyBucketSortKey(key: string): number {
+  const bucket = parseHourlyBucket(key);
+  if (!bucket) return 999;
+  const offset = getLocalOffsetHours();
+  return (bucket.start + offset + 24) % 24;
+}
+
+function formatTimeToKst(time: string): string {
+  const match = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return time;
+  const hour = Number(match[1]);
+  const minute = match[2];
+  const offset = getLocalOffsetHours();
+  const localHour = (hour + offset + 24) % 24;
+  return `${String(localHour).padStart(2, '0')}:${minute}`;
+}
+
 // ── 미니 라인 차트 ───────────────────────────────────
 function LineChart({
   data, targetScore, width: W, height: H,
@@ -61,15 +103,14 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
   const insets = useSafeAreaInsets();
   if (!todayStats || !todayStats.summary) return null;
 
-  const hourlyLabels: Record<string, string> = {
-    '09_12': '오전 9-12시',
-    '12_15': '오후 12-3시',
-    '15_18': '오후 3-6시',
-    '18_21': '오후 6-9시',
-  };
-  const hourlyData = Object.entries(hourlyLabels)
-    .map(([key, label]) => ({ label, score: todayStats.hourlyScores?.[key] ?? 0 }))
-    .filter(h => h.score > 0);
+  const hourlyData = Object.entries(todayStats.hourlyScores ?? {})
+    .map(([key, score]) => ({
+      label: formatHourlyBucketToKst(key),
+      score,
+      sortKey: getHourlyBucketSortKey(key),
+    }))
+    .filter(h => h.score > 0)
+    .sort((a, b) => a.sortKey - b.sortKey);
 
   return (
     <Modal visible={visible} animationType="slide">
@@ -123,7 +164,9 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
                 <View key={i} style={[dtStyles.badCard, { backgroundColor: isDanger ? '#FFF0F3' : '#FFF7EC' }]}>
                   <View style={dtStyles.badLeft}>
                     <Icon name="clock" size={14} color={isDanger ? COLORS.accent : COLORS.warning} />
-                    <Text style={[dtStyles.badTime, { color: isDanger ? COLORS.accent : COLORS.warning }]}>{b.time}</Text>
+                    <Text style={[dtStyles.badTime, { color: isDanger ? COLORS.accent : COLORS.warning }]}>
+                      {formatTimeToKst(b.time)}
+                    </Text>
                   </View>
                   <Text style={dtStyles.badDetail}>각도: {b.angle}°    지속시간: {b.duration}</Text>
                   <View style={[dtStyles.levelBadge, { backgroundColor: isDanger ? COLORS.accent : COLORS.warning }]}>

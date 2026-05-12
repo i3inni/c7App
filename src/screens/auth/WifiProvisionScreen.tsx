@@ -53,14 +53,14 @@ export default function WifiProvisionScreen() {
       if (event.type === 'connected') {
         // BLE 연결 시 ESP32가 현재 연결 상태 전송
         setCurrentSsid(event.ssid);
-        setDevice({ connectedSsid: event.ssid });
+        setDevice({ connectedSsid: event.ssid, wifiConnected: true });
         if (status === 'scanning') setStatus('idle');
         return;
       }
 
       if (event.type === 'disconnected') {
         setCurrentSsid(null);
-        setDevice({ connectedSsid: undefined, mqttStatus: 'disconnected' });
+        setDevice({ connectedSsid: null, wifiConnected: false, mqttStatus: 'disconnected' });
         stopPostureListener();
         setStatus('idle');
         return;
@@ -85,6 +85,7 @@ export default function WifiProvisionScreen() {
         }
         setDevice({
           connectedSsid: selectedRef.current,
+          wifiConnected: true,
           ...(deviceId ? { deviceId } : {}),
         });
         setCurrentSsid(selectedRef.current);
@@ -104,6 +105,7 @@ export default function WifiProvisionScreen() {
       }
 
       if (event.type === 'fail') {
+        setDevice({ wifiConnected: false });
         setStatus('fail');
       }
     });

@@ -1,6 +1,7 @@
 import { BleManager, Device, BleError } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { toByteArray, fromByteArray } from 'base64-js';
+import { useStore } from '../store';
 
 // ─── C7AI BLE UUID (esp32/main.ino 과 반드시 일치) ───────────────────────────
 export const C7_SERVICE_UUID     = '4FAFC201-1FB5-459E-8FCC-C5C9C331914B';
@@ -35,6 +36,15 @@ export interface WifiNetwork {
 }
 
 const manager = new BleManager();
+const disconnectSubscriptions = new Map<string, { remove: () => void }>();
+
+const watchDisconnection = (deviceId: string) => {
+  disconnectSubscriptions.get(deviceId)?.remove();
+  const sub = manager.onDeviceDisconnected(deviceId, () => {
+    useStore.getState().setDevice({ bleConnected: false });
+  });
+  if (sub) disconnectSubscriptions.set(deviceId, sub);
+};
 
 // 안드로이드 블루투스 권한 요청
 export const requestBluetoothPermissions = async (): Promise<boolean> => {
@@ -73,11 +83,16 @@ export const stopScan = () => {
 export const connectToDevice = async (deviceId: string): Promise<Device> => {
   const device = await manager.connectToDevice(deviceId, { requestMTU: 512 });
   await device.discoverAllServicesAndCharacteristics();
+  useStore.getState().setDevice({ bleConnected: true });
+  watchDisconnection(deviceId);
   return device;
 };
 
 export const disconnectDevice = async (deviceId: string) => {
   await manager.cancelDeviceConnection(deviceId);
+  disconnectSubscriptions.get(deviceId)?.remove();
+  disconnectSubscriptions.delete(deviceId);
+  useStore.getState().setDevice({ bleConnected: false });
 };
 
 /**
