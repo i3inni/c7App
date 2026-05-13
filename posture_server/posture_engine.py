@@ -15,9 +15,9 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Literal, Dict, Optional
 
-from features import build_features
+from features import SENSORS, build_features, validate_sensor_order
 
-SENSORS = ["C7", "T7", "T3"]
+validate_sensor_order(SENSORS, "posture_engine")
 
 POSE_META = {
     "normal":       {"kr": "바른 자세",       "is_bad": False},

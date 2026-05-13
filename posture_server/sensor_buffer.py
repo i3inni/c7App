@@ -10,10 +10,13 @@ ESP32 전송 순서:            C7 → T3 → T7  (i=0,1,2)
 import time
 from dataclasses import dataclass, field
 
+from features import SENSORS, validate_sensor_order
+
 SENSOR_TIMEOUT = 2.0  # 이 시간 안에 3개가 안 모이면 버퍼 초기화
 
 # 서버(posture_engine)가 기대하는 순서
-_ORDER = ["C7", "T3", "T7"]
+validate_sensor_order(SENSORS, "sensor_buffer")
+_ORDER = SENSORS
 
 
 @dataclass
@@ -27,7 +30,7 @@ class SensorBuffer:
 
     @property
     def is_complete(self) -> bool:
-        return all(s in self._data for s in ("C7", "T3", "T7"))
+        return all(s in self._data for s in _ORDER)
 
     @property
     def is_expired(self) -> bool:

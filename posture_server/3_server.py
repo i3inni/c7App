@@ -6,7 +6,7 @@
   userId   = guest UUID 또는 Firebase UID — 사용자 식별
   → 동일 기기를 여러 사용자가 사용해도 캘리브레이션/통계 분리
 
-센서: C7 / T7 / T3 (3개, pitch + roll)
+센서: C7 / T3 / T7 (3개, pitch + roll)
 영점: 벽 캘리브레이션 (POST /calibrate) → Firestore 영속화
 판단: AI 분류 + 개인화 threshold (BMI + 연령 + 현재 자세 상태)
 알림: 50샘플 rolling window
@@ -79,7 +79,7 @@ class CalibrateRequest(BaseModel):
     @classmethod
     def check_len(cls, v):
         if len(v) != 3:
-            raise ValueError("센서값 3개 필요 [C7, T7, T3]")
+            raise ValueError("센서값 3개 필요 [C7, T3, T7]")
         return v
 
     @field_validator("mac")
@@ -135,7 +135,7 @@ class DataRequest(BaseModel):
     @classmethod
     def check_len(cls, v):
         if len(v) != 3:
-            raise ValueError("센서값 3개 필요 [C7, T7, T3]")
+            raise ValueError("센서값 3개 필요 [C7, T3, T7]")
         return v
 
 
@@ -212,7 +212,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="C7AI 자세 추정 API",
-    description="C7/T7/T3 | 벽 캘리브레이션 | BMI+연령+자세상태 | MQTT | deviceId+userId 분리 식별",
+    description="C7/T3/T7 | 벽 캘리브레이션 | BMI+연령+자세상태 | MQTT | deviceId+userId 분리 식별",
     version="9.0.0",
     lifespan=lifespan,
 )
@@ -415,7 +415,7 @@ if __name__ == "__main__":
     print(" C7AI 자세 추정 서버 v9")
     print(" deviceId(MAC) + userId(guest/Firebase) 분리 식별")
     print(" MQTT: posture/+/raw 구독 | result/alert publish")
-    print(" 센서: C7 / T7 / T3")
+    print(" 센서: C7 / T3 / T7")
     print("=" * 60 + "\n")
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port, reload=False)

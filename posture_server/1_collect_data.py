@@ -22,6 +22,7 @@ import aiomqtt
 import numpy as np
 from dotenv import load_dotenv
 
+from features import RAW_FEATURE_COLS, SENSORS, validate_sensor_order
 from sensor_buffer import SensorBuffer
 
 load_dotenv()
@@ -30,9 +31,8 @@ load_dotenv()
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 CSV_PATH = os.path.join(DATA_DIR, "training_data.csv")
 
-SENSORS      = ["C7", "T3", "T7"]
-FEATURE_COLS = [f"diff_{s}_{ax}" for s in SENSORS for ax in ("pitch", "roll")]
-CSV_HEADER   = FEATURE_COLS + ["label"]
+validate_sensor_order(SENSORS, "1_collect_data")
+CSV_HEADER   = RAW_FEATURE_COLS + ["label"]
 
 SAMPLES_PER_POSE = 500   # 자세당 500샘플 (~50초, 10Hz 기준)
 CALIBRATE_N      = 30    # baseline 평균 프레임 수 (~3초)
@@ -86,7 +86,7 @@ async def _run_listener(queue: asyncio.Queue, stop: asyncio.Event) -> None:
                 device_id = str(msg.topic).split("/")[1]
                 data      = json.loads(msg.payload)
                 sensor    = data.get("sensor", "")
-                if sensor not in ("C7", "T3", "T7"):
+                if sensor not in SENSORS:
                     continue
 
                 buf = buffers.setdefault(device_id, SensorBuffer())

@@ -9,7 +9,9 @@ feature 정의 및 생성 공용 모듈.
 
 import math
 
-SENSORS = ["C7", "T3", "T7"]
+SENSOR_ORDER = ("C7", "T3", "T7")
+SENSORS = list(SENSOR_ORDER)
+SENSOR_COUNT = len(SENSOR_ORDER)
 
 # Firestore / CSV 저장용 (raw만)
 RAW_FEATURE_COLS = [f"diff_{s}_{ax}" for s in SENSORS for ax in ("pitch", "roll")]
@@ -25,6 +27,17 @@ DERIVED_FEATURE_COLS = [
 
 # 모델 학습 / 추론용 (raw + 파생)
 FEATURE_COLS = RAW_FEATURE_COLS + DERIVED_FEATURE_COLS
+
+
+def validate_sensor_order(sensors: list[str] | tuple[str, ...], context: str = "") -> None:
+    """프로젝트 전체에서 센서 순서를 C7 -> T3 -> T7로 강제합니다."""
+    expected = list(SENSOR_ORDER)
+    actual = list(sensors)
+    if actual != expected:
+        prefix = f"{context}: " if context else ""
+        raise ValueError(
+            f"{prefix}센서 순서 불일치. expected={expected}, actual={actual}"
+        )
 
 
 def build_features(dp: list[float], dr: list[float]) -> list[float]:
