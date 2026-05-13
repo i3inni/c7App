@@ -31,6 +31,7 @@ CURRENT_SCALER_PATH = os.path.join(BASE_DIR, "models", "current",  "scaler.pkl")
 DEFAULT_MODEL_PATH  = os.path.join(BASE_DIR, "models", "default",  "posture_model.pkl")
 DEFAULT_SCALER_PATH = os.path.join(BASE_DIR, "models", "default",  "scaler.pkl")
 REJECTED_DIR        = os.path.join(BASE_DIR, "models", "rejected")
+CSV_PATH            = os.path.join(BASE_DIR, "data",   "training_data.csv")
 
 BAD_CLASSES = ["forward_head", "kyphosis", "lateral_tilt"]
 
@@ -87,9 +88,30 @@ def _save_rejected(model, scaler) -> None:
     joblib.dump(scaler, os.path.join(REJECTED_DIR, f"scaler_{ts}.pkl"))
 
 
+def _load_csv_rows() -> list[dict]:
+    """default CSV를 dict 리스트로 로드합니다."""
+    if not os.path.exists(CSV_PATH):
+        print(f"⚠️  CSV 없음 ({CSV_PATH}) — Firestore 데이터만 사용")
+        return []
+    df = pd.read_csv(CSV_PATH)
+    # CSV 컬럼이 RAW_FEATURE_COLS 순서와 다를 수 있으므로 컬럼명 기준으로 선택
+    available = [c for c in RAW_FEATURE_COLS if c in df.columns]
+    if len(available) < len(RAW_FEATURE_COLS) or "label" not in df.columns:
+        print("⚠️  CSV 컬럼 불일치 — CSV 제외")
+        return []
+    rows = df[available + ["label"]].to_dict(orient="records")
+    print(f"📂 CSV 로드: {len(rows)}행")
+    return rows
+
+
 def _train_sync(rows: list[dict]) -> dict:
     """동기 학습 + A/B 비교 + 조건부 승격."""
-    df = pd.DataFrame(rows)
+    # CSV(default 기준점) + Firestore(guided/auto) 합치기
+    csv_rows = _load_csv_rows()
+    all_rows = csv_rows + rows
+    print(f"📊 학습셋: CSV {len(csv_rows)}개 + Firestore {len(rows)}개 = 총 {len(all_rows)}개")
+
+    df = pd.DataFrame(all_rows)
 
     # 유효 클래스 필터
     counts = df["label"].value_counts()
@@ -103,7 +125,6 @@ def _train_sync(rows: list[dict]) -> dict:
         raise ValueError(f"클래스 불균형 {PROMOTE_MAX_CLASS_IMBALANCE}:1 초과 — 데이터 보강 필요")
 
     # raw 6개 → 파생 포함 11개로 확장
-    import numpy as np
     raw_matrix = df[RAW_FEATURE_COLS].values
     X = np.array([features_from_raw(row.tolist()) for row in raw_matrix])
     y = df["label"].values
