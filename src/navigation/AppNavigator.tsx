@@ -29,8 +29,9 @@ import {
 
 import { COLORS } from '../constants/theme';
 import { useStore } from '../store';
-import { startPostureListener, getListenerDeviceId } from '../services/mqttService';
-import { connectToDevice, sendUserId } from '../services/bleService';
+import { startPostureListener, getListenerDeviceId, stopPostureListener } from '../services/mqttService';
+import { connectToDevice, sendUserId, subscribeWifiStatus } from '../services/bleService';
+import { initConnectionNotifications } from '../services/connectionNotificationService';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import '../navigation/types'; // 전역 RootParamList 등록
 
@@ -137,6 +138,7 @@ function MainTabs() {
   const deviceId    = useStore(s => s.device.deviceId);
   const bleDeviceId = useStore(s => s.device.bleDeviceId);
   const userId      = useStore(s => s.user?.id);
+  const setDevice   = useStore(s => s.setDevice);
 
   // 앱 재시작 후 Firestore 리스너 재연결
   useEffect(() => {
@@ -149,15 +151,37 @@ function MainTabs() {
   useEffect(() => {
     if (!bleDeviceId || !userId) return;
     let cancelled = false;
+    let unsubWifiStatus: (() => void) | null = null;
     (async () => {
       try {
         const ble = await connectToDevice(bleDeviceId);
         if (cancelled) return;
         await sendUserId(ble, userId);
+        unsubWifiStatus = subscribeWifiStatus(ble, (event) => {
+          if (event.type === 'connected') {
+            setDevice({ connectedSsid: event.ssid, wifiConnected: true });
+            return;
+          }
+          if (event.type === 'disconnected') {
+            setDevice({ connectedSsid: null, wifiConnected: false, mqttStatus: 'disconnected' });
+            stopPostureListener();
+            return;
+          }
+          if (event.type === 'success') {
+            setDevice({ wifiConnected: true });
+            return;
+          }
+          if (event.type === 'fail') {
+            setDevice({ wifiConnected: false, connectedSsid: null });
+          }
+        });
       } catch {}
     })();
-    return () => { cancelled = true; };
-  }, [bleDeviceId, userId]);
+    return () => {
+      cancelled = true;
+      unsubWifiStatus?.();
+    };
+  }, [bleDeviceId, userId, setDevice]);
 
   return (
     <Tab.Navigator
@@ -174,6 +198,10 @@ function MainTabs() {
 
 // ── 루트 스택 ─────────────────────────────────────────
 export default function AppNavigator() {
+  useEffect(() => {
+    initConnectionNotifications();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <NavigationContainer>

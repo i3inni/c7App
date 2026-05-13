@@ -11,7 +11,7 @@ import { useStore } from '../../store';
 import { COLORS, FONTS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import {
   analyzeExercises, analyzeWeeklyReport, analyzeDiagnosis,
-  classifyLevel, levelToMeta,
+  classifyLevel,
   ExerciseStep, WeeklyReport, LLMDiagnosis,
 } from '../../services/aiService';
 
@@ -49,11 +49,7 @@ export default function AIScreen() {
   const nextExMs = lastExercisesAt ? Math.max(0, EXERCISE_INTERVAL - (now - lastExercisesAt)) : 0;
   const nextExMin = Math.floor(nextExMs / (60 * 1000));
 
-  // 레벨/배지: ML 모델 출력 우선, 없으면 각도 기반 폴백
   const level = currentDiagnosisLevel ?? classifyLevel(currentAngle);
-  // 표시용 레벨: 마지막 진단 결과 고정 (실시간 각도 변화에 흔들리지 않음)
-  const displayLevel = level;
-  const { levelText, badgeText, badgeColor, warningIconName, warningIconColor } = levelToMeta(displayLevel);
 
   const [activeStep, setActiveStep] = useState<Step>(1);
 
@@ -149,36 +145,14 @@ export default function AIScreen() {
           </View>
         </View>
 
-        {/* 오늘의 진단 결과 */}
+        {/* AI 진단 받기 */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Icon name="clipboard" size={16} color={COLORS.text} />
-            <Text style={styles.sectionTitle}>오늘의 진단 결과</Text>
+            <Icon name="plus-circle" size={16} color={COLORS.text} />
+            <Text style={styles.sectionTitle}>AI 진단 받기</Text>
           </View>
 
           <View style={styles.diagCard}>
-            <View style={styles.diagTop}>
-              <Icon name={warningIconName} size={18} color={warningIconColor} />
-              <Text style={styles.diagTitle}>{levelText}</Text>
-              <View style={[styles.cautionBadge, { backgroundColor: `${badgeColor}20` }]}>
-                <Text style={[styles.cautionText, { color: badgeColor }]}>{badgeText}</Text>
-              </View>
-            </View>
-
-            <View style={styles.diagStats}>
-              <View style={styles.diagStat}>
-                <Text style={styles.diagStatLabel}>정상 범위</Text>
-                <Text style={styles.diagStatVal}>5-15°</Text>
-              </View>
-              <View style={styles.diagStat}>
-                <Text style={styles.diagStatLabel}>개선율</Text>
-                <Text style={[styles.diagStatVal, { color: COLORS.primary }]}>
-                  {diagnosis?.improvementRate ?? '-'}
-                </Text>
-              </View>
-            </View>
-
-            {/* LLM 진단 영역 */}
             {!diagnosis && !diagLoading && !diagError && (
               <TouchableOpacity style={styles.diagFetchBtn} onPress={fetchDiagnosis} activeOpacity={0.85}>
                 <View style={styles.diagFetchBtnInner}>

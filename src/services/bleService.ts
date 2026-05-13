@@ -2,6 +2,7 @@ import { BleManager, Device, BleError } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { toByteArray, fromByteArray } from 'base64-js';
 import { useStore } from '../store';
+import { markManualBleDisconnect } from './connectionNotificationService';
 
 // ─── C7AI BLE UUID (esp32/main.ino 과 반드시 일치) ───────────────────────────
 export const C7_SERVICE_UUID     = '4FAFC201-1FB5-459E-8FCC-C5C9C331914B';
@@ -37,6 +38,19 @@ export interface WifiNetwork {
 
 const manager = new BleManager();
 const disconnectSubscriptions = new Map<string, { remove: () => void }>();
+
+const base64ToUtf8 = (base64Value: string): string => {
+  const bytes = toByteArray(base64Value);
+  let encoded = '';
+  for (const byte of bytes) {
+    encoded += `%${byte.toString(16).padStart(2, '0')}`;
+  }
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return Array.from(bytes).map((b) => String.fromCharCode(b)).join('');
+  }
+};
 
 const watchDisconnection = (deviceId: string) => {
   disconnectSubscriptions.get(deviceId)?.remove();
@@ -88,7 +102,56 @@ export const connectToDevice = async (deviceId: string): Promise<Device> => {
   return device;
 };
 
+const scanForReconnectTarget = (savedDeviceId: string, timeoutMs = 8_000): Promise<Device> =>
+  new Promise((resolve, reject) => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
+
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      manager.stopDeviceScan();
+      if (timeout) clearTimeout(timeout);
+      fn();
+    };
+
+    timeout = setTimeout(() => {
+      finish(() => reject(new Error('BLE reconnect scan timeout')));
+    }, timeoutMs);
+
+    manager.startDeviceScan(
+      [C7_SERVICE_UUID],
+      { allowDuplicates: false },
+      (error, device) => {
+        if (error) {
+          finish(() => reject(error));
+          return;
+        }
+        if (!device) return;
+
+        const matchesSavedId = device.id === savedDeviceId;
+        const matchesKnownName = (device.name ?? device.localName ?? '').toUpperCase().includes('C7AI');
+
+        if (!matchesSavedId && !matchesKnownName) return;
+
+        finish(() => resolve(device));
+      }
+    );
+  });
+
+export const reconnectToSavedDevice = async (savedDeviceId: string): Promise<Device> => {
+  try {
+    return await connectToDevice(savedDeviceId);
+  } catch {
+    const scanned = await scanForReconnectTarget(savedDeviceId);
+    const connected = await connectToDevice(scanned.id);
+    useStore.getState().setDevice({ bleDeviceId: scanned.id });
+    return connected;
+  }
+};
+
 export const disconnectDevice = async (deviceId: string) => {
+  markManualBleDisconnect();
   await manager.cancelDeviceConnection(deviceId);
   disconnectSubscriptions.get(deviceId)?.remove();
   disconnectSubscriptions.delete(deviceId);
@@ -107,8 +170,7 @@ export const readDeviceId = async (device: Device): Promise<string> => {
     C7_MAC_CHAR_UUID,
   );
   if (!char.value) throw new Error('MAC characteristic 값 없음');
-  const bytes = toByteArray(char.value);
-  return Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+  return base64ToUtf8(char.value);
 };
 
 /**
@@ -117,9 +179,19 @@ export const readDeviceId = async (device: Device): Promise<string> => {
  * BLE 연결 직후 그리고 userId 변경 시(로그인/로그아웃) 호출합니다.
  */
 const strToBase64 = (str: string): string => {
-  const bytes = new Uint8Array(str.length);
-  for (let i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i) & 0xff;
-  return fromByteArray(bytes);
+  const encoded = encodeURIComponent(str);
+  const bytes: number[] = [];
+  for (let i = 0; i < encoded.length; i++) {
+    const ch = encoded[i];
+    if (ch === '%') {
+      bytes.push(parseInt(encoded.slice(i + 1, i + 3), 16));
+      i += 2;
+    } else {
+      bytes.push(ch.charCodeAt(0));
+    }
+  }
+  const byteArray = new Uint8Array(bytes);
+  return fromByteArray(byteArray);
 };
 
 export const sendUserId = async (device: Device, userId: string): Promise<void> => {
@@ -158,8 +230,7 @@ export const subscribeFallbackData = (
 
 const parseFallbackFrame = (base64Value: string): PostureFrame | null => {
   try {
-    const bytes = toByteArray(base64Value);
-    const json = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+    const json = base64ToUtf8(base64Value);
     const data = JSON.parse(json);
     if (
       (data.sensor === 'C7' || data.sensor === 'T3' || data.sensor === 'T7') &&
@@ -191,8 +262,7 @@ export const readWifiList = async (device: Device): Promise<string[]> => {
     C7_WIFI_LIST_CHAR_UUID,
   );
   if (!char.value) throw new Error('WiFi list 값 없음(null)');
-  const bytes = toByteArray(char.value);
-  const json = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+  const json = base64ToUtf8(char.value);
   const parsed = JSON.parse(json); // parse 실패 시 에러 전파 → 폴링에서 에러 메시지로 표시됨
   return Array.isArray(parsed) ? parsed : [];
 };
@@ -210,8 +280,7 @@ export const subscribeWifiList = (
     C7_WIFI_LIST_CHAR_UUID,
     (err, char) => {
       if (err || !char?.value) return;
-      const msg = Array.from(toByteArray(char.value))
-        .map(b => String.fromCharCode(b)).join('');
+      const msg = base64ToUtf8(char.value);
       if (msg === 'SCAN_START') { buffer = []; return; }
       if (msg === 'SCAN_END')   { onList([...buffer]); buffer = []; return; }
       if (msg.startsWith('SSID:')) {
@@ -254,8 +323,7 @@ export const subscribeWifiStatus = (
     C7_WIFI_STATUS_CHAR_UUID,
     (err, char) => {
       if (err || !char?.value) return;
-      const msg = Array.from(toByteArray(char.value))
-        .map(b => String.fromCharCode(b)).join('');
+      const msg = base64ToUtf8(char.value);
       if (msg === 'success')      onStatus({ type: 'success' });
       else if (msg === 'fail')    onStatus({ type: 'fail' });
       else if (msg === 'disconnected') onStatus({ type: 'disconnected' });
@@ -283,6 +351,9 @@ export const sendPowerMode = async (
   device: Device,
   mode: 'on' | 'eco' | 'off',
 ): Promise<void> => {
+  if (mode === 'off') {
+    markManualBleDisconnect();
+  }
   await device.writeCharacteristicWithResponseForService(
     C7_SERVICE_UUID,
     C7_POWER_CHAR_UUID,
@@ -300,8 +371,7 @@ export const subscribePowerStatus = (
     (err, char) => {
       if (err || !char?.value) return;
       try {
-        const json = Array.from(toByteArray(char.value))
-          .map(b => String.fromCharCode(b)).join('');
+        const json = base64ToUtf8(char.value);
         const data = JSON.parse(json);
         if (data.mode && data.cpu && data.interval) onStatus(data as PowerStatus);
       } catch {}

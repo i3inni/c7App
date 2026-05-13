@@ -31,7 +31,9 @@ export default function WifiProvisionScreen() {
   const [password, setPassword]               = useState('');
   const [showPass, setShowPass]               = useState(false);
   const [status, setStatus]                   = useState<Status>('scanning');
-  const [currentSsid, setCurrentSsid]         = useState<string | null>(useStore.getState().device.connectedSsid);
+  const [currentSsid, setCurrentSsid]         = useState<string | null>(
+    mode === 'manage' ? useStore.getState().device.connectedSsid : null
+  );
   const selectedRef = useRef('');
 
   useEffect(() => {
@@ -52,7 +54,9 @@ export default function WifiProvisionScreen() {
 
       if (event.type === 'connected') {
         // BLE 연결 시 ESP32가 현재 연결 상태 전송
-        setCurrentSsid(event.ssid);
+        if (mode === 'manage') {
+          setCurrentSsid(event.ssid);
+        }
         setDevice({ connectedSsid: event.ssid, wifiConnected: true });
         if (status === 'scanning') setStatus('idle');
         return;
@@ -201,7 +205,7 @@ export default function WifiProvisionScreen() {
         </View>
 
         {/* 현재 연결 상태 카드 (관리 모드 or 연결 정보 있을 때) */}
-        {currentSsid && (
+        {mode === 'manage' && currentSsid && (
           <View style={s.currentCard}>
             <View style={s.currentLeft}>
               <View style={s.connectedDot} />
@@ -251,7 +255,7 @@ export default function WifiProvisionScreen() {
             }
             renderItem={({ item }) => {
               const isSelected = selected === item.ssid;
-              const isCurrent  = currentSsid === item.ssid;
+              const isCurrent  = mode === 'manage' && currentSsid === item.ssid;
               const stroke = isSelected ? COLORS.primary : COLORS.textMuted;
               return (
                 <TouchableOpacity

@@ -12,7 +12,7 @@ import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import type { AppNotification } from '../../constants/types';
 import { getNotifications, deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
 import { updateTargetScore } from '../../services/userService';
-import { connectToDevice, sendPowerMode } from '../../services/bleService';
+import { connectToDevice, reconnectToSavedDevice, sendPowerMode, sendUserId } from '../../services/bleService';
 
 function scoreToLevel(score: number) {
   if (score >= 90) return 'excellent';
@@ -692,6 +692,27 @@ export default function HomeScreen() {
   const isBleConnected = device.bleConnected;
   const isWifiConnected = device.wifiConnected || isConnected;
 
+  const handleReconnectBle = async () => {
+    if (isBleConnected) {
+      Alert.alert('블루투스 연결', '이미 기기와 연결되어 있어요.');
+      return;
+    }
+    if (!device.bleDeviceId) {
+      Alert.alert('블루투스 재연결', '저장된 기기 정보가 없어 다시 연결할 수 없어요.');
+      return;
+    }
+
+    try {
+      const ble = await reconnectToSavedDevice(device.bleDeviceId);
+      if (user?.id) {
+        await sendUserId(ble, user.id);
+      }
+      Alert.alert('블루투스 재연결', '기기와 다시 연결됐어요.');
+    } catch {
+      Alert.alert('블루투스 재연결 실패', '기기 전원과 거리를 확인한 뒤 다시 시도해 주세요.');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -721,7 +742,9 @@ export default function HomeScreen() {
           <View style={styles.realDot} />
           <Text style={styles.realtimeLabel}>REAL-TIME VISUAL</Text>
           <View style={styles.statusIcons}>
-            <BluetoothStatusIcon active={isBleConnected} />
+            <TouchableOpacity onPress={handleReconnectBle} activeOpacity={0.8} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <BluetoothStatusIcon active={isBleConnected} />
+            </TouchableOpacity>
             <WifiStatusIcon active={isWifiConnected} />
           </View>
           <BatteryIndicator level={device.battery} />
