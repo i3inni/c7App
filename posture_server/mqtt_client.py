@@ -112,10 +112,10 @@ def _evaluate_candidate(
     rule_label: str,
     model_label: str,
     key: tuple[str, str],
-) -> tuple[bool, float, float]:
+) -> tuple[bool, float, float, bool]:
     """
     auto 샘플이 candidate 조건을 만족하는지 평가.
-    반환: (is_candidate, stability_score, hold_duration_sec)
+    반환: (is_candidate, stability_score, hold_duration_sec, rule_model_agree)
     """
     feat_buf  = _recent_features.get(key, deque(maxlen=STABILITY_WINDOW))
     label_buf = _recent_labels.get(key,   deque(maxlen=HOLD_LABEL_WINDOW))
@@ -130,7 +130,7 @@ def _evaluate_candidate(
         and hold_sec    >= CANDIDATE_MIN_HOLD_SEC
         and rule_agrees
     )
-    return is_candidate, stability, hold_sec
+    return is_candidate, stability, hold_sec, rule_agrees
 
 
 def _rule_based_label(result: dict) -> str:
@@ -255,7 +255,7 @@ async def _handle_complete_frame(
     # auto 샘플 저장 (SAMPLE_EVERY_N 프레임마다)
     _frame_counters[key] = _frame_counters.get(key, 0) + 1
     if _frame_counters[key] % SAMPLE_EVERY_N == 0:
-        is_candidate, stability, hold_sec = _evaluate_candidate(
+        is_candidate, stability, hold_sec, rule_agrees = _evaluate_candidate(
             features, confidence, rule_label, result["pose_en"], key
         )
         await save_training_sample(
@@ -265,6 +265,9 @@ async def _handle_complete_frame(
             confidence=confidence,
             device_id=device_id,
             approved_for_training=is_candidate,
+            sensor_stability_score=stability,
+            hold_duration_sec=hold_sec,
+            rule_model_agree=rule_agrees,
         )
         if is_candidate:
             print(f"⭐ auto candidate 승격: {rule_label} | conf={confidence:.2f} stab={stability:.2f} hold={hold_sec:.1f}s")

@@ -295,6 +295,9 @@ def _save_training_sample_sync(
     confidence: float = 0.0,
     device_id: str = "",
     approved_for_training: bool = False,
+    sensor_stability_score: float | None = None,
+    hold_duration_sec: float | None = None,
+    rule_model_agree: bool | None = None,
 ) -> None:
     if not _db:
         return
@@ -307,6 +310,12 @@ def _save_training_sample_sync(
     doc["confidence"]           = confidence        # 모델 확신도 (human=1.0)
     doc["device_id"]            = device_id
     doc["approved_for_training"] = approved_for_training
+    if sensor_stability_score is not None:
+        doc["sensor_stability_score"] = sensor_stability_score
+    if hold_duration_sec is not None:
+        doc["hold_duration_sec"] = hold_duration_sec
+    if rule_model_agree is not None:
+        doc["rule_model_agree"] = rule_model_agree
     _db.collection(TRAINING_COLLECTION).add(doc)
 
 
@@ -333,6 +342,9 @@ async def save_training_sample(
     confidence: float = 0.0,
     device_id: str = "",
     approved_for_training: bool = False,
+    sensor_stability_score: float | None = None,
+    hold_duration_sec: float | None = None,
+    rule_model_agree: bool | None = None,
 ) -> None:
     if not _db:
         return
@@ -340,6 +352,7 @@ async def save_training_sample(
         _save_training_sample_sync,
         user_id, label, features,
         source, label_source, confidence, device_id, approved_for_training,
+        sensor_stability_score, hold_duration_sec, rule_model_agree,
     )
 
 
