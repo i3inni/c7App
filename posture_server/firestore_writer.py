@@ -495,3 +495,47 @@ async def update_live_posture(
         )
     except Exception as e:
         print(f"❌ live_posture 쓰기 실패: {type(e).__name__}: {e} (device={device_id})")
+
+
+# ── 탈락 auto 샘플 정리 ──────────────────────────────────
+
+AUTO_SAMPLE_TTL_DAYS = 7  # 탈락 auto 샘플 보관 기간
+
+
+def _cleanup_rejected_auto_sync() -> int:
+    """approved=False인 auto 샘플 중 TTL 지난 것 삭제. 삭제 건수 반환."""
+    if not _db:
+        return 0
+
+    cutoff = datetime.utcnow() - timedelta(days=AUTO_SAMPLE_TTL_DAYS)
+
+    docs = (
+        _db.collection(TRAINING_COLLECTION)
+           .where("source", "==", "auto")
+           .where("approved_for_training", "==", False)
+           .stream()
+    )
+
+    deleted = 0
+    for doc in docs:
+        data = doc.to_dict()
+        created_at = data.get("createdAt")
+        if created_at is None:
+            continue
+        # Firestore Timestamp → datetime
+        ts = created_at if isinstance(created_at, datetime) else created_at.replace(tzinfo=None)
+        if hasattr(ts, 'timestamp'):
+            ts = datetime.utcfromtimestamp(ts.timestamp())
+        if ts < cutoff:
+            doc.reference.delete()
+            deleted += 1
+
+    return deleted
+
+
+async def cleanup_rejected_auto_samples() -> int:
+    if not _db:
+        return 0
+    deleted = await asyncio.to_thread(_cleanup_rejected_auto_sync)
+    print(f"🧹 탈락 auto 샘플 정리: {deleted}개 삭제 (7일 초과)")
+    return deleted

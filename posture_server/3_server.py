@@ -36,7 +36,7 @@ from posture_engine import (
 from mqtt_client import mqtt_listener, register_collection_session, unregister_collection_session
 from firestore_writer import (
     save_calibration, save_training_sample, fetch_training_samples,
-    aggregate_weekly_stats,
+    aggregate_weekly_stats, cleanup_rejected_auto_samples,
 )
 from auto_trainer import retrain
 from features import RAW_FEATURE_COLS as FEATURE_COLS
@@ -180,6 +180,7 @@ async def _midnight_scheduler() -> None:
         yesterday = datetime.now(timezone.utc) - timedelta(days=1)
         print(f"⏰ weekly_stats 집계 시작: {yesterday.strftime('%Y-%m-%d')}")
         await aggregate_weekly_stats(yesterday.replace(tzinfo=None))
+        await cleanup_rejected_auto_samples()
 
 
 @asynccontextmanager
