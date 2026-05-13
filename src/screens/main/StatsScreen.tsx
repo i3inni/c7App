@@ -98,9 +98,15 @@ function LineChart({
 }
 
 // ── 오늘 요약 상세 모달 ──────────────────────────────
+const BAD_PAGE_SIZE = 10;
+
 function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { todayStats } = useStore();
   const insets = useSafeAreaInsets();
+  const [badPage, setBadPage] = useState(0);
+  const [filterHour, setFilterHour] = useState<number | null>(null);
+  const [showHourFilter, setShowHourFilter] = useState(false);
+
   if (!todayStats || !todayStats.summary) return null;
 
   const hourlyData = Object.entries(todayStats.hourlyScores ?? {})
@@ -111,6 +117,36 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
     }))
     .filter(h => h.score > 0)
     .sort((a, b) => a.sortKey - b.sortKey);
+
+  const sortedBadLogs = (todayStats.badPostureLogs ?? [])
+    .map(b => {
+      const kstTime = formatTimeToKst(b.time);
+      const kstHour = Number(kstTime.split(':')[0]);
+      return { ...b, kstTime, kstHour };
+    })
+    .sort((a, b) => a.kstTime.localeCompare(b.kstTime));
+
+  const availableHours = Array.from(new Set(sortedBadLogs.map(b => b.kstHour))).sort((a, b) => a - b);
+  const filteredBadLogs = filterHour === null ? sortedBadLogs : sortedBadLogs.filter(b => b.kstHour === filterHour);
+
+  const totalBadPages = Math.ceil(filteredBadLogs.length / BAD_PAGE_SIZE);
+  const pagedBadLogs = filteredBadLogs.slice(badPage * BAD_PAGE_SIZE, (badPage + 1) * BAD_PAGE_SIZE);
+
+  const groupedBadLogs: { hour: number; logs: typeof pagedBadLogs }[] = [];
+  pagedBadLogs.forEach(log => {
+    const last = groupedBadLogs[groupedBadLogs.length - 1];
+    if (last && last.hour === log.kstHour) {
+      last.logs.push(log);
+    } else {
+      groupedBadLogs.push({ hour: log.kstHour, logs: [log] });
+    }
+  });
+
+  const handleFilterHour = (hour: number | null) => {
+    setFilterHour(hour);
+    setBadPage(0);
+    setShowHourFilter(false);
+  };
 
   return (
     <Modal visible={visible} animationType="slide">
@@ -152,29 +188,101 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
           )}
 
           {/* 불량 자세 기록 */}
-          <Text style={dtStyles.sectionTitle}>불량 자세 발생 기록</Text>
-          {(!todayStats.badPostureLogs || todayStats.badPostureLogs.length === 0) ? (
+          <View style={dtStyles.badHeaderRow}>
+            <Text style={dtStyles.sectionTitle}>불량 자세 발생 기록</Text>
+            {sortedBadLogs.length > 0 && (
+              <TouchableOpacity
+                style={[dtStyles.filterBtn, showHourFilter && dtStyles.filterBtnActive]}
+                onPress={() => setShowHourFilter(v => !v)}
+              >
+                <Icon name="clock" size={13} color={showHourFilter || filterHour !== null ? '#fff' : COLORS.textSecondary} />
+                <Text style={[dtStyles.filterBtnText, (showHourFilter || filterHour !== null) && dtStyles.filterBtnTextActive]}>
+                  {filterHour !== null ? `${formatKoreanHour(filterHour)}시` : '시간 필터'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {showHourFilter && availableHours.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={dtStyles.filterChipScroll} contentContainerStyle={{ paddingVertical: 4 }}>
+              <TouchableOpacity
+                style={[dtStyles.filterChip, filterHour === null && dtStyles.filterChipActive]}
+                onPress={() => handleFilterHour(null)}
+              >
+                <Text style={[dtStyles.filterChipText, filterHour === null && dtStyles.filterChipTextActive]}>전체</Text>
+              </TouchableOpacity>
+              {availableHours.map(hour => (
+                <TouchableOpacity
+                  key={hour}
+                  style={[dtStyles.filterChip, filterHour === hour && dtStyles.filterChipActive]}
+                  onPress={() => handleFilterHour(hour)}
+                >
+                  <Text style={[dtStyles.filterChipText, filterHour === hour && dtStyles.filterChipTextActive]}>
+                    {formatKoreanHour(hour)}시
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
+          {filteredBadLogs.length > 0 && (
+            <Text style={dtStyles.badPageInfo}>
+              {filterHour !== null ? `${formatKoreanHour(filterHour)}시 · ` : ''}
+              {badPage * BAD_PAGE_SIZE + 1}–{Math.min((badPage + 1) * BAD_PAGE_SIZE, filteredBadLogs.length)} / {filteredBadLogs.length}건
+            </Text>
+          )}
+
+          {filteredBadLogs.length === 0 ? (
             <View style={dtStyles.emptyBox}>
               <Text style={dtStyles.emptyText}>오늘 불량 자세 기록이 없습니다 👍</Text>
             </View>
           ) : (
-            todayStats.badPostureLogs.map((b, i) => {
-              const isDanger = b.angle >= 25;
-              return (
-                <View key={i} style={[dtStyles.badCard, { backgroundColor: isDanger ? '#FFF0F3' : '#FFF7EC' }]}>
-                  <View style={dtStyles.badLeft}>
-                    <Icon name="clock" size={14} color={isDanger ? COLORS.accent : COLORS.warning} />
-                    <Text style={[dtStyles.badTime, { color: isDanger ? COLORS.accent : COLORS.warning }]}>
-                      {formatTimeToKst(b.time)}
-                    </Text>
+            <>
+              {groupedBadLogs.map(({ hour, logs }) => (
+                <View key={hour}>
+                  <View style={dtStyles.hourGroupHeader}>
+                    <Icon name="clock" size={13} color={COLORS.textSecondary} />
+                    <Text style={dtStyles.hourGroupText}>{formatKoreanHour(hour)}시</Text>
                   </View>
-                  <Text style={dtStyles.badDetail}>각도: {b.angle}°    지속시간: {b.duration}</Text>
-                  <View style={[dtStyles.levelBadge, { backgroundColor: isDanger ? COLORS.accent : COLORS.warning }]}>
-                    <Text style={dtStyles.levelText}>{isDanger ? '위험' : '주의'}</Text>
-                  </View>
+                  {logs.map((b, i) => {
+                    const isDanger = b.angle >= 25;
+                    return (
+                      <View key={i} style={[dtStyles.badCard, { backgroundColor: isDanger ? '#FFF0F3' : '#FFF7EC' }]}>
+                        <View style={dtStyles.badLeft}>
+                          <Text style={[dtStyles.badTime, { color: isDanger ? COLORS.accent : COLORS.warning }]}>
+                            {b.kstTime}
+                          </Text>
+                        </View>
+                        <Text style={dtStyles.badDetail}>각도: {b.angle}°    지속시간: {b.duration}</Text>
+                        <View style={[dtStyles.levelBadge, { backgroundColor: isDanger ? COLORS.accent : COLORS.warning }]}>
+                          <Text style={dtStyles.levelText}>{isDanger ? '위험' : '주의'}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
                 </View>
-              );
-            })
+              ))}
+
+              {totalBadPages > 1 && (
+                <View style={dtStyles.pageNav}>
+                  <TouchableOpacity
+                    style={[dtStyles.pageBtn, badPage === 0 && dtStyles.pageBtnDisabled]}
+                    onPress={() => setBadPage(p => Math.max(0, p - 1))}
+                    disabled={badPage === 0}
+                  >
+                    <Text style={[dtStyles.pageBtnText, badPage === 0 && dtStyles.pageBtnTextDisabled]}>‹ 이전</Text>
+                  </TouchableOpacity>
+                  <Text style={dtStyles.pageNumText}>{badPage + 1} / {totalBadPages}</Text>
+                  <TouchableOpacity
+                    style={[dtStyles.pageBtn, badPage === totalBadPages - 1 && dtStyles.pageBtnDisabled]}
+                    onPress={() => setBadPage(p => Math.min(totalBadPages - 1, p + 1))}
+                    disabled={badPage === totalBadPages - 1}
+                  >
+                    <Text style={[dtStyles.pageBtnText, badPage === totalBadPages - 1 && dtStyles.pageBtnTextDisabled]}>다음 ›</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
           )}
 
           {/* 활동 요약 */}
@@ -241,6 +349,32 @@ const dtStyles = StyleSheet.create({
   },
   summaryLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, textAlign: 'center' },
   summaryVal: { fontSize: FONTS.sizes.xl, fontWeight: '800', color: COLORS.text, marginTop: 4 },
+  badHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACING.base, marginBottom: SPACING.sm },
+  badPageInfo: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
+  hourGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: SPACING.xs, marginTop: SPACING.sm },
+  hourGroupText: { fontSize: FONTS.sizes.xs, fontWeight: '700', color: COLORS.textSecondary },
+  pageNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACING.sm, marginBottom: SPACING.xs },
+  pageBtn: { paddingVertical: SPACING.xs, paddingHorizontal: SPACING.base, backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md },
+  pageBtnDisabled: { opacity: 0.35 },
+  pageBtnText: { fontSize: FONTS.sizes.sm, fontWeight: '700', color: COLORS.text },
+  pageBtnTextDisabled: { color: COLORS.textMuted },
+  pageNumText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  filterBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: SPACING.sm, paddingVertical: 4,
+    backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.full,
+  },
+  filterBtnActive: { backgroundColor: COLORS.primary },
+  filterBtnText: { fontSize: FONTS.sizes.xs, fontWeight: '600', color: COLORS.textSecondary },
+  filterBtnTextActive: { color: '#fff' },
+  filterChipScroll: { marginBottom: SPACING.xs },
+  filterChip: {
+    paddingHorizontal: SPACING.md, paddingVertical: 6, marginRight: SPACING.xs,
+    backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.full,
+  },
+  filterChipActive: { backgroundColor: COLORS.primary },
+  filterChipText: { fontSize: FONTS.sizes.xs, fontWeight: '600', color: COLORS.textSecondary },
+  filterChipTextActive: { color: '#fff' },
 });
 
 // ── 주간 상세 모달 ────────────────────────────────────
