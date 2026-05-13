@@ -18,8 +18,8 @@ from sklearn.metrics import classification_report, confusion_matrix
 
 BASE_DIR    = os.path.dirname(__file__)
 CSV_PATH    = os.path.join(BASE_DIR, "data",   "training_data.csv")
-MODEL_PATH  = os.path.join(BASE_DIR, "models", "posture_model.pkl")
-SCALER_PATH = os.path.join(BASE_DIR, "models", "scaler.pkl")
+MODEL_PATH  = os.path.join(BASE_DIR, "models", "default", "posture_model.pkl")
+SCALER_PATH = os.path.join(BASE_DIR, "models", "default", "scaler.pkl")
 
 SENSORS      = ["C7", "T3", "T7"]
 FEATURE_COLS = [f"diff_{s}_{ax}" for s in SENSORS for ax in ("pitch", "roll")]

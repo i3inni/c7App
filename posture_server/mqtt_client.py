@@ -60,8 +60,8 @@ _prev_severity: dict[tuple[str, str], str]          = {}
 _collection_sessions: dict[str, asyncio.Queue] = {}
 
 # 자동 학습 파이프라인
-SAMPLE_EVERY_N = 30   # 프레임 30개마다 1개 저장 (~3초에 1개)
-RETRAIN_EVERY  = 200  # 누적 200개 도달 시 재학습 트리거
+SAMPLE_EVERY_N = 10   # 프레임 10개마다 1개 저장
+RETRAIN_EVERY  = 60   # 새 샘플 60개 도달 시 재학습 트리거
 _frame_counters: dict[tuple[str, str], int] = {}
 _new_sample_count = 0
 

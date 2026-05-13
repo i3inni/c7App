@@ -36,9 +36,25 @@ from mqtt_client import mqtt_listener, register_collection_session, unregister_c
 from firestore_writer import save_calibration, save_training_sample, fetch_all_training_samples
 from auto_trainer import retrain, FEATURE_COLS
 
-BASE_DIR    = os.path.dirname(__file__)
-MODEL_PATH  = os.path.join(BASE_DIR, "models", "posture_model.pkl")
-SCALER_PATH = os.path.join(BASE_DIR, "models", "scaler.pkl")
+BASE_DIR = os.path.dirname(__file__)
+CURRENT_MODEL_PATH  = os.path.join(BASE_DIR, "models", "current", "posture_model.pkl")
+CURRENT_SCALER_PATH = os.path.join(BASE_DIR, "models", "current", "scaler.pkl")
+DEFAULT_MODEL_PATH  = os.path.join(BASE_DIR, "models", "default", "posture_model.pkl")
+DEFAULT_SCALER_PATH = os.path.join(BASE_DIR, "models", "default", "scaler.pkl")
+LEGACY_MODEL_PATH   = os.path.join(BASE_DIR, "models", "posture_model.pkl")
+LEGACY_SCALER_PATH  = os.path.join(BASE_DIR, "models", "scaler.pkl")
+
+
+def resolve_model_paths() -> tuple[str, str, str] | None:
+    candidates = [
+        ("current", CURRENT_MODEL_PATH, CURRENT_SCALER_PATH),
+        ("default", DEFAULT_MODEL_PATH, DEFAULT_SCALER_PATH),
+        ("legacy", LEGACY_MODEL_PATH, LEGACY_SCALER_PATH),
+    ]
+    for source, model_path, scaler_path in candidates:
+        if os.path.exists(model_path) and os.path.exists(scaler_path):
+            return source, model_path, scaler_path
+    return None
 
 
 # ─────────────────────────────────────────
@@ -142,11 +158,13 @@ class DataResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if os.path.exists(MODEL_PATH) and os.path.exists(SCALER_PATH):
-        ml.model    = joblib.load(MODEL_PATH)
-        ml.scaler   = joblib.load(SCALER_PATH)
+    model_paths = resolve_model_paths()
+    if model_paths:
+        source, model_path, scaler_path = model_paths
+        ml.model    = joblib.load(model_path)
+        ml.scaler   = joblib.load(scaler_path)
         ml.is_ready = True
-        print("✅ 모델 로딩 완료")
+        print(f"✅ 모델 로딩 완료 ({source}: {model_path})")
     else:
         print("⚠️  모델 없음 — python 2_train_model.py 실행 후 재시작")
 

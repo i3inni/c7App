@@ -19,8 +19,8 @@ from sklearn.preprocessing import StandardScaler
 from posture_engine import ml
 
 BASE_DIR    = os.path.dirname(__file__)
-MODEL_PATH  = os.path.join(BASE_DIR, "models", "posture_model.pkl")
-SCALER_PATH = os.path.join(BASE_DIR, "models", "scaler.pkl")
+MODEL_PATH  = os.path.join(BASE_DIR, "models", "current", "posture_model.pkl")
+SCALER_PATH = os.path.join(BASE_DIR, "models", "current", "scaler.pkl")
 
 SENSORS      = ["C7", "T3", "T7"]
 FEATURE_COLS = [f"diff_{s}_{ax}" for s in SENSORS for ax in ("pitch", "roll")]
