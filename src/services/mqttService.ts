@@ -1,8 +1,9 @@
 /**
  * 실시간 자세 데이터 리스너
  *
- * 흐름: ESP32 → HiveMQ → FastAPI(Railway) → Firestore daily_stats
- *       → 앱 onSnapshot → Zustand store 업데이트
+ * 흐름: ESP32 → HiveMQ → FastAPI(Railway) → Firestore
+ *   ├─ live_posture/{deviceId}  (2초 throttle) → 현재 점수/각도/자세 타입
+ *   └─ daily_stats/{userId}_{YYYYMMDD} (10초 throttle) → 오늘 누적 통계
  *
  * FastAPI 서버가 MQTT를 구독하고 Firestore에 기록하므로
  * 앱은 MQTT 클라이언트 없이 Firestore만 구독하면 됨.
@@ -11,9 +12,10 @@
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useStore } from '../store';
-import { DayStats } from '../constants/types';
+import { DayStats, PostureType } from '../constants/types';
 
-let unsubscribe: Unsubscribe | null = null;
+let unsubscribeLive:  Unsubscribe | null = null;
+let unsubscribeStats: Unsubscribe | null = null;
 
 function todayDocId(userId: string): string {
   const d = new Date();
@@ -23,27 +25,28 @@ function todayDocId(userId: string): string {
 
 export const startPostureListener = (deviceId: string, userId: string): void => {
   stopPostureListener();
-
-  const docId = todayDocId(userId);
-  const ref   = doc(db, 'daily_stats', docId);
-
   setListenerDeviceId(deviceId);
   useStore.getState().setDevice({ deviceId, mqttStatus: 'connected' });
 
-  unsubscribe = onSnapshot(ref, (snap) => {
+  // 실시간 자세: live_posture/{deviceId} — 2초 주기
+  const liveRef = doc(db, 'live_posture', deviceId);
+  unsubscribeLive = onSnapshot(liveRef, (snap) => {
+    if (!snap.exists()) return;
+    const d = snap.data();
+    useStore.getState().updatePosture(d.score ?? 0, d.angle ?? 0, d.pose_en as PostureType);
+    if (d.c7Angle !== undefined) {
+      useStore.getState().setAngles({ c7: d.c7Angle, t3: d.t3Angle ?? 0, t7: d.t7Angle ?? 0 });
+    }
+  }, () => {
+    useStore.getState().setDevice({ mqttStatus: 'error' });
+  });
+
+  // 일별 통계: daily_stats/{userId}_{YYYYMMDD} — 10초 주기
+  const statsRef = doc(db, 'daily_stats', todayDocId(userId));
+  unsubscribeStats = onSnapshot(statsRef, (snap) => {
     if (!snap.exists()) return;
     const data    = snap.data();
     const summary = data.summary ?? {};
-
-    const score = summary.dailyScore ?? 0;
-    const angle = summary.avgAngle  ?? 0;
-    useStore.getState().updatePosture(score, angle);
-
-    const c7 = summary.c7Angle ?? angle;
-    const t3 = summary.t3Angle ?? 0;
-    const t7 = summary.t7Angle ?? 0;
-    useStore.getState().setAngles({ c7, t3, t7 });
-
     useStore.getState().setTodayStats({
       uid:          data.uid,
       date:         data.date ?? '',
@@ -54,17 +57,17 @@ export const startPostureListener = (deviceId: string, userId: string): void => 
         totalUsageTime:  summary.totalUsageTime  ?? '0.0h',
         avgAngle:        summary.avgAngle        ?? 0,
       },
-      hourlyScores:  data.hourlyScores  ?? {},
+      hourlyScores:   data.hourlyScores   ?? {},
       badPostureLogs: data.badPostureLogs ?? [],
     } as DayStats);
-  }, () => {
-    useStore.getState().setDevice({ mqttStatus: 'error' });
   });
 };
 
 export const stopPostureListener = (): void => {
-  unsubscribe?.();
-  unsubscribe = null;
+  unsubscribeLive?.();
+  unsubscribeLive = null;
+  unsubscribeStats?.();
+  unsubscribeStats = null;
 };
 
 // AppNavigator에서 재연결 여부 판단용

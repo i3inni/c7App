@@ -32,6 +32,7 @@ from sensor_buffer import SensorBuffer
 from posture_engine import ml, run_inference, apply_calibration
 from firestore_writer import (
     update_daily_stats,
+    update_live_posture,
     on_alert_started,
     load_calibration,
 )
@@ -106,6 +107,11 @@ async def _handle_complete_frame(
         "t3": dp[2],
     }
     await update_daily_stats(user_id, score, angle, is_bad, corrected, sensor_angles)
+    await update_live_posture(
+        device_id, user_id, score, angle,
+        result["severity"], result["pose_en"], result["pose_kr"],
+        result["alert"], sensor_angles,
+    )
 
     result_payload = json.dumps({
         "deviceId": device_id,

@@ -50,6 +50,10 @@ _last_notif_ts: dict[str, float] = {}  # "{deviceId}:{userId}" → 마지막 알
 STATS_WRITE_INTERVAL = 10.0  # 초: userId당 최대 1회/10초
 _last_stats_write_ts: dict[str, float] = {}  # userId → 마지막 write 시각
 
+# live_posture 실시간 쓰기 throttle — deviceId당 최대 1회/2초
+LIVE_WRITE_INTERVAL = 2.0
+_last_live_write_ts: dict[str, float] = {}  # deviceId → 마지막 write 시각
+
 
 # ── 헬퍼 ────────────────────────────────────────────────
 
@@ -237,3 +241,62 @@ async def on_alert_started(
     if now - last >= NOTIF_COOLDOWN:
         _last_notif_ts[cooldown_key] = now
         await asyncio.to_thread(_create_notif_sync, user_id, device_id, pose_kr, severity)
+
+
+# ── 실시간 자세 (live_posture) ───────────────────────────
+
+def _update_live_sync(
+    device_id: str,
+    user_id: str,
+    score: int,
+    angle: float,
+    severity: str,
+    pose_en: str,
+    pose_kr: str,
+    alert: bool,
+    sensor_angles: dict | None,
+) -> None:
+    if not _db:
+        return
+    data: dict = {
+        "userId":    user_id,
+        "score":     score,
+        "angle":     round(angle, 1),
+        "severity":  severity,
+        "pose_en":   pose_en,
+        "pose_kr":   pose_kr,
+        "alert":     alert,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    if sensor_angles:
+        data["c7Angle"] = round(sensor_angles["c7"], 1)
+        data["t3Angle"] = round(sensor_angles["t3"], 1)
+        data["t7Angle"] = round(sensor_angles["t7"], 1)
+    _db.collection("live_posture").document(device_id).set(data)
+
+
+async def update_live_posture(
+    device_id: str,
+    user_id: str,
+    score: int,
+    angle: float,
+    severity: str,
+    pose_en: str,
+    pose_kr: str,
+    alert: bool,
+    sensor_angles: dict | None = None,
+) -> None:
+    if not _db:
+        return
+    now = asyncio.get_event_loop().time()
+    last = _last_live_write_ts.get(device_id, 0.0)
+    if now - last < LIVE_WRITE_INTERVAL:
+        return
+    _last_live_write_ts[device_id] = now
+    try:
+        await asyncio.to_thread(
+            _update_live_sync,
+            device_id, user_id, score, angle, severity, pose_en, pose_kr, alert, sensor_angles,
+        )
+    except Exception as e:
+        print(f"❌ live_posture 쓰기 실패: {type(e).__name__}: {e} (device={device_id})")
