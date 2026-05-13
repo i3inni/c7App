@@ -382,7 +382,7 @@ def run_inference(device_id: str, user_id: str, p: list[float], r: list[float]) 
     센서 데이터로 자세를 추론합니다.
     device_id: MAC 주소 (소문자, 콜론 없음)
     user_id:   guest UUID 또는 Firebase UID
-    p, r 순서: [C7, T7, T3]
+    p, r 순서: [C7, T3, T7]  (SensorBuffer.extract() 반환 순서)
     """
     state = get_state(device_id, user_id)
 
@@ -400,18 +400,18 @@ def run_inference(device_id: str, user_id: str, p: list[float], r: list[float]) 
     meta = POSE_META.get(pose_en, {"kr": pose_en, "is_bad": True})
 
     # 새 스코어링 로직 호출
-    # p 순서: [C7, T7, T3] → SensorAngles 매핑
+    # p 순서: [C7, T3, T7] (SensorBuffer.extract() 반환 순서)
     score_result = compute_score(
         c7       = SensorAngles(pitch=p[0], roll=r[0]),
-        t3       = SensorAngles(pitch=p[2], roll=r[2]),
-        t7       = SensorAngles(pitch=p[1], roll=r[1]),
+        t3       = SensorAngles(pitch=p[1], roll=r[1]),
+        t7       = SensorAngles(pitch=p[2], roll=r[2]),
         baseline = PostureBaseline(
             c7_pitch = state.baseline_pitch[0],
-            t7_pitch = state.baseline_pitch[1],
-            t3_pitch = state.baseline_pitch[2],
+            t3_pitch = state.baseline_pitch[1],
+            t7_pitch = state.baseline_pitch[2],
             c7_roll  = state.baseline_roll[0],
-            t7_roll  = state.baseline_roll[1],
-            t3_roll  = state.baseline_roll[2],
+            t3_roll  = state.baseline_roll[1],
+            t7_roll  = state.baseline_roll[2],
             mode     = "sitting",
         ),
         profile = UserProfile(age=state.age, bmi=state.bmi),

@@ -35,7 +35,7 @@ from posture_engine import (
 )
 from mqtt_client import mqtt_listener, register_collection_session, unregister_collection_session
 from firestore_writer import (
-    save_calibration, save_training_sample, fetch_all_training_samples,
+    save_calibration, save_training_sample, fetch_training_samples,
     aggregate_weekly_stats,
 )
 from auto_trainer import retrain, FEATURE_COLS
@@ -71,8 +71,8 @@ class CalibrateRequest(BaseModel):
     height_cm: float
     weight_kg: float
     age:       int
-    p: list[float]          # 벽 기준 pitch [C7, T7, T3]
-    r: list[float]          # 벽 기준 roll  [C7, T7, T3]
+    p: list[float]          # 벽 기준 pitch [C7, T3, T7]
+    r: list[float]          # 벽 기준 roll  [C7, T3, T7]
 
     @field_validator("p", "r")
     @classmethod
@@ -355,13 +355,20 @@ async def pose_calibration_collect(req: PoseCollectRequest):
     if not frames:
         raise HTTPException(422, "센서 데이터를 수신하지 못했습니다. 기기가 연결됐는지 확인하세요.")
 
-    # baseline diff 계산 → 피처 생성 → Firestore 저장
+    # baseline diff 계산 → 피처 생성 → Firestore 저장 (guided: 사람이 직접 수집)
     saved = 0
     for p, r in frames:
         dp = [p[i] - req.baseline_p[i] for i in range(3)]
         dr = [r[i] - req.baseline_r[i] for i in range(3)]
         features = [v for pair in zip(dp, dr) for v in pair]
-        await save_training_sample(req.user_id, req.label, features)
+        await save_training_sample(
+            req.user_id, req.label, features,
+            source="guided",
+            label_source="human",
+            confidence=1.0,
+            device_id=req.device_id,
+            approved_for_training=True,
+        )
         saved += 1
 
     return {"status": "ok", "label": req.label, "collected": saved}
@@ -370,10 +377,10 @@ async def pose_calibration_collect(req: PoseCollectRequest):
 @app.post("/pose-calibration/train")
 async def pose_calibration_train():
     """
-    Firestore의 모든 training_samples로 모델을 재학습하고 핫 리로드합니다.
+    guided 샘플(사람이 직접 수집, approved=True)로만 모델을 재학습하고 핫 리로드합니다.
     캘리브레이션 마지막 단계에서 한 번만 호출합니다.
     """
-    rows = await fetch_all_training_samples()
+    rows = await fetch_training_samples(sources=["guided"], approved_only=True)
     if not rows:
         raise HTTPException(422, "학습 데이터가 없습니다. 먼저 /pose-calibration/collect를 실행하세요.")
 

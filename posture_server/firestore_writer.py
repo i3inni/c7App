@@ -287,33 +287,81 @@ SENSORS      = ["C7", "T3", "T7"]
 FEATURE_COLS = [f"diff_{s}_{ax}" for s in SENSORS for ax in ("pitch", "roll")]
 
 
-def _save_training_sample_sync(user_id: str, label: str, features: list[float]) -> None:
+def _save_training_sample_sync(
+    user_id: str,
+    label: str,
+    features: list[float],
+    source: str = "auto",
+    label_source: str = "rule",
+    confidence: float = 0.0,
+    device_id: str = "",
+    approved_for_training: bool = False,
+) -> None:
     if not _db:
         return
     doc = {f: features[i] for i, f in enumerate(FEATURE_COLS)}
-    doc["label"]     = label
-    doc["userId"]    = user_id
-    doc["createdAt"] = firestore.SERVER_TIMESTAMP
+    doc["label"]                = label
+    doc["userId"]               = user_id
+    doc["createdAt"]            = firestore.SERVER_TIMESTAMP
+    doc["source"]               = source            # "guided" | "auto"
+    doc["label_source"]         = label_source      # "human" | "rule" | "model"
+    doc["confidence"]           = confidence        # 모델 확신도 (human=1.0)
+    doc["device_id"]            = device_id
+    doc["approved_for_training"] = approved_for_training
     _db.collection(TRAINING_COLLECTION).add(doc)
 
 
-def _fetch_all_training_samples_sync() -> list[dict]:
+def _fetch_training_samples_sync(
+    sources: list[str] | None = None,
+    approved_only: bool = False,
+) -> list[dict]:
     if not _db:
         return []
-    docs = _db.collection(TRAINING_COLLECTION).stream()
-    return [d.to_dict() for d in docs]
+    query = _db.collection(TRAINING_COLLECTION)
+    if sources:
+        query = query.where("source", "in", sources)
+    if approved_only:
+        query = query.where("approved_for_training", "==", True)
+    return [d.to_dict() for d in query.stream()]
 
 
-async def save_training_sample(user_id: str, label: str, features: list[float]) -> None:
+async def save_training_sample(
+    user_id: str,
+    label: str,
+    features: list[float],
+    source: str = "auto",
+    label_source: str = "rule",
+    confidence: float = 0.0,
+    device_id: str = "",
+    approved_for_training: bool = False,
+) -> None:
     if not _db:
         return
-    await asyncio.to_thread(_save_training_sample_sync, user_id, label, features)
+    await asyncio.to_thread(
+        _save_training_sample_sync,
+        user_id, label, features,
+        source, label_source, confidence, device_id, approved_for_training,
+    )
 
 
-async def fetch_all_training_samples() -> list[dict]:
+async def fetch_training_samples(
+    sources: list[str] | None = None,
+    approved_only: bool = False,
+) -> list[dict]:
+    """
+    sources=None  → 전체
+    sources=["guided"]  → guided만
+    sources=["guided", "auto"]  → 둘 다
+    approved_only=True  → approved_for_training=True 인 것만
+    """
     if not _db:
         return []
-    return await asyncio.to_thread(_fetch_all_training_samples_sync)
+    return await asyncio.to_thread(_fetch_training_samples_sync, sources, approved_only)
+
+
+# 하위 호환 — 기존 코드에서 fetch_all_training_samples() 호출하는 곳을 위해 유지
+async def fetch_all_training_samples() -> list[dict]:
+    return await fetch_training_samples()
 
 
 # ── 주간 통계 집계 ────────────────────────────────────────

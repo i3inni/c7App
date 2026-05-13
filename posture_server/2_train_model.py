@@ -1,8 +1,8 @@
 """
 [Part 2] AI 모델 학습
 
-센서: C7 / T7 / T3 × pitch / roll = 6피처
-레이블: normal / forward_head / kyphosis / text_neck / lean_back / lateral_tilt
+센서: C7 / T3 / T7 × pitch / roll = 6피처
+레이블: normal / forward_head / kyphosis / lateral_tilt
 
 실행: python 2_train_model.py
 """
