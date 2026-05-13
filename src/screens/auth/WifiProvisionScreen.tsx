@@ -92,7 +92,10 @@ export default function WifiProvisionScreen() {
         if (deviceId) startPostureListener(deviceId, user?.id ?? 'unknown');
 
         if (mode === 'setup') {
-          setTimeout(() => (nav as any).replace('MainTabs'), 1500);
+          setTimeout(() => (nav as any).replace(
+            deviceId ? 'PoseCalibration' : 'MainTabs',
+            deviceId ? { deviceId } : undefined,
+          ), 1500);
         } else {
           // 관리 모드: 연결 성공 후 화면에 머물기
           setTimeout(() => {

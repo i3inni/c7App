@@ -8,6 +8,12 @@ export interface SpineAngles {
   t7: number;
 }
 
+export interface SpineRolls {
+  c7: number;
+  t3: number;
+  t7: number;
+}
+
 type ZoneType = 'c7' | 't3' | 't7';
 
 const WARN:   Record<ZoneType, number> = { c7: 8,  t3: 6,  t7: 10 };
@@ -65,10 +71,12 @@ function VertebraElement({
 // ── 메인 컴포넌트 ──────────────────────────────────────
 export default function SpineVisualizer({
   angles,
+  rolls  = { c7: 0, t3: 0, t7: 0 },
   width  = 150,
   height = 300,
 }: {
   angles: SpineAngles;
+  rolls?:  SpineRolls;
   width?:  number;
   height?: number;
 }) {
@@ -148,12 +156,14 @@ export default function SpineVisualizer({
           // 척추 왼쪽 끝에서 일정 간격 띄워 배치
           const labelX = x - 52;
 
+          const rollVal = rolls[type];
+
           return (
             <G key={type}>
               <Circle cx={x - 36} cy={y} r={3} fill={color} />
               <SvgText
                 x={labelX}
-                y={y - 6}
+                y={y - 10}
                 textAnchor="end"
                 fill={color}
                 fontSize="13"
@@ -161,14 +171,13 @@ export default function SpineVisualizer({
               >
                 {type.toUpperCase()}
               </SvgText>
-              <SvgText
-                x={labelX}
-                y={y + 10}
-                textAnchor="end"
-                fill={color}
-                fontSize="12"
-              >
-                {val.toFixed(1)}°
+              {/* 전후(pitch) */}
+              <SvgText x={labelX} y={y + 5} textAnchor="end" fill={color} fontSize="11">
+                {`↕ ${val.toFixed(1)}°`}
+              </SvgText>
+              {/* 좌우(roll) */}
+              <SvgText x={labelX} y={y + 18} textAnchor="end" fill={color} fontSize="11" opacity="0.7">
+                {`↔ ${rollVal.toFixed(1)}°`}
               </SvgText>
             </G>
           );

@@ -348,6 +348,14 @@ export default function DeviceControlScreen() {
     }
   };
 
+  const handlePrecisionTraining = () => {
+    if (!device.deviceId) {
+      (nav as any).replace('MqttConnect');
+      return;
+    }
+    (nav as any).navigate('PoseCalibration', { deviceId: device.deviceId, mode: 'training' });
+  };
+
   // 로컬 상태 + Firestore 동시 저장 헬퍼
   const saveDevice = (partial: Parameters<typeof setDevice>[0]) => {
     setDevice(partial);
@@ -516,6 +524,20 @@ export default function DeviceControlScreen() {
               <Text style={styles.wifiChangeBtnText}>WiFi 변경</Text>
             </TouchableOpacity>
           </View>
+        </View>
+
+        <View style={styles.trainingCard}>
+          <View style={styles.trainingTextWrap}>
+            <Text style={styles.trainingLabel}>정밀 자세 학습</Text>
+            <Text style={styles.trainingSub}>자세별 데이터를 직접 수집해 분석 정확도를 높입니다.</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.trainingBtn, !device.deviceId && styles.trainingBtnDisabled]}
+            onPress={handlePrecisionTraining}
+            disabled={!device.deviceId}
+          >
+            <Text style={styles.trainingBtnText}>시작</Text>
+          </TouchableOpacity>
         </View>
 
         {/* MQTT 카드 */}
@@ -791,4 +813,38 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xs,
   },
   wifiChangeBtnText: { fontSize: FONTS.sizes.sm, fontWeight: '700', color: COLORS.primary },
+  trainingCard: {
+    backgroundColor: '#fff',
+    borderRadius: RADIUS.xl,
+    marginHorizontal: SPACING.base,
+    marginBottom: SPACING.sm,
+    padding: SPACING.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...SHADOWS.sm,
+  },
+  trainingTextWrap: { flex: 1, paddingRight: SPACING.md },
+  trainingLabel: {
+    fontSize: FONTS.sizes.base,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 3,
+  },
+  trainingSub: {
+    fontSize: FONTS.sizes.xs,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  trainingBtn: {
+    minWidth: 68,
+    height: 40,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.base,
+  },
+  trainingBtnDisabled: { backgroundColor: COLORS.textMuted },
+  trainingBtnText: { fontSize: FONTS.sizes.sm, fontWeight: '800', color: '#fff' },
 });

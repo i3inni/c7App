@@ -36,6 +36,7 @@ export const startPostureListener = (deviceId: string, userId: string): void => 
     useStore.getState().updatePosture(d.score ?? 0, d.angle ?? 0, d.pose_en as PostureType);
     if (d.c7Angle !== undefined) {
       useStore.getState().setAngles({ c7: d.c7Angle, t3: d.t3Angle ?? 0, t7: d.t7Angle ?? 0 });
+      useStore.getState().setRolls({ c7: d.c7Roll ?? 0, t3: d.t3Roll ?? 0, t7: d.t7Roll ?? 0 });
     }
   }, () => {
     useStore.getState().setDevice({ mqttStatus: 'error' });

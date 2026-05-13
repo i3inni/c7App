@@ -14,6 +14,14 @@ import { getNotifications, deleteNotification, clearNotifications as clearNotifF
 import { updateTargetScore } from '../../services/userService';
 import { connectToDevice, sendPowerMode } from '../../services/bleService';
 
+function scoreToLevel(score: number) {
+  if (score >= 90) return 'excellent';
+  if (score >= 80) return 'good';
+  if (score >= 70) return 'normal';
+  if (score >= 60) return 'caution';
+  return 'danger';
+}
+
 // ── SVG 아이콘 ────────────────────────────────────────
 function PersonIcon({ size = 22, color = COLORS.text }: { size?: number; color?: string }) {
   return (
@@ -635,7 +643,7 @@ const SCREEN_H = Dimensions.get('window').height;
 
 export default function HomeScreen() {
   const nav = useNavigation();
-  const { user, device, currentScore, currentAngle, currentAngles, currentLevel, currentPostureType, settings, setDevice, notifications, setNotifications } = useStore();
+  const { user, device, currentScore, currentAngle, currentAngles, currentRolls, currentLevel, currentPostureType, settings, setDevice, notifications, setNotifications, todayStats } = useStore();
   const [showGoal, setShowGoal] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
 
@@ -674,8 +682,11 @@ export default function HomeScreen() {
     caution: COLORS.scoreCaution,
     danger: COLORS.scoreDanger,
   };
-  const hasData = currentScore > 0;
-  const color = hasData ? (levelColor[currentLevel] ?? COLORS.textSecondary) : COLORS.textMuted;
+  const isLive = currentScore > 0;
+  const displayScore = isLive ? currentScore : (todayStats?.summary.dailyScore ?? 0);
+  const hasData = displayScore > 0;
+  const displayLevel = isLive ? currentLevel : scoreToLevel(displayScore);
+  const color = hasData ? (levelColor[displayLevel] ?? COLORS.textSecondary) : COLORS.textMuted;
   const unread = notifications.filter(n => !n.read).length;
   const isConnected = device.mqttStatus === 'connected';
   const isBleConnected = device.bleConnected;
@@ -720,7 +731,7 @@ export default function HomeScreen() {
         <View style={styles.gaugeSection}>
           {/* 점수 숫자 */}
           <View style={styles.scoreOverlay}>
-            <Text style={styles.scoreNum}>{hasData ? currentScore : '--'}</Text>
+            <Text style={styles.scoreNum}>{hasData ? displayScore : '--'}</Text>
             <Text style={styles.scoreLabelText}>POSTURE SCORE</Text>
           </View>
 
@@ -730,7 +741,7 @@ export default function HomeScreen() {
             activeOpacity={0.85}
             style={styles.barWrap}
           >
-            <PostureGauge score={currentScore} targetScore={settings.targetScore} />
+            <PostureGauge score={displayScore} targetScore={settings.targetScore} />
             <TouchableOpacity onPress={() => setShowGoal(true)} style={styles.targetRow}>
               <Text style={styles.targetText}>◎ Target: {settings.targetScore}+ 점</Text>
             </TouchableOpacity>
@@ -740,6 +751,7 @@ export default function HomeScreen() {
           <View style={styles.figureWrap}>
             <SpineVisualizer
               angles={currentAngles}
+              rolls={currentRolls}
               width={spineW}
               height={spineH}
             />
@@ -758,7 +770,7 @@ export default function HomeScreen() {
           <View style={styles.statBox}>
             <Text style={styles.statKey}>STATUS</Text>
             <Text style={[styles.statStatus, { color }]}>
-              {hasData ? `⚠ ${levelLabel[currentLevel]}` : '—'}
+              {hasData ? `⚠ ${levelLabel[displayLevel]}` : '—'}
             </Text>
           </View>
         </View>

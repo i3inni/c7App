@@ -29,6 +29,7 @@ interface AppState {
   currentScore: number;
   currentAngle: number;
   currentAngles: { c7: number; t3: number; t7: number };
+  currentRolls:  { c7: number; t3: number; t7: number };
   currentLevel: PostureLevel;
   currentPostureType: PostureType;
   currentDiagnosisLevel: DiagnosisLevel | null; // ML 모델 직접 출력 (null이면 각도 기반 폴백)
@@ -62,6 +63,7 @@ interface AppState {
 
   updatePosture: (score: number, angle: number, postureType?: PostureType) => void;
   setAngles: (angles: { c7: number; t3: number; t7: number }) => void;
+  setRolls:  (rolls:  { c7: number; t3: number; t7: number }) => void;
   setPostureType: (type: PostureType) => void;
   setDiagnosisLevel: (level: DiagnosisLevel | null) => void;
   setTodayStats: (stats: DayStats) => void;
@@ -107,6 +109,7 @@ export const useStore = create<AppState>()(
       currentScore: 0,
       currentAngle: 0,
       currentAngles: { c7: 0, t3: 0, t7: 0 },
+      currentRolls:  { c7: 0, t3: 0, t7: 0 },
       currentLevel: 'normal',
       currentPostureType: 'unknown',
       currentDiagnosisLevel: null,
@@ -156,6 +159,7 @@ export const useStore = create<AppState>()(
       updatePosture: (score, angle, postureType) =>
         set({ currentScore: score, currentAngle: angle, currentLevel: scoreToLevel(score), ...(postureType ? { currentPostureType: postureType } : {}) }),
       setAngles: (angles) => set({ currentAngles: angles }),
+      setRolls:  (rolls)  => set({ currentRolls: rolls }),
       setPostureType: (type) => set({ currentPostureType: type }),
       setDiagnosisLevel: (level) => set({ currentDiagnosisLevel: level }),
       setTodayStats: (stats) => set({ todayStats: stats }),

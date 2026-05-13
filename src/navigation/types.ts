@@ -20,6 +20,7 @@ export type RootStackParamList = {
   MqttConnect: undefined;
   WifiProvision: { device: Device; mode?: 'setup' | 'manage' };
   InitBodyInfo: undefined;
+  PoseCalibration: { deviceId: string; mode?: 'setup' | 'training' };
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   MyInfo: undefined;
   BodyInfo: undefined;

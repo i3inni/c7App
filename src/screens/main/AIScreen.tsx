@@ -52,7 +52,7 @@ export default function AIScreen() {
   // 레벨/배지: ML 모델 출력 우선, 없으면 각도 기반 폴백
   const level = currentDiagnosisLevel ?? classifyLevel(currentAngle);
   // 표시용 레벨: 마지막 진단 결과 고정 (실시간 각도 변화에 흔들리지 않음)
-  const displayLevel = lastDiagnosis?.level ?? level;
+  const displayLevel = level;
   const { levelText, badgeText, badgeColor, warningIconName, warningIconColor } = levelToMeta(displayLevel);
 
   const [activeStep, setActiveStep] = useState<Step>(1);

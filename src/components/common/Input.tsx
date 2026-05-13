@@ -74,8 +74,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     paddingHorizontal: SPACING.base,
     height: 52,
-    borderWidth: 1,
-    borderColor: '#E8ECF1',
   },
   input: {
     flex: 1,

@@ -15,6 +15,7 @@ import {
 import MqttConnectScreen from '../screens/auth/MqttConnectScreen';
 import WifiProvisionScreen from '../screens/auth/WifiProvisionScreen';
 import InitBodyInfoScreen from '../screens/auth/InitBodyInfoScreen';
+import CalibrationScreen from '../screens/auth/CalibrationScreen';
 
 import HomeScreen from '../screens/main/HomeScreen';
 import StatsScreen from '../screens/main/StatsScreen';
@@ -189,6 +190,7 @@ export default function AppNavigator() {
           <Stack.Screen name="MqttConnect" component={MqttConnectScreen} />
           <Stack.Screen name="WifiProvision" component={WifiProvisionScreen as any} />
           <Stack.Screen name="InitBodyInfo" component={InitBodyInfoScreen} />
+          <Stack.Screen name="PoseCalibration" component={CalibrationScreen} />
 
           {/* Main */}
           <Stack.Screen name="MainTabs" component={MainTabs} />
