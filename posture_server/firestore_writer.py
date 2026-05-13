@@ -272,7 +272,46 @@ def _update_live_sync(
         data["c7Angle"] = round(sensor_angles["c7"], 1)
         data["t3Angle"] = round(sensor_angles["t3"], 1)
         data["t7Angle"] = round(sensor_angles["t7"], 1)
+        data["c7Roll"]  = round(sensor_angles.get("c7Roll", 0.0), 1)
+        data["t3Roll"]  = round(sensor_angles.get("t3Roll", 0.0), 1)
+        data["t7Roll"]  = round(sensor_angles.get("t7Roll", 0.0), 1)
     _db.collection("live_posture").document(device_id).set(data)
+
+
+# ── 학습 샘플 ────────────────────────────────────────────
+
+TRAINING_COLLECTION = "training_samples"
+SENSORS      = ["C7", "T3", "T7"]
+FEATURE_COLS = [f"diff_{s}_{ax}" for s in SENSORS for ax in ("pitch", "roll")]
+
+
+def _save_training_sample_sync(user_id: str, label: str, features: list[float]) -> None:
+    if not _db:
+        return
+    doc = {f: features[i] for i, f in enumerate(FEATURE_COLS)}
+    doc["label"]     = label
+    doc["userId"]    = user_id
+    doc["createdAt"] = firestore.SERVER_TIMESTAMP
+    _db.collection(TRAINING_COLLECTION).add(doc)
+
+
+def _fetch_all_training_samples_sync() -> list[dict]:
+    if not _db:
+        return []
+    docs = _db.collection(TRAINING_COLLECTION).stream()
+    return [d.to_dict() for d in docs]
+
+
+async def save_training_sample(user_id: str, label: str, features: list[float]) -> None:
+    if not _db:
+        return
+    await asyncio.to_thread(_save_training_sample_sync, user_id, label, features)
+
+
+async def fetch_all_training_samples() -> list[dict]:
+    if not _db:
+        return []
+    return await asyncio.to_thread(_fetch_all_training_samples_sync)
 
 
 async def update_live_posture(

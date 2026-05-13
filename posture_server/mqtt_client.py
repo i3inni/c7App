@@ -52,6 +52,17 @@ SUB_TOPIC = "posture/+/raw"
 _buffers:       dict[tuple[str, str], SensorBuffer] = {}
 _prev_alert:    dict[tuple[str, str], bool]         = {}
 _prev_severity: dict[tuple[str, str], str]          = {}
+
+# 자세 캘리브레이션 수집 세션: device_id → asyncio.Queue
+_collection_sessions: dict[str, asyncio.Queue] = {}
+
+
+def register_collection_session(device_id: str, queue: asyncio.Queue) -> None:
+    _collection_sessions[device_id] = queue
+
+
+def unregister_collection_session(device_id: str) -> None:
+    _collection_sessions.pop(device_id, None)
 _cal_loaded:    set[tuple[str, str]]                = set()
 
 
@@ -100,11 +111,11 @@ async def _handle_complete_frame(
 
     _prev_severity[key] = result["severity"]
 
-    dp = result["diff_pitch"]  # [C7, T7, T3] 순서 (sensor_buffer._ORDER 기준)
+    dp = result["diff_pitch"]  # [C7, T3, T7] 순서 (실측 기준)
+    dr = result["diff_roll"]
     sensor_angles = {
-        "c7": dp[0],
-        "t7": dp[1],
-        "t3": dp[2],
+        "c7": dp[0], "t3": dp[1], "t7": dp[2],
+        "c7Roll": dr[0], "t3Roll": dr[1], "t7Roll": dr[2],
     }
     await update_daily_stats(user_id, score, angle, is_bad, corrected, sensor_angles)
     await update_live_posture(
@@ -199,6 +210,11 @@ async def mqtt_listener() -> None:
                             p, r = buf.extract()
                             buf.clear()
                             print(f"✅ 완성 프레임 → 추론: device={device_id} user={user_id} pitch={[round(x,1) for x in p]}")
+
+                            # 수집 세션 활성화 중이면 프레임 전달
+                            if device_id in _collection_sessions:
+                                await _collection_sessions[device_id].put((p, r))
+
                             asyncio.create_task(
                                 _handle_complete_frame(client, device_id, user_id, p, r)
                             )

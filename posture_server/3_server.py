@@ -32,8 +32,9 @@ from posture_engine import (
     ml, get_state, calc_bmi, bmi_adjustment, age_adjustment,
     apply_calibration, run_inference, SENSORS,
 )
-from mqtt_client import mqtt_listener
-from firestore_writer import save_calibration
+from mqtt_client import mqtt_listener, register_collection_session, unregister_collection_session
+from firestore_writer import save_calibration, save_training_sample, fetch_all_training_samples
+from auto_trainer import retrain, FEATURE_COLS
 
 BASE_DIR    = os.path.dirname(__file__)
 MODEL_PATH  = os.path.join(BASE_DIR, "models", "posture_model.pkl")
@@ -73,6 +74,33 @@ class CalibrateRequest(BaseModel):
     def check_user_id(cls, v):
         if not v or len(v) > 128:
             raise ValueError("user_id가 비어 있거나 너무 깁니다.")
+        return v
+
+
+POSE_LABELS  = ["normal", "forward_head", "kyphosis", "lateral_tilt"]
+COLLECT_SEC  = 20   # 자세당 수집 시간 (초)
+
+
+class PoseCollectRequest(BaseModel):
+    device_id:   str
+    user_id:     str
+    label:       str
+    baseline_p:  list[float]   # 캘리브레이션 baseline pitch [C7, T3, T7]
+    baseline_r:  list[float]   # 캘리브레이션 baseline roll  [C7, T3, T7]
+    duration_sec: int = COLLECT_SEC
+
+    @field_validator("label")
+    @classmethod
+    def check_label(cls, v):
+        if v not in POSE_LABELS:
+            raise ValueError(f"label은 {POSE_LABELS} 중 하나여야 합니다")
+        return v
+
+    @field_validator("baseline_p", "baseline_r")
+    @classmethod
+    def check_len(cls, v):
+        if len(v) != 3:
+            raise ValueError("baseline은 3개 값 필요 [C7, T3, T7]")
         return v
 
 
@@ -218,6 +246,96 @@ async def health():
         "sensors":     SENSORS,
         "version":     "9.0.0",
     }
+
+
+@app.post("/pose-calibration/baseline")
+async def pose_calibration_baseline(body: dict):
+    """
+    device_id 기기에서 N초간 데이터를 수집해 baseline(평균 pitch/roll)을 반환합니다.
+    CalibrationScreen 시작 시 한 번 호출합니다.
+    """
+    device_id    = body.get("device_id", "")
+    duration_sec = int(body.get("duration_sec", 5))
+
+    queue: asyncio.Queue = asyncio.Queue()
+    register_collection_session(device_id, queue)
+
+    frames: list[tuple] = []
+    deadline = asyncio.get_event_loop().time() + duration_sec
+    try:
+        while asyncio.get_event_loop().time() < deadline:
+            remaining = deadline - asyncio.get_event_loop().time()
+            try:
+                p, r = await asyncio.wait_for(queue.get(), timeout=min(remaining, 3.0))
+                frames.append((p, r))
+            except asyncio.TimeoutError:
+                break
+    finally:
+        unregister_collection_session(device_id)
+
+    if not frames:
+        raise HTTPException(422, "센서 데이터를 수신하지 못했습니다.")
+
+    n  = len(frames)
+    bp = [sum(f[0][i] for f in frames) / n for i in range(3)]
+    br = [sum(f[1][i] for f in frames) / n for i in range(3)]
+    return {"baseline_p": bp, "baseline_r": br, "frames": n}
+
+
+@app.post("/pose-calibration/collect")
+async def pose_calibration_collect(req: PoseCollectRequest):
+    """
+    자세 하나의 센서 데이터를 수집해 Firestore training_samples에 저장합니다.
+    앱 캘리브레이션 화면에서 자세마다 한 번씩 호출합니다.
+    """
+    queue: asyncio.Queue = asyncio.Queue()
+    register_collection_session(req.device_id, queue)
+
+    frames: list[tuple] = []
+    deadline = asyncio.get_event_loop().time() + req.duration_sec
+    try:
+        while asyncio.get_event_loop().time() < deadline:
+            remaining = deadline - asyncio.get_event_loop().time()
+            try:
+                p, r = await asyncio.wait_for(queue.get(), timeout=min(remaining, 3.0))
+                frames.append((p, r))
+            except asyncio.TimeoutError:
+                break
+    finally:
+        unregister_collection_session(req.device_id)
+
+    if not frames:
+        raise HTTPException(422, "센서 데이터를 수신하지 못했습니다. 기기가 연결됐는지 확인하세요.")
+
+    # baseline diff 계산 → 피처 생성 → Firestore 저장
+    saved = 0
+    for p, r in frames:
+        dp = [p[i] - req.baseline_p[i] for i in range(3)]
+        dr = [r[i] - req.baseline_r[i] for i in range(3)]
+        features = [v for pair in zip(dp, dr) for v in pair]
+        await save_training_sample(req.user_id, req.label, features)
+        saved += 1
+
+    return {"status": "ok", "label": req.label, "collected": saved}
+
+
+@app.post("/pose-calibration/train")
+async def pose_calibration_train():
+    """
+    Firestore의 모든 training_samples로 모델을 재학습하고 핫 리로드합니다.
+    캘리브레이션 마지막 단계에서 한 번만 호출합니다.
+    """
+    rows = await fetch_all_training_samples()
+    if not rows:
+        raise HTTPException(422, "학습 데이터가 없습니다. 먼저 /pose-calibration/collect를 실행하세요.")
+
+    # FEATURE_COLS에 해당하는 키가 모두 있는 행만 사용
+    valid_rows = [r for r in rows if all(f in r for f in FEATURE_COLS) and "label" in r]
+    if not valid_rows:
+        raise HTTPException(422, "유효한 학습 샘플이 없습니다.")
+
+    result = await retrain(valid_rows)
+    return {"status": "ok", **result}
 
 
 @app.get("/")

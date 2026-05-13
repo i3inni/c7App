@@ -21,7 +21,7 @@ CSV_PATH    = os.path.join(BASE_DIR, "data",   "training_data.csv")
 MODEL_PATH  = os.path.join(BASE_DIR, "models", "posture_model.pkl")
 SCALER_PATH = os.path.join(BASE_DIR, "models", "scaler.pkl")
 
-SENSORS      = ["C7", "T7", "T3"]
+SENSORS      = ["C7", "T3", "T7"]
 FEATURE_COLS = [f"diff_{s}_{ax}" for s in SENSORS for ax in ("pitch", "roll")]
 LABEL_COL    = "label"
 POSE_LABELS  = ["normal", "forward_head", "kyphosis", "lateral_tilt"]

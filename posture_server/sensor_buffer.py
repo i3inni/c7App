@@ -2,7 +2,7 @@
 ESP32가 C7 / T3 / T7 메시지를 같은 토픽에 순차 전송하므로,
 3개가 모두 도착하면 한 번에 처리할 수 있도록 임시 보관합니다.
 
-서버가 기대하는 센서 순서: [C7, T7, T3]
+서버가 기대하는 센서 순서: [C7, T3, T7]
 ESP32 전송 순서:            C7 → T3 → T7  (i=0,1,2)
 → extract() 에서 순서를 맞춰 반환합니다.
 """
@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 SENSOR_TIMEOUT = 2.0  # 이 시간 안에 3개가 안 모이면 버퍼 초기화
 
 # 서버(posture_engine)가 기대하는 순서
-_ORDER = ["C7", "T7", "T3"]
+_ORDER = ["C7", "T3", "T7"]
 
 
 @dataclass
@@ -35,7 +35,7 @@ class SensorBuffer:
         return bool(self._data) and (time.monotonic() - self._ts) > SENSOR_TIMEOUT
 
     def extract(self) -> tuple[list[float], list[float]]:
-        """[C7, T7, T3] 순서로 pitch / roll 반환."""
+        """[C7, T3, T7] 순서로 pitch / roll 반환."""
         p = [self._data[s][0] for s in _ORDER]
         r = [self._data[s][1] for s in _ORDER]
         return p, r
