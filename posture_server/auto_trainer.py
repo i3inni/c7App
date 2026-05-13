@@ -94,6 +94,8 @@ def _evaluate_against_baseline(
     scaler,
     X_te,
     y_te,
+    cand_acc: float,
+    cand_recall: float,
 ) -> tuple[bool, dict]:
     """
     candidate를 baseline(default/current)과 비교합니다.
@@ -101,9 +103,6 @@ def _evaluate_against_baseline(
     반환:
       (통과 여부, 비교 정보 dict)
     """
-    cand_acc = candidate.score(scaler.transform(X_te), y_te) * 100
-    cand_recall = _bad_recall(candidate, scaler, X_te, y_te) * 100
-
     if baseline_pair is None:
         return True, {
             "baseline": baseline_name,
@@ -244,6 +243,8 @@ def _train_sync(rows: list[dict]) -> dict:
             scaler,
             X_te,
             y_te,
+            cand_acc,
+            cand_recall,
         )
         checks.append(info)
 
