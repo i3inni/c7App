@@ -390,7 +390,8 @@ async def pose_calibration_train():
         raise HTTPException(422, "유효한 학습 샘플이 없습니다.")
 
     result = await retrain(valid_rows)
-    return {"status": "ok", **result}
+    status = "promoted" if result["promoted"] else "rejected"
+    return {"status": status, **result}
 
 
 @app.get("/")
