@@ -10,7 +10,7 @@ import SpineVisualizer from '../../components/common/SpineVisualizer';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? '';
-const BASELINE_SEC = 5;
+const BASELINE_SEC = 10;
 const TRAINING_POSE_SEC = 30;
 
 const POSES = [
@@ -172,7 +172,10 @@ export default function CalibrationScreen() {
         body: JSON.stringify({ device_id: deviceId, duration_sec: BASELINE_SEC }),
       });
       if (!res.ok) {
-        throw new Error(await getErrorMessage(res, '영점 측정 실패'));
+        const msg = res.status === 408
+          ? '기기가 Wi-Fi에 연결되어 있는지 확인 후 다시 시도하세요.'
+          : await getErrorMessage(res, '영점 측정 실패');
+        throw new Error(msg);
       }
       const data = await res.json();
 

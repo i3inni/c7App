@@ -324,7 +324,7 @@ async def pose_calibration_baseline(body: dict):
         unregister_collection_session(device_id)
 
     if not frames:
-        raise HTTPException(422, "센서 데이터를 수신하지 못했습니다.")
+        raise HTTPException(408, "기기에서 센서 데이터를 수신하지 못했습니다. 기기가 Wi-Fi 및 MQTT에 연결되어 있는지 확인하세요.")
 
     n  = len(frames)
     bp = [sum(f[0][i] for f in frames) / n for i in range(3)]
