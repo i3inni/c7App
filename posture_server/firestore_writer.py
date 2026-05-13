@@ -29,6 +29,7 @@ load_dotenv()
 
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 _db = None
 try:
@@ -327,9 +328,9 @@ def _fetch_training_samples_sync(
         return []
     query = _db.collection(TRAINING_COLLECTION)
     if sources:
-        query = query.where("source", "in", sources)
+        query = query.where(filter=FieldFilter("source", "in", sources))
     if approved_only:
-        query = query.where("approved_for_training", "==", True)
+        query = query.where(filter=FieldFilter("approved_for_training", "==", True))
     return [d.to_dict() for d in query.stream()]
 
 
@@ -459,7 +460,7 @@ def _aggregate_weekly_stats_sync(target_date: datetime) -> None:
     if not _db:
         return
     date_str = target_date.strftime("%Y-%m-%d")
-    docs = list(_db.collection("daily_stats").where("date", "==", date_str).stream())
+    docs = list(_db.collection("daily_stats").where(filter=FieldFilter("date", "==", date_str)).stream())
     user_ids = list({
         (d.to_dict().get("userId") or d.to_dict().get("uid"))
         for d in docs
@@ -524,8 +525,8 @@ def _cleanup_rejected_auto_sync() -> int:
 
     docs = (
         _db.collection(TRAINING_COLLECTION)
-           .where("source", "==", "auto")
-           .where("approved_for_training", "==", False)
+           .where(filter=FieldFilter("source", "==", "auto"))
+           .where(filter=FieldFilter("approved_for_training", "==", False))
            .stream()
     )
 

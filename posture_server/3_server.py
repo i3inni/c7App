@@ -307,6 +307,7 @@ async def pose_calibration_baseline(body: dict):
     device_id    = body.get("device_id", "")
     duration_sec = int(body.get("duration_sec", 5))
 
+    print(f"📐 baseline 수집 시작: device_id={repr(device_id)} duration={duration_sec}s")
     queue: asyncio.Queue = asyncio.Queue()
     register_collection_session(device_id, queue)
 
