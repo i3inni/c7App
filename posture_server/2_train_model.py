@@ -16,24 +16,29 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix, recall_score
 
+from features import SENSORS, RAW_FEATURE_COLS, FEATURE_COLS, features_from_raw
+
 BASE_DIR    = os.path.dirname(__file__)
 CSV_PATH    = os.path.join(BASE_DIR, "data",   "training_data.csv")
 MODEL_PATH  = os.path.join(BASE_DIR, "models", "default", "posture_model.pkl")
 SCALER_PATH = os.path.join(BASE_DIR, "models", "default", "scaler.pkl")
 
-SENSORS      = ["C7", "T3", "T7"]
-FEATURE_COLS = [f"diff_{s}_{ax}" for s in SENSORS for ax in ("pitch", "roll")]
-LABEL_COL    = "label"
-POSE_LABELS  = ["normal", "forward_head", "kyphosis", "lateral_tilt"]
+LABEL_COL   = "label"
+POSE_LABELS = ["normal", "forward_head", "kyphosis", "lateral_tilt"]
 
 
 def load_data():
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"데이터 없음: {CSV_PATH}\npython 1_collect_data.py --simulate 먼저 실행")
     df = pd.read_csv(CSV_PATH)
-    print(f"데이터: {len(df)}행  피처: {len(FEATURE_COLS)}개")
+    print(f"데이터: {len(df)}행  raw 피처: {len(RAW_FEATURE_COLS)}개 → 파생 포함: {len(FEATURE_COLS)}개")
     print(df[LABEL_COL].value_counts().to_string() + "\n")
-    return df[FEATURE_COLS].values, df[LABEL_COL].values
+
+    # raw 6개에서 파생 feature 추가해 11개로 확장
+    raw_matrix = df[RAW_FEATURE_COLS].values
+    X = np.array([features_from_raw(row.tolist()) for row in raw_matrix])
+    y = df[LABEL_COL].values
+    return X, y
 
 
 def train(X_train, y_train):

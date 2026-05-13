@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 
 from sensor_buffer import SensorBuffer
 from posture_engine import ml, run_inference, apply_calibration
+from features import RAW_FEATURE_COLS
 from firestore_writer import (
     update_daily_stats,
     update_live_posture,

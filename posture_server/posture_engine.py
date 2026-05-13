@@ -15,6 +15,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Literal, Dict, Optional
 
+from features import build_features
+
 SENSORS = ["C7", "T7", "T3"]
 
 POSE_META = {
@@ -390,8 +392,8 @@ def run_inference(device_id: str, user_id: str, p: list[float], r: list[float]) 
     dr = [r[i] - state.baseline_roll[i]  for i in range(3)]
     state.window.append(dp[0])
 
-    # ML 분류 (pose_en, pose_kr, is_bad_posture)
-    features = [v for pair in zip(dp, dr) for v in pair]
+    # ML 분류 — raw + 파생 feature 11개
+    features = build_features(dp, dr)
     X_scaled = ml.scaler.transform(np.array(features).reshape(1, -1))
     proba    = ml.model.predict_proba(X_scaled)[0]
     best_idx = int(np.argmax(proba))

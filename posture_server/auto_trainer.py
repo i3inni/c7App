@@ -23,6 +23,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 from posture_engine import ml
+from features import RAW_FEATURE_COLS, FEATURE_COLS, features_from_raw
 
 BASE_DIR      = os.path.dirname(__file__)
 CURRENT_MODEL_PATH  = os.path.join(BASE_DIR, "models", "current",  "posture_model.pkl")
@@ -31,9 +32,7 @@ DEFAULT_MODEL_PATH  = os.path.join(BASE_DIR, "models", "default",  "posture_mode
 DEFAULT_SCALER_PATH = os.path.join(BASE_DIR, "models", "default",  "scaler.pkl")
 REJECTED_DIR        = os.path.join(BASE_DIR, "models", "rejected")
 
-SENSORS      = ["C7", "T3", "T7"]
-FEATURE_COLS = [f"diff_{s}_{ax}" for s in SENSORS for ax in ("pitch", "roll")]
-BAD_CLASSES  = ["forward_head", "kyphosis", "lateral_tilt"]
+BAD_CLASSES = ["forward_head", "kyphosis", "lateral_tilt"]
 
 MIN_SAMPLES_PER_CLASS = 5
 
@@ -103,7 +102,10 @@ def _train_sync(rows: list[dict]) -> dict:
     if not _check_class_balance(df["label"].values):
         raise ValueError(f"클래스 불균형 {PROMOTE_MAX_CLASS_IMBALANCE}:1 초과 — 데이터 보강 필요")
 
-    X = df[FEATURE_COLS].values
+    # raw 6개 → 파생 포함 11개로 확장
+    import numpy as np
+    raw_matrix = df[RAW_FEATURE_COLS].values
+    X = np.array([features_from_raw(row.tolist()) for row in raw_matrix])
     y = df["label"].values
 
     X_tr, X_te, y_tr, y_te = train_test_split(

@@ -38,7 +38,8 @@ from firestore_writer import (
     save_calibration, save_training_sample, fetch_training_samples,
     aggregate_weekly_stats,
 )
-from auto_trainer import retrain, FEATURE_COLS
+from auto_trainer import retrain
+from features import RAW_FEATURE_COLS as FEATURE_COLS
 
 BASE_DIR = os.path.dirname(__file__)
 CURRENT_MODEL_PATH  = os.path.join(BASE_DIR, "models", "current", "posture_model.pkl")

@@ -283,8 +283,7 @@ def _update_live_sync(
 # ── 학습 샘플 ────────────────────────────────────────────
 
 TRAINING_COLLECTION = "training_samples"
-SENSORS      = ["C7", "T3", "T7"]
-FEATURE_COLS = [f"diff_{s}_{ax}" for s in SENSORS for ax in ("pitch", "roll")]
+from features import RAW_FEATURE_COLS as FEATURE_COLS  # Firestore엔 raw 6개만 저장
 
 
 def _save_training_sample_sync(
