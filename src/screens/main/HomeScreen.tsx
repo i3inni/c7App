@@ -754,6 +754,8 @@ export default function HomeScreen() {
               rolls={currentRolls}
               width={spineW}
               height={spineH}
+              labelFontSize={16}
+              valueFontSize={14}
             />
           </View>
         </View>

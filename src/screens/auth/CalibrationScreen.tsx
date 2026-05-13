@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Path, G, Rect } from 'react-native-svg';
 import { useStore } from '../../store';
 import SpineVisualizer from '../../components/common/SpineVisualizer';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
@@ -14,11 +14,66 @@ const BASELINE_SEC = 5;
 const TRAINING_POSE_SEC = 30;
 
 const POSES = [
-  { key: 'normal',       label: '바른 자세',       instruction: '등을 펴고 화면을 바라보는\n편안한 바른 자세를 유지하세요.',         emoji: '🪑' },
-  { key: 'forward_head', label: '거북목',           instruction: '고개를 앞으로 쭉 내밀고\n화면에 가까이 숙이는 자세를 유지하세요.', emoji: '🐢' },
-  { key: 'kyphosis',     label: '굽은등',           instruction: '어깨를 앞으로 구부리고\n등을 둥글게 말아주세요.',                  emoji: '🌀' },
-  { key: 'lateral_tilt', label: '옆으로 기울어짐', instruction: '몸을 한쪽으로 기울이거나\n다리를 꼬고 앉아주세요.',                emoji: '↗️' },
+  { key: 'normal',       label: '바른 자세',       instruction: '등을 펴고 화면을 바라보는\n편안한 바른 자세를 유지하세요.'         },
+  { key: 'forward_head', label: '거북목',           instruction: '고개를 앞으로 쭉 내밀고\n화면에 가까이 숙이는 자세를 유지하세요.' },
+  { key: 'kyphosis',     label: '굽은등',           instruction: '어깨를 앞으로 구부리고\n등을 둥글게 말아주세요.'                  },
+  { key: 'lateral_tilt', label: '옆으로 기울어짐', instruction: '몸을 한쪽으로 기울이거나\n다리를 꼬고 앉아주세요.'                },
 ] as const;
+
+function PoseIcon({ poseKey, size = 72 }: { poseKey: string; size?: number }) {
+  const c = COLORS.primary;
+  const sw = 2.6;
+  switch (poseKey) {
+    case 'normal':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 72 72" fill="none">
+          <Circle cx="36" cy="10" r="8" stroke={c} strokeWidth={sw} />
+          <Path d="M36 18 L36 48" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M22 30 L50 30" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M22 30 L22 44 M50 30 L50 44" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M24 48 L48 48" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M28 48 L28 62 L14 62 M44 48 L44 62 L58 62" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    case 'forward_head':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 72 72" fill="none">
+          <Circle cx="48" cy="10" r="8" stroke={c} strokeWidth={sw} />
+          <Path d="M42 18 L36 30" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M36 30 L36 52" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M22 34 L50 30" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M22 34 L22 48 M48 30 L48 44" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M26 52 L46 52" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M30 52 L30 66 M42 52 L42 66" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+        </Svg>
+      );
+    case 'kyphosis':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 72 72" fill="none">
+          <Circle cx="44" cy="10" r="8" stroke={c} strokeWidth={sw} />
+          <Path d="M40 18 Q20 28 24 50" stroke={c} strokeWidth={sw} strokeLinecap="round" fill="none" />
+          <Path d="M20 28 L44 22" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M20 28 L16 42 M44 22 L50 36" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M20 52 L40 50" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M24 54 L22 68 M36 52 L38 66" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+        </Svg>
+      );
+    case 'lateral_tilt':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 72 72" fill="none">
+          <Circle cx="46" cy="10" r="8" stroke={c} strokeWidth={sw} />
+          <Path d="M42 18 L28 52" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M18 26 L54 20" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M18 26 L14 40 M54 20 L58 34" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M22 54 L40 50" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M26 56 L22 70 M36 52 L36 68" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M62 38 L68 32 M62 38 L68 44" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    default:
+      return null;
+  }
+}
 
 type Step = 'baseline_ready' | 'baseline_capturing' | 'pose_ready' | 'pose_collecting' | 'training' | 'done' | 'error';
 type RouteParams = { PoseCalibration: { deviceId: string; mode?: 'setup' | 'training' } };
@@ -248,7 +303,13 @@ export default function CalibrationScreen() {
           </View>
 
           <View style={s.instructionCard}>
-            <Text style={s.instructionTitle}>🧱 벽에 기대어 서주세요</Text>
+            <View style={s.instructionTitleRow}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                <Rect x="2" y="3" width="20" height="18" rx="2" stroke={COLORS.text} strokeWidth="1.8" />
+                <Path d="M2 8h20M2 13h20M9 3v18" stroke={COLORS.text} strokeWidth="1.8" strokeLinecap="round" />
+              </Svg>
+              <Text style={s.instructionTitle}>벽에 기대어 서주세요</Text>
+            </View>
             <Text style={s.instructionText}>
               뒤통수 · 어깨 · 엉덩이 · 발뒤꿈치를 벽에 붙이고{'\n'}
               편안하게 정자세로 서주세요.{'\n\n'}
@@ -310,7 +371,7 @@ export default function CalibrationScreen() {
           </View>
 
           <View style={s.poseCard}>
-            <Text style={s.poseEmoji}>{currentPose.emoji}</Text>
+            <View style={s.poseEmoji}><PoseIcon poseKey={currentPose.key} size={72} /></View>
             <Text style={s.poseLabel}>{currentPose.label}</Text>
             <Text style={s.poseInstruction}>{currentPose.instruction}</Text>
             <Text style={s.poseTimer}>{TRAINING_POSE_SEC}초간 유지</Text>
@@ -333,7 +394,7 @@ export default function CalibrationScreen() {
           <View style={s.vizCard}>
             <SpineVisualizer angles={currentAngles} rolls={currentRolls} width={spineW} height={spineH} />
           </View>
-          <Text style={s.collectEmoji}>{currentPose.emoji}</Text>
+          <View style={s.collectEmoji}><PoseIcon poseKey={currentPose.key} size={72} /></View>
           <Text style={s.capturingLabel}>{currentPose.label}</Text>
           <Text style={s.capturingHint}>{currentPose.instruction}</Text>
           <Text style={s.countdownNum}>{countdown}</Text>
@@ -387,7 +448,11 @@ export default function CalibrationScreen() {
   return (
     <SafeAreaView style={s.safe}>
       <View style={[s.centerContent, { justifyContent: 'center' }]}>
-        <Text style={{ fontSize: 48 }}>⚠️</Text>
+        <Svg width={56} height={56} viewBox="0 0 24 24" fill="none">
+          <Path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke={COLORS.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M12 9v4" stroke={COLORS.accent} strokeWidth="2" strokeLinecap="round" />
+          <Circle cx="12" cy="17" r="1" fill={COLORS.accent} />
+        </Svg>
         <Text style={s.errorTitle}>오류 발생</Text>
         <Text style={s.capturingHint}>{errorMsg}</Text>
         <TouchableOpacity style={[s.btn, { marginTop: SPACING.xl }]} onPress={() => setStep('baseline_ready')}>
@@ -426,7 +491,8 @@ const s = StyleSheet.create({
     borderRadius: RADIUS.xl, borderWidth: 1, borderColor: 'rgba(29,179,142,0.25)',
     padding: SPACING.lg, marginBottom: SPACING.xl,
   },
-  instructionTitle: { fontSize: FONTS.sizes.md, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.sm },
+  instructionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.sm },
+  instructionTitle: { fontSize: FONTS.sizes.md, fontWeight: '800', color: COLORS.text },
   instructionText:  { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, lineHeight: 22 },
   bodyInfo:         { marginTop: SPACING.sm, fontSize: FONTS.sizes.xs, color: COLORS.primary, fontWeight: '600' },
   bodyInfoMuted:    { marginTop: SPACING.sm, fontSize: FONTS.sizes.xs, color: COLORS.textMuted },
@@ -440,7 +506,7 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.bgSecondary, borderWidth: 1, borderColor: COLORS.border,
     padding: SPACING.xl, alignItems: 'center', marginBottom: SPACING.xl, ...SHADOWS.md,
   },
-  poseEmoji:       { fontSize: 56, marginBottom: SPACING.md },
+  poseEmoji:       { marginBottom: SPACING.md },
   poseLabel:       { fontSize: FONTS.sizes.xl, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.sm },
   poseInstruction: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 22 },
   poseTimer:       { fontSize: FONTS.sizes.xs, color: COLORS.primary, fontWeight: '700', marginTop: SPACING.md },
@@ -453,7 +519,7 @@ const s = StyleSheet.create({
 
   capturingLabel: { fontSize: FONTS.sizes.xl, fontWeight: '800', color: COLORS.text, marginTop: SPACING.lg, textAlign: 'center' },
   capturingHint:  { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, marginTop: SPACING.sm, textAlign: 'center', lineHeight: 22, paddingHorizontal: SPACING.xl },
-  collectEmoji:   { fontSize: 56, marginTop: SPACING.lg },
+  collectEmoji:   { marginTop: SPACING.lg },
 
   countdownNum: { fontSize: 72, fontWeight: '900', color: COLORS.primary, marginTop: SPACING.md },
   countdownSub: { fontSize: FONTS.sizes.sm, color: COLORS.textMuted, marginBottom: SPACING.sm },

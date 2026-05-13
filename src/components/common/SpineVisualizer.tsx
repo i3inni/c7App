@@ -71,14 +71,18 @@ function VertebraElement({
 // ── 메인 컴포넌트 ──────────────────────────────────────
 export default function SpineVisualizer({
   angles,
-  rolls  = { c7: 0, t3: 0, t7: 0 },
-  width  = 150,
-  height = 300,
+  rolls       = { c7: 0, t3: 0, t7: 0 },
+  width       = 150,
+  height      = 300,
+  labelFontSize = 13,
+  valueFontSize = 11,
 }: {
   angles: SpineAngles;
   rolls?:  SpineRolls;
   width?:  number;
   height?: number;
+  labelFontSize?: number;
+  valueFontSize?: number;
 }) {
   const { points, labels } = useMemo(() => {
     const c7R = (angles.c7 * Math.PI) / 180;
@@ -158,6 +162,10 @@ export default function SpineVisualizer({
 
           const rollVal = rolls[type];
 
+          const pitchY = y + valueFontSize * 0.5;
+          const rollY  = pitchY + valueFontSize + 4;
+          const arrowXBase = labelX - Math.round(valueFontSize * 3.8);
+
           return (
             <G key={type}>
               <Circle cx={x - 36} cy={y} r={3} fill={color} />
@@ -166,18 +174,30 @@ export default function SpineVisualizer({
                 y={y - 10}
                 textAnchor="end"
                 fill={color}
-                fontSize="13"
+                fontSize={String(labelFontSize)}
                 fontWeight="bold"
               >
                 {type.toUpperCase()}
               </SvgText>
-              {/* 전후(pitch) */}
-              <SvgText x={labelX} y={y + 5} textAnchor="end" fill={color} fontSize="11">
-                {`↕ ${val.toFixed(1)}°`}
+              {/* 전후(pitch) - 상하 화살표 아이콘 */}
+              <G transform={`translate(${arrowXBase - 4}, ${pitchY - valueFontSize * 0.5})`}>
+                <Path
+                  d="M4 0 L4 11 M1.5 3 L4 0 L6.5 3 M1.5 8 L4 11 L6.5 8"
+                  stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none"
+                />
+              </G>
+              <SvgText x={labelX} y={pitchY} textAnchor="end" fill={color} fontSize={String(valueFontSize)}>
+                {`${val.toFixed(1)}°`}
               </SvgText>
-              {/* 좌우(roll) */}
-              <SvgText x={labelX} y={y + 18} textAnchor="end" fill={color} fontSize="11" opacity="0.7">
-                {`↔ ${rollVal.toFixed(1)}°`}
+              {/* 좌우(roll) - 좌우 화살표 아이콘 */}
+              <G transform={`translate(${arrowXBase - 8}, ${rollY - valueFontSize * 0.5})`}>
+                <Path
+                  d="M0 4 L12 4 M3 1.5 L0 4 L3 6.5 M9 1.5 L12 4 L9 6.5"
+                  stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none"
+                />
+              </G>
+              <SvgText x={labelX} y={rollY} textAnchor="end" fill={color} fontSize={String(valueFontSize)} opacity="0.7">
+                {`${rollVal.toFixed(1)}°`}
               </SvgText>
             </G>
           );
