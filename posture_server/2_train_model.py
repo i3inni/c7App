@@ -56,6 +56,17 @@ def evaluate(model, scaler, X_train, y_train, X_test, y_test):
     y_pred = model.predict(X_test)
     print(classification_report(y_test, y_pred, target_names=POSE_LABELS, zero_division=0))
 
+    # 혼동행렬
+    cm     = confusion_matrix(y_test, y_pred, labels=POSE_LABELS)
+    labels = [l[:12] for l in POSE_LABELS]
+    col_w  = 14
+    print("[혼동행렬]  (행=실제, 열=예측)")
+    print(" " * 14 + "".join(f"{l:>{col_w}}" for l in labels))
+    for i, row_label in enumerate(labels):
+        row = "".join(f"{cm[i][j]:>{col_w}}" for j in range(len(labels)))
+        print(f"{row_label:>14}{row}")
+    print()
+
     print("[센서별 축 중요도]")
     for s in SENSORS:
         pi = model.feature_importances_[FEATURE_COLS.index(f"diff_{s}_pitch")]

@@ -35,7 +35,10 @@ from firestore_writer import (
     update_live_posture,
     on_alert_started,
     load_calibration,
+    save_training_sample,
+    fetch_all_training_samples,
 )
+from auto_trainer import retrain
 
 load_dotenv()
 
@@ -55,6 +58,23 @@ _prev_severity: dict[tuple[str, str], str]          = {}
 
 # 자세 캘리브레이션 수집 세션: device_id → asyncio.Queue
 _collection_sessions: dict[str, asyncio.Queue] = {}
+
+# 자동 학습 파이프라인
+SAMPLE_EVERY_N = 30   # 프레임 30개마다 1개 저장 (~3초에 1개)
+RETRAIN_EVERY  = 200  # 누적 200개 도달 시 재학습 트리거
+_frame_counters: dict[tuple[str, str], int] = {}
+_new_sample_count = 0
+
+
+def _rule_based_label(result: dict) -> str:
+    """ML 예측이 아닌 각도 규칙으로 라벨 결정."""
+    if result["roll_flag"]:
+        return "lateral_tilt"
+    if result["c7_flag"] and result["severity"] != "normal":
+        return "forward_head"
+    if result["t3_flag"] and result["severity"] != "normal":
+        return "kyphosis"
+    return "normal"
 
 
 def register_collection_session(device_id: str, queue: asyncio.Queue) -> None:
@@ -86,6 +106,14 @@ async def _ensure_calibration(device_id: str, user_id: str) -> None:
         print(f"✅ [{device_id}/{user_id}] 캘리브레이션 복원 완료")
     else:
         print(f"ℹ️  [{device_id}/{user_id}] 저장된 캘리브레이션 없음 — 기본값 사용")
+
+
+async def _do_retrain(rows: list[dict]) -> None:
+    try:
+        result = await retrain(rows)
+        print(f"🔄 자동 재학습 완료: {result['total_samples']}샘플 / 정확도 {result['test_acc']}%")
+    except Exception as e:
+        print(f"⚠️  자동 재학습 실패: {e}")
 
 
 async def _handle_complete_frame(
@@ -150,6 +178,20 @@ async def _handle_complete_frame(
         await client.publish(f"posture/{device_id}/alert", alert_payload)
 
     _prev_alert[key] = result["alert"]
+
+    # 자동 학습: 규칙 기반 라벨로 샘플 저장, 누적 시 재학습
+    global _new_sample_count
+    _frame_counters[key] = _frame_counters.get(key, 0) + 1
+    if _frame_counters[key] % SAMPLE_EVERY_N == 0:
+        label    = _rule_based_label(result)
+        features = [v for pair in zip(result["diff_pitch"], result["diff_roll"]) for v in pair]
+        await save_training_sample(user_id, label, features)
+        _new_sample_count += 1
+        if _new_sample_count >= RETRAIN_EVERY:
+            _new_sample_count = 0
+            rows = await fetch_all_training_samples()
+            if rows:
+                asyncio.create_task(_do_retrain(rows))
 
 
 async def mqtt_listener() -> None:

@@ -67,11 +67,11 @@ def _train_sync(rows: list[dict]) -> dict:
     joblib.dump(scaler, SCALER_PATH)
 
     return {
-        "classes":      list(model.classes_),
+        "classes":       list(model.classes_),
         "total_samples": len(df),
-        "train_acc":    round(train_acc * 100, 1),
-        "test_acc":     round(test_acc  * 100, 1),
-        "label_counts": counts.to_dict(),
+        "train_acc":     round(train_acc * 100, 1),
+        "test_acc":      round(test_acc  * 100, 1),
+        "label_counts":  counts.to_dict(),
     }
 
 

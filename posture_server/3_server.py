@@ -78,7 +78,7 @@ class CalibrateRequest(BaseModel):
 
 
 POSE_LABELS  = ["normal", "forward_head", "kyphosis", "lateral_tilt"]
-COLLECT_SEC  = 20   # 자세당 수집 시간 (초)
+COLLECT_SEC  = 300  # 자세당 수집 시간 (초)
 
 
 class PoseCollectRequest(BaseModel):
