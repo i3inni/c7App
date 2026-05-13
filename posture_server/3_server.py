@@ -21,6 +21,7 @@ import os
 import asyncio
 import joblib
 from contextlib import asynccontextmanager, suppress
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
@@ -33,7 +34,10 @@ from posture_engine import (
     apply_calibration, run_inference, SENSORS,
 )
 from mqtt_client import mqtt_listener, register_collection_session, unregister_collection_session
-from firestore_writer import save_calibration, save_training_sample, fetch_all_training_samples
+from firestore_writer import (
+    save_calibration, save_training_sample, fetch_all_training_samples,
+    aggregate_weekly_stats,
+)
 from auto_trainer import retrain, FEATURE_COLS
 
 BASE_DIR = os.path.dirname(__file__)
@@ -156,6 +160,27 @@ class DataResponse(BaseModel):
 # Lifespan
 # ─────────────────────────────────────────
 
+async def _midnight_scheduler() -> None:
+    """매일 UTC 자정 직후 전날 daily_stats → weekly_stats 집계."""
+    # 서버 시작 시 어제 집계 (누락 방지)
+    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+    print(f"⏰ 서버 시작 시 소급 집계: {yesterday.strftime('%Y-%m-%d')}")
+    await aggregate_weekly_stats(yesterday.replace(tzinfo=None))
+
+    while True:
+        now = datetime.now(timezone.utc)
+        next_midnight = (now + timedelta(days=1)).replace(
+            hour=0, minute=1, second=0, microsecond=0
+        )
+        wait_secs = (next_midnight - now).total_seconds()
+        print(f"⏰ 다음 weekly 집계까지 {wait_secs / 3600:.1f}h ({next_midnight.strftime('%Y-%m-%d %H:%M')} UTC)")
+        await asyncio.sleep(wait_secs)
+
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        print(f"⏰ weekly_stats 집계 시작: {yesterday.strftime('%Y-%m-%d')}")
+        await aggregate_weekly_stats(yesterday.replace(tzinfo=None))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     model_paths = resolve_model_paths()
@@ -168,14 +193,19 @@ async def lifespan(app: FastAPI):
     else:
         print("⚠️  모델 없음 — python 2_train_model.py 실행 후 재시작")
 
-    mqtt_task = asyncio.create_task(mqtt_listener())
+    mqtt_task      = asyncio.create_task(mqtt_listener())
+    scheduler_task = asyncio.create_task(_midnight_scheduler())
     print("✅ MQTT 리스너 시작")
+    print("✅ 자정 weekly 집계 스케줄러 시작")
 
     yield
 
     mqtt_task.cancel()
+    scheduler_task.cancel()
     with suppress(asyncio.CancelledError):
         await mqtt_task
+    with suppress(asyncio.CancelledError):
+        await scheduler_task
 
 
 app = FastAPI(

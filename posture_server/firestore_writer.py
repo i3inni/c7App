@@ -20,7 +20,9 @@ firebase-admin은 동기 API이므로 asyncio.to_thread로 래핑합니다.
 import os
 import asyncio
 import time
-from datetime import datetime
+import math
+import calendar
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -312,6 +314,113 @@ async def fetch_all_training_samples() -> list[dict]:
     if not _db:
         return []
     return await asyncio.to_thread(_fetch_all_training_samples_sync)
+
+
+# ── 주간 통계 집계 ────────────────────────────────────────
+
+_KR_DAYS = ["월", "화", "수", "목", "금", "토", "일"]  # weekday(): 월=0
+_DEFAULT_TARGET_SCORE = 85
+
+
+def _week_index(day: int) -> int:
+    return math.ceil(day / 7)
+
+
+def _period_month(dt: datetime) -> str:
+    return f"{dt.year}-{dt.month:02d}"
+
+
+def _week_day_range(dt: datetime) -> tuple[int, int]:
+    wi = _week_index(dt.day)
+    start = (wi - 1) * 7 + 1
+    end = min(wi * 7, calendar.monthrange(dt.year, dt.month)[1])
+    return start, end
+
+
+def _get_target_score_sync(user_id: str) -> int:
+    if not _db:
+        return _DEFAULT_TARGET_SCORE
+    snap = _db.collection("users").document(user_id).get()
+    if not snap.exists:
+        return _DEFAULT_TARGET_SCORE
+    return snap.to_dict().get("deviceSettings", {}).get("targetScore", _DEFAULT_TARGET_SCORE)
+
+
+def _aggregate_user_week_sync(user_id: str, target_date: datetime) -> None:
+    wi = _week_index(target_date.day)
+    pm = _period_month(target_date)
+    start_day, end_day = _week_day_range(target_date)
+
+    # 이번 주 target_date까지의 daily_stats 수집 (데이터 있는 날만)
+    daily_rows: list[tuple[datetime, dict]] = []
+    for day in range(start_day, min(target_date.day, end_day) + 1):
+        dt = target_date.replace(day=day)
+        doc_id = f"{user_id}_{dt.strftime('%Y%m%d')}"
+        snap = _db.collection("daily_stats").document(doc_id).get()
+        if snap.exists:
+            daily_rows.append((dt, snap.to_dict()))
+
+    if not daily_rows:
+        return
+
+    scores = [round(r["summary"]["dailyScore"]) for _, r in daily_rows]
+    avg_score = round(sum(scores) / len(scores), 1)
+
+    target_score = _get_target_score_sync(user_id)
+    target_success = sum(1 for s in scores if s >= target_score)
+
+    breakdown = []
+    for i, (dt, row) in enumerate(daily_rows):
+        score = round(row["summary"]["dailyScore"])
+        prev = round(daily_rows[i - 1][1]["summary"]["dailyScore"]) if i > 0 else score
+        breakdown.append({"day": _KR_DAYS[dt.weekday()], "score": score, "change": score - prev})
+
+    # 이전 주 avgScore로 scoreChange 계산
+    prev_avg = 0.0
+    if wi > 1:
+        prev_snap = _db.collection("weekly_stats").document(f"{user_id}_{pm}_{wi - 1}").get()
+        if prev_snap.exists:
+            prev_avg = prev_snap.to_dict().get("avgScore", 0.0)
+
+    doc_id = f"{user_id}_{pm}_{wi}"
+    _db.collection("weekly_stats").document(doc_id).set({
+        "uid":               user_id,
+        "periodMonth":       pm,
+        "weekIndex":         wi,
+        "avgScore":          avg_score,
+        "scoreChange":       round(avg_score - prev_avg, 1),
+        "targetSuccessDays": f"{target_success}/{len(daily_rows)}",
+        "dailyBreakdown":    breakdown,
+    })
+    print(f"✅ weekly_stats 업서트: {doc_id} | avg={avg_score} days={len(daily_rows)} target={target_success}/{len(daily_rows)}")
+
+
+def _aggregate_weekly_stats_sync(target_date: datetime) -> None:
+    if not _db:
+        return
+    date_str = target_date.strftime("%Y-%m-%d")
+    docs = list(_db.collection("daily_stats").where("date", "==", date_str).stream())
+    user_ids = list({
+        (d.to_dict().get("userId") or d.to_dict().get("uid"))
+        for d in docs
+    } - {None, ""})
+
+    if not user_ids:
+        print(f"📊 weekly aggregation ({date_str}): 데이터 없음")
+        return
+
+    print(f"📊 weekly aggregation ({date_str}): {len(user_ids)}명 처리")
+    for user_id in user_ids:
+        try:
+            _aggregate_user_week_sync(user_id, target_date)
+        except Exception as e:
+            print(f"❌ weekly aggregation 실패 (user={user_id}): {e}")
+
+
+async def aggregate_weekly_stats(target_date: datetime) -> None:
+    if not _db:
+        return
+    await asyncio.to_thread(_aggregate_weekly_stats_sync, target_date)
 
 
 async def update_live_posture(
