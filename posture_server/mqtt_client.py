@@ -24,6 +24,8 @@ import os
 import json
 import ssl
 import asyncio
+import math
+from collections import deque
 
 import aiomqtt
 from dotenv import load_dotenv
@@ -60,6 +62,74 @@ _collection_sessions: dict[str, asyncio.Queue] = {}
 # auto 샘플 저장 간격
 SAMPLE_EVERY_N = 10   # 프레임 10개마다 1개 저장
 _frame_counters: dict[tuple[str, str], int] = {}
+
+# ── auto 샘플 품질 평가용 rolling 버퍼 ─────────────────────
+STABILITY_WINDOW   = 6    # 안정성 계산에 쓸 최근 프레임 수 (~3초)
+HOLD_LABEL_WINDOW  = 6    # 자세 유지 판정에 쓸 최근 프레임 수
+FRAME_INTERVAL_SEC = 0.5  # 완성 프레임 간격 (ESP32 전송 주기)
+
+# key → deque of feature vectors (각 6개 float)
+_recent_features: dict[tuple[str, str], deque] = {}
+# key → deque of rule labels
+_recent_labels: dict[tuple[str, str], deque] = {}
+
+# ── 승격 조건 임계값 ──────────────────────────────────────
+CANDIDATE_MIN_CONFIDENCE  = 0.80  # 모델 확신도
+CANDIDATE_MIN_STABILITY   = 0.70  # 센서 안정성 (0~1)
+CANDIDATE_MIN_HOLD_SEC    = 3.0   # 자세 유지 시간 (초)
+
+
+def _compute_stability(feature_window: deque) -> float:
+    """최근 N프레임 feature의 평균 표준편차로 안정성 계산 (높을수록 안정)."""
+    if len(feature_window) < 2:
+        return 0.0
+    n_features = len(feature_window[0])
+    stds = []
+    for i in range(n_features):
+        vals = [frame[i] for frame in feature_window]
+        mean = sum(vals) / len(vals)
+        variance = sum((v - mean) ** 2 for v in vals) / len(vals)
+        stds.append(math.sqrt(variance))
+    mean_std = sum(stds) / len(stds)
+    return 1.0 / (1.0 + mean_std)
+
+
+def _compute_hold_duration(label_window: deque, current_label: str) -> float:
+    """현재 라벨이 최근 N프레임 동안 연속으로 같았던 시간(초) 반환."""
+    count = 0
+    for past_label in reversed(label_window):
+        if past_label == current_label:
+            count += 1
+        else:
+            break
+    return count * FRAME_INTERVAL_SEC
+
+
+def _evaluate_candidate(
+    features: list[float],
+    confidence: float,
+    rule_label: str,
+    model_label: str,
+    key: tuple[str, str],
+) -> tuple[bool, float, float]:
+    """
+    auto 샘플이 candidate 조건을 만족하는지 평가.
+    반환: (is_candidate, stability_score, hold_duration_sec)
+    """
+    feat_buf  = _recent_features.get(key, deque(maxlen=STABILITY_WINDOW))
+    label_buf = _recent_labels.get(key,   deque(maxlen=HOLD_LABEL_WINDOW))
+
+    stability    = _compute_stability(feat_buf)
+    hold_sec     = _compute_hold_duration(label_buf, rule_label)
+    rule_agrees  = (rule_label == model_label)
+
+    is_candidate = (
+        confidence  >= CANDIDATE_MIN_CONFIDENCE
+        and stability   >= CANDIDATE_MIN_STABILITY
+        and hold_sec    >= CANDIDATE_MIN_HOLD_SEC
+        and rule_agrees
+    )
+    return is_candidate, stability, hold_sec
 
 
 def _rule_based_label(result: dict) -> str:
@@ -168,20 +238,35 @@ async def _handle_complete_frame(
 
     _prev_alert[key] = result["alert"]
 
-    # auto 샘플 저장 (재학습에는 포함 안 됨 — approved_for_training=False)
+    # rolling 버퍼 업데이트 (매 프레임)
+    rule_label = _rule_based_label(result)
+    features   = [v for pair in zip(result["diff_pitch"], result["diff_roll"]) for v in pair]
+    confidence = result["confidence"] / 100.0
+
+    if key not in _recent_features:
+        _recent_features[key] = deque(maxlen=STABILITY_WINDOW)
+    if key not in _recent_labels:
+        _recent_labels[key] = deque(maxlen=HOLD_LABEL_WINDOW)
+
+    _recent_features[key].append(features)
+    _recent_labels[key].append(rule_label)
+
+    # auto 샘플 저장 (SAMPLE_EVERY_N 프레임마다)
     _frame_counters[key] = _frame_counters.get(key, 0) + 1
     if _frame_counters[key] % SAMPLE_EVERY_N == 0:
-        label      = _rule_based_label(result)
-        confidence = result["confidence"] / 100.0
-        features   = [v for pair in zip(result["diff_pitch"], result["diff_roll"]) for v in pair]
+        is_candidate, stability, hold_sec = _evaluate_candidate(
+            features, confidence, rule_label, result["pose_en"], key
+        )
         await save_training_sample(
-            user_id, label, features,
+            user_id, rule_label, features,
             source="auto",
             label_source="rule",
             confidence=confidence,
             device_id=device_id,
-            approved_for_training=False,
+            approved_for_training=is_candidate,
         )
+        if is_candidate:
+            print(f"⭐ auto candidate 승격: {rule_label} | conf={confidence:.2f} stab={stability:.2f} hold={hold_sec:.1f}s")
 
 
 async def mqtt_listener() -> None:
