@@ -80,6 +80,93 @@ def _load_default() -> tuple | None:
     return None
 
 
+def _load_current() -> tuple | None:
+    """current 모델 로드. 없으면 None."""
+    if os.path.exists(CURRENT_MODEL_PATH) and os.path.exists(CURRENT_SCALER_PATH):
+        return joblib.load(CURRENT_MODEL_PATH), joblib.load(CURRENT_SCALER_PATH)
+    return None
+
+
+def _evaluate_against_baseline(
+    baseline_name: str,
+    baseline_pair: tuple | None,
+    candidate,
+    scaler,
+    X_te,
+    y_te,
+) -> tuple[bool, dict]:
+    """
+    candidate를 baseline(default/current)과 비교합니다.
+
+    반환:
+      (통과 여부, 비교 정보 dict)
+    """
+    cand_acc = candidate.score(scaler.transform(X_te), y_te) * 100
+    cand_recall = _bad_recall(candidate, scaler, X_te, y_te) * 100
+
+    if baseline_pair is None:
+        return True, {
+            "baseline": baseline_name,
+            "missing": True,
+            "candidate_acc": cand_acc,
+            "candidate_recall": cand_recall,
+            "baseline_acc": None,
+            "baseline_recall": None,
+            "acc_delta": None,
+            "recall_delta": None,
+            "passed": True,
+            "reason": "",
+        }
+
+    base_model, base_scaler = baseline_pair
+    base_acc = base_model.score(base_scaler.transform(X_te), y_te) * 100
+    base_recall = _bad_recall(base_model, base_scaler, X_te, y_te) * 100
+
+    acc_delta = cand_acc - base_acc
+    recall_delta = cand_recall - base_recall
+
+    if acc_delta < PROMOTE_MIN_ACC_DELTA:
+        return False, {
+            "baseline": baseline_name,
+            "missing": False,
+            "candidate_acc": cand_acc,
+            "candidate_recall": cand_recall,
+            "baseline_acc": base_acc,
+            "baseline_recall": base_recall,
+            "acc_delta": acc_delta,
+            "recall_delta": recall_delta,
+            "passed": False,
+            "reason": f"{baseline_name} 대비 acc 하락 {acc_delta:+.1f}% (허용: {PROMOTE_MIN_ACC_DELTA}%)",
+        }
+
+    if recall_delta < PROMOTE_MIN_RECALL_DELTA:
+        return False, {
+            "baseline": baseline_name,
+            "missing": False,
+            "candidate_acc": cand_acc,
+            "candidate_recall": cand_recall,
+            "baseline_acc": base_acc,
+            "baseline_recall": base_recall,
+            "acc_delta": acc_delta,
+            "recall_delta": recall_delta,
+            "passed": False,
+            "reason": f"{baseline_name} 대비 recall 하락 {recall_delta:+.1f}% (허용: {PROMOTE_MIN_RECALL_DELTA}%)",
+        }
+
+    return True, {
+        "baseline": baseline_name,
+        "missing": False,
+        "candidate_acc": cand_acc,
+        "candidate_recall": cand_recall,
+        "baseline_acc": base_acc,
+        "baseline_recall": base_recall,
+        "acc_delta": acc_delta,
+        "recall_delta": recall_delta,
+        "passed": True,
+        "reason": "",
+    }
+
+
 def _save_rejected(model, scaler) -> None:
     """승격 실패 모델을 rejected/ 에 타임스탬프와 함께 보관."""
     os.makedirs(REJECTED_DIR, exist_ok=True)
@@ -142,33 +229,44 @@ def _train_sync(rows: list[dict]) -> dict:
     cand_acc    = candidate.score(scaler.transform(X_te), y_te) * 100
     cand_recall = _bad_recall(candidate, scaler, X_te, y_te) * 100
 
-    # ── default와 비교 ────────────────────────────────────
+    # ── default / current 둘 다 비교 ─────────────────────
     default_pair = _load_default()
-    promoted     = False
+    current_pair = _load_current()
+    promoted = False
     reject_reason = ""
 
-    if default_pair:
-        def_model, def_scaler = default_pair
-        def_acc    = def_model.score(def_scaler.transform(X_te), y_te) * 100
-        def_recall = _bad_recall(def_model, def_scaler, X_te, y_te) * 100
-
-        acc_delta    = cand_acc    - def_acc
-        recall_delta = cand_recall - def_recall
+    checks = []
+    for baseline_name, pair in (("default", default_pair), ("current", current_pair)):
+        ok, info = _evaluate_against_baseline(
+            baseline_name,
+            pair,
+            candidate,
+            scaler,
+            X_te,
+            y_te,
+        )
+        checks.append(info)
 
         print(f"📊 비교 | candidate acc={cand_acc:.1f}% recall={cand_recall:.1f}%")
-        print(f"        | default    acc={def_acc:.1f}%   recall={def_recall:.1f}%")
-        print(f"        | delta      acc={acc_delta:+.1f}%  recall={recall_delta:+.1f}%")
-
-        if acc_delta < PROMOTE_MIN_ACC_DELTA:
-            reject_reason = f"acc 하락 {acc_delta:+.1f}% (허용: {PROMOTE_MIN_ACC_DELTA}%)"
-        elif recall_delta < PROMOTE_MIN_RECALL_DELTA:
-            reject_reason = f"recall 하락 {recall_delta:+.1f}% (허용: {PROMOTE_MIN_RECALL_DELTA}%)"
+        if info["missing"]:
+            print(f"        | {baseline_name:<10} 없음 — 비교 생략")
         else:
-            promoted = True
-    else:
-        # default 없으면 기준 없이 바로 승격
+            print(
+                f"        | {baseline_name:<10} acc={info['baseline_acc']:.1f}%   "
+                f"recall={info['baseline_recall']:.1f}%"
+            )
+            print(
+                f"        | delta      acc={info['acc_delta']:+.1f}%  "
+                f"recall={info['recall_delta']:+.1f}%"
+            )
+
+        if not ok and not reject_reason:
+            reject_reason = info["reason"]
+
+    if all(info["passed"] for info in checks):
         promoted = True
-        print("⚠️  default 모델 없음 — 비교 없이 승격")
+    elif not reject_reason:
+        reject_reason = "baseline 비교 조건 미통과"
 
     if promoted:
         os.makedirs(os.path.dirname(CURRENT_MODEL_PATH), exist_ok=True)
@@ -188,6 +286,7 @@ def _train_sync(rows: list[dict]) -> dict:
         "bad_recall":     round(cand_recall, 1),
         "promoted":       promoted,
         "reject_reason":  reject_reason,
+        "baseline_checks": checks,
     }
 
 
