@@ -64,6 +64,10 @@ _collection_sessions: dict[str, asyncio.Queue] = {}
 SAMPLE_EVERY_N = 10   # 프레임 10개마다 1개 저장
 _frame_counters: dict[tuple[str, str], int] = {}
 
+# 어드민 userId 캐시 — 서버 재시작 전까지 유지
+_admin_user_ids: set[str] = set()
+_admin_checked:  set[str] = set()  # 이미 Firestore 조회한 userId
+
 # ── auto 샘플 품질 평가용 rolling 버퍼 ─────────────────────
 STABILITY_WINDOW   = 6    # 안정성 계산에 쓸 최근 프레임 수 (~3초)
 HOLD_LABEL_WINDOW  = 6    # 자세 유지 판정에 쓸 최근 프레임 수
@@ -142,6 +146,25 @@ def _rule_based_label(result: dict) -> str:
     if result["t3_flag"] and result["severity"] != "normal":
         return "kyphosis"
     return "normal"
+
+
+async def _ensure_admin_status(user_id: str) -> None:
+    """userId의 admin 여부를 Firestore에서 한 번만 확인해 캐시합니다."""
+    if user_id in _admin_checked:
+        return
+    _admin_checked.add(user_id)
+    try:
+        from firestore_writer import _db
+        if not _db:
+            return
+        snap = await asyncio.to_thread(
+            lambda: _db.collection("users").document(user_id).get()
+        )
+        if snap.exists and snap.to_dict().get("role") == "admin":
+            _admin_user_ids.add(user_id)
+            print(f"🔑 [{user_id}] 어드민 확인 — auto 샘플 저장 비활성화")
+    except Exception as e:
+        print(f"⚠️  admin 확인 실패 (user={user_id}): {e}")
 
 
 def register_collection_session(device_id: str, queue: asyncio.Queue) -> None:
@@ -252,25 +275,27 @@ async def _handle_complete_frame(
     _recent_features[key].append(features)
     _recent_labels[key].append(rule_label)
 
-    # auto 샘플 저장 (SAMPLE_EVERY_N 프레임마다)
-    _frame_counters[key] = _frame_counters.get(key, 0) + 1
-    if _frame_counters[key] % SAMPLE_EVERY_N == 0:
-        is_candidate, stability, hold_sec, rule_agrees = _evaluate_candidate(
-            features, confidence, rule_label, result["pose_en"], key
-        )
-        await save_training_sample(
-            user_id, rule_label, features,
-            source="auto",
-            label_source="rule",
-            confidence=confidence,
-            device_id=device_id,
-            approved_for_training=is_candidate,
-            sensor_stability_score=stability,
-            hold_duration_sec=hold_sec,
-            rule_model_agree=rule_agrees,
-        )
-        if is_candidate:
-            print(f"⭐ auto candidate 승격: {rule_label} | conf={confidence:.2f} stab={stability:.2f} hold={hold_sec:.1f}s")
+    # auto 샘플 저장 (SAMPLE_EVERY_N 프레임마다, 어드민 제외)
+    await _ensure_admin_status(user_id)
+    if user_id not in _admin_user_ids:
+        _frame_counters[key] = _frame_counters.get(key, 0) + 1
+        if _frame_counters[key] % SAMPLE_EVERY_N == 0:
+            is_candidate, stability, hold_sec, rule_agrees = _evaluate_candidate(
+                features, confidence, rule_label, result["pose_en"], key
+            )
+            await save_training_sample(
+                user_id, rule_label, features,
+                source="auto",
+                label_source="rule",
+                confidence=confidence,
+                device_id=device_id,
+                approved_for_training=is_candidate,
+                sensor_stability_score=stability,
+                hold_duration_sec=hold_sec,
+                rule_model_agree=rule_agrees,
+            )
+            if is_candidate:
+                print(f"⭐ auto candidate 승격: {rule_label} | conf={confidence:.2f} stab={stability:.2f} hold={hold_sec:.1f}s")
 
 
 async def mqtt_listener() -> None:
