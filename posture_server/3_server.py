@@ -103,6 +103,7 @@ COLLECT_SEC  = 300  # 자세당 수집 시간 (초)
 INTENSITY_VALUES = ["none", "mild", "medium", "strong"]
 QUALITY_VALUES   = ["approved", "ambiguous", "rejected"]
 SAMPLE_SOURCES   = ["guided", "admin"]
+SPLIT_VALUES     = ["train", "validation"]
 
 
 class PoseCollectRequest(BaseModel):
@@ -115,6 +116,8 @@ class PoseCollectRequest(BaseModel):
     intensity:   str = "none"       # "none" | "mild" | "medium" | "strong"
     quality:     str = "approved"   # "approved" | "ambiguous" | "rejected"
     source:      str = "guided"     # "guided" | "admin"
+    split:       str = "train"      # "train" | "validation"
+    model_eval_only: bool = False   # True → 학습 제외, 검증 전용
     notes:       str | None = None
     collected_by: str | None = None
     session_id:  str | None = None
@@ -145,6 +148,13 @@ class PoseCollectRequest(BaseModel):
     def check_source(cls, v):
         if v not in SAMPLE_SOURCES:
             raise ValueError(f"source는 {SAMPLE_SOURCES} 중 하나여야 합니다")
+        return v
+
+    @field_validator("split")
+    @classmethod
+    def check_split(cls, v):
+        if v not in SPLIT_VALUES:
+            raise ValueError(f"split은 {SPLIT_VALUES} 중 하나여야 합니다")
         return v
 
     @field_validator("baseline_p", "baseline_r")
@@ -390,8 +400,13 @@ async def pose_calibration_collect(req: PoseCollectRequest):
 
     # baseline diff 계산 → 피처 생성 → Firestore 저장
     # label은 기존 4클래스를 유지하고, 강도/품질은 데이터셋 관리용 메타데이터로만 저장합니다.
+    #
+    # approved_for_training 규칙:
+    #   quality=="approved"  AND  split=="train"  AND  model_eval_only==False
+    #   → 셋 중 하나라도 어긋나면 학습에서 제외됩니다.
     saved = 0
-    approved_for_training = req.quality == "approved"
+    is_validation = (req.split == "validation") or req.model_eval_only
+    approved_for_training = (req.quality == "approved") and not is_validation
     for p, r in frames:
         dp = [p[i] - req.baseline_p[i] for i in range(3)]
         dr = [r[i] - req.baseline_r[i] for i in range(3)]
@@ -405,6 +420,8 @@ async def pose_calibration_collect(req: PoseCollectRequest):
             approved_for_training=approved_for_training,
             intensity=req.intensity,
             quality=req.quality,
+            split=req.split,
+            model_eval_only=req.model_eval_only,
             notes=req.notes,
             collected_by=req.collected_by,
             session_id=req.session_id,
@@ -416,6 +433,8 @@ async def pose_calibration_collect(req: PoseCollectRequest):
         "label": req.label,
         "intensity": req.intensity,
         "quality": req.quality,
+        "split": req.split,
+        "model_eval_only": req.model_eval_only,
         "approved_for_training": approved_for_training,
         "collected": saved,
     }

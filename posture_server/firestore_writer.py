@@ -301,6 +301,8 @@ def _save_training_sample_sync(
     rule_model_agree: bool | None = None,
     intensity: str | None = None,
     quality: str | None = None,
+    split: str = "train",
+    model_eval_only: bool = False,
     notes: str | None = None,
     collected_by: str | None = None,
     session_id: str | None = None,
@@ -311,13 +313,15 @@ def _save_training_sample_sync(
     doc["label"]                = label
     doc["userId"]               = user_id
     doc["createdAt"]            = firestore.SERVER_TIMESTAMP
-    doc["source"]               = source            # "guided" | "auto"
+    doc["source"]               = source            # "guided" | "auto" | "admin"
     doc["label_source"]         = label_source      # "human" | "rule" | "model"
     doc["confidence"]           = confidence        # 모델 확신도 (human=1.0)
     doc["device_id"]            = device_id
     doc["approved_for_training"] = approved_for_training
-    doc["intensity"]            = intensity or "none"       # "none" | "mild" | "medium" | "strong"
+    doc["intensity"]            = intensity or "none"
     doc["quality"]              = quality or ("approved" if approved_for_training else "unreviewed")
+    doc["split"]                = split             # "train" | "validation"
+    doc["model_eval_only"]      = model_eval_only   # True → 검증 전용, 학습 제외
     if sensor_stability_score is not None:
         doc["sensor_stability_score"] = sensor_stability_score
     if hold_duration_sec is not None:
@@ -336,6 +340,7 @@ def _save_training_sample_sync(
 def _fetch_training_samples_sync(
     sources: list[str] | None = None,
     approved_only: bool = False,
+    exclude_eval_only: bool = True,
 ) -> list[dict]:
     if not _db:
         return []
@@ -344,7 +349,12 @@ def _fetch_training_samples_sync(
         query = query.where(filter=FieldFilter("source", "in", sources))
     if approved_only:
         query = query.where(filter=FieldFilter("approved_for_training", "==", True))
-    return [d.to_dict() for d in query.stream()]
+    rows = [d.to_dict() for d in query.stream()]
+    # Python-side filter: model_eval_only=True 샘플은 학습에서 제외
+    # (approved_for_training 방어선의 이중 안전장치)
+    if exclude_eval_only:
+        rows = [r for r in rows if not r.get("model_eval_only", False)]
+    return rows
 
 
 async def save_training_sample(
@@ -361,6 +371,8 @@ async def save_training_sample(
     rule_model_agree: bool | None = None,
     intensity: str | None = None,
     quality: str | None = None,
+    split: str = "train",
+    model_eval_only: bool = False,
     notes: str | None = None,
     collected_by: str | None = None,
     session_id: str | None = None,
@@ -372,23 +384,27 @@ async def save_training_sample(
         user_id, label, features,
         source, label_source, confidence, device_id, approved_for_training,
         sensor_stability_score, hold_duration_sec, rule_model_agree,
-        intensity, quality, notes, collected_by, session_id,
+        intensity, quality, split, model_eval_only, notes, collected_by, session_id,
     )
 
 
 async def fetch_training_samples(
     sources: list[str] | None = None,
     approved_only: bool = False,
+    exclude_eval_only: bool = True,
 ) -> list[dict]:
     """
     sources=None  → 전체
     sources=["guided"]  → guided만
     sources=["guided", "auto"]  → 둘 다
     approved_only=True  → approved_for_training=True 인 것만
+    exclude_eval_only=True  → model_eval_only=True 인 것 제외 (기본값, 학습용 fetch 시)
     """
     if not _db:
         return []
-    return await asyncio.to_thread(_fetch_training_samples_sync, sources, approved_only)
+    return await asyncio.to_thread(
+        _fetch_training_samples_sync, sources, approved_only, exclude_eval_only
+    )
 
 
 # 하위 호환 — 기존 코드에서 fetch_all_training_samples() 호출하는 곳을 위해 유지
