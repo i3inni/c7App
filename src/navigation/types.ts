@@ -7,6 +7,7 @@ export type MainTabParamList = {
   STATS: undefined;
   AI: undefined;
   CONFIG: undefined;
+  TRAINING: undefined;
 };
 
 // ── Stack 파라미터 ────────────────────────────────────

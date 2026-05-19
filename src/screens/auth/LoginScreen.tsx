@@ -17,6 +17,7 @@ import ConfirmModal from "../../components/common/ConfirmModal";
 import { COLORS, FONTS, SPACING, RADIUS } from "../../constants/theme";
 import { login, logout, loginWithGoogle, reactivateAccount, resendVerificationEmail } from "../../services/authService";
 import { getUserDoc } from "../../services/userService";
+import { ADMIN_EMAILS } from "../../constants/adminConfig";
 
 interface PendingUser {
   uid: string;
@@ -96,7 +97,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const user = await login(id, pw);
-      if (!user.emailVerified) {
+      if (!user.emailVerified && !ADMIN_EMAILS.includes(user.email ?? '')) {
         Alert.alert(
           '이메일 인증 필요',
           '가입 시 발송된 인증 메일을 확인해주세요.',
@@ -120,7 +121,8 @@ export default function LoginScreen() {
       const doc = await getUserDoc(user.uid);
       await checkAndLogin(user.uid, doc, user.email ?? id, user.email ?? undefined);
     } catch (e: any) {
-      setErrorModal({ title: '로그인 실패', message: firebaseErrorMessage(e.code) });
+      console.error('[Login Error]', e.code, e.message);
+      setErrorModal({ title: '로그인 실패', message: firebaseErrorMessage(e.code) + (e.code ? `\n(${e.code})` : '') });
     } finally {
       setLoading(false);
     }

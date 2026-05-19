@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,8 +27,9 @@ import {
   ChangePasswordScreen, WithdrawScreen,
 } from '../screens/profile/ProfileScreens';
 
-import { COLORS } from '../constants/theme';
+import { COLORS, FONTS, SPACING, RADIUS } from '../constants/theme';
 import { useStore } from '../store';
+import { ADMIN_EMAILS } from '../constants/adminConfig';
 import { startPostureListener, getListenerDeviceId, stopPostureListener } from '../services/mqttService';
 import { connectToDevice, sendUserId, subscribeWifiStatus } from '../services/bleService';
 import { initConnectionNotifications } from '../services/connectionNotificationService';
@@ -75,10 +76,74 @@ function TabIcon({ name, color, size = 22 }: { name: string; color: string; size
           />
         </Svg>
       );
+    case 'TRAINING':
+      return (
+        <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+          <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
+            stroke={color} strokeWidth="1.6" />
+          <Path d="M10 8l6 4-6 4V8z" stroke={color} strokeWidth="1.6" strokeLinejoin="round" />
+        </Svg>
+      );
     default:
       return null;
   }
 }
+
+// ── 관리자 정밀 자세 학습 탭 화면 ────────────────────────
+function AdminTrainingTabScreen() {
+  const nav = useNavigation();
+  const device = useStore(s => s.device);
+
+  const handleStart = () => {
+    if (!device.deviceId) {
+      (nav as any).replace('MqttConnect');
+      return;
+    }
+    (nav as any).navigate('PoseCalibration', { deviceId: device.deviceId, mode: 'training' });
+  };
+
+  return (
+    <View style={adminStyles.safe}>
+      <View style={adminStyles.content}>
+        <View style={adminStyles.iconWrap}>
+          <TabIcon name="TRAINING" color={COLORS.primary} size={48} />
+        </View>
+        <Text style={adminStyles.title}>정밀 자세 학습</Text>
+        <Text style={adminStyles.desc}>
+          자세별 데이터를 직접 수집해{'\n'}분석 정확도를 높입니다.
+        </Text>
+        <TouchableOpacity
+          style={[adminStyles.btn, !device.deviceId && adminStyles.btnDisabled]}
+          onPress={handleStart}
+          disabled={!device.deviceId}
+          activeOpacity={0.8}
+        >
+          <Text style={adminStyles.btnText}>시작</Text>
+        </TouchableOpacity>
+        {!device.deviceId && (
+          <Text style={adminStyles.hint}>기기를 먼저 연결해주세요.</Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const adminStyles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#F5F6F8', justifyContent: 'center', alignItems: 'center' },
+  content: { alignItems: 'center', paddingHorizontal: SPACING.base },
+  iconWrap: { marginBottom: 20 },
+  title: { fontSize: FONTS.sizes.xl, fontWeight: '800', color: COLORS.text, marginBottom: 10 },
+  desc: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 32 },
+  btn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 48,
+    paddingVertical: 14,
+    borderRadius: RADIUS.full,
+  },
+  btnDisabled: { backgroundColor: COLORS.textMuted },
+  btnText: { fontSize: FONTS.sizes.base, fontWeight: '800', color: '#fff' },
+  hint: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted, marginTop: 14 },
+});
 
 function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -138,7 +203,9 @@ function MainTabs() {
   const deviceId    = useStore(s => s.device.deviceId);
   const bleDeviceId = useStore(s => s.device.bleDeviceId);
   const userId      = useStore(s => s.user?.id);
+  const userEmail   = useStore(s => s.user?.email);
   const setDevice   = useStore(s => s.setDevice);
+  const isAdmin     = ADMIN_EMAILS.includes(userEmail ?? '');
 
   // 앱 재시작 후 Firestore 리스너 재연결
   useEffect(() => {
@@ -182,6 +249,17 @@ function MainTabs() {
       unsubWifiStatus?.();
     };
   }, [bleDeviceId, userId, setDevice]);
+
+  if (isAdmin) {
+    return (
+      <Tab.Navigator
+        tabBar={props => <TabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tab.Screen name="TRAINING" component={AdminTrainingTabScreen} />
+      </Tab.Navigator>
+    );
+  }
 
   return (
     <Tab.Navigator
