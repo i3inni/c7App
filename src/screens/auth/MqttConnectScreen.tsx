@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, Animated, TouchableOpacity, FlatList, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Device } from 'react-native-ble-plx';
 import { useStore } from '../../store';
@@ -173,7 +174,7 @@ export default function MqttConnectScreen() {
         <View style={styles.centerArea}>
           <View style={[styles.outerCircle, { borderColor: COLORS.accent }]}>
             <View style={styles.cloudCard}>
-              <Text style={styles.cloudIcon}>⚠️</Text>
+              <Ionicons name="alert-circle-outline" size={32} color={COLORS.accent} />
               <Text style={[styles.syncLabel, { color: COLORS.accent }]}>ERROR</Text>
             </View>
           </View>
@@ -211,7 +212,7 @@ export default function MqttConnectScreen() {
               opacity: dot2, transform: [{ scale: dot2.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }]
             }]} />
             <View style={styles.cloudCard}>
-              <Text style={styles.cloudIcon}>☁️</Text>
+              <Ionicons name="cloud-outline" size={28} color={COLORS.primary} />
               <Text style={styles.syncLabel}>SYNCING</Text>
             </View>
           </View>
@@ -236,7 +237,7 @@ export default function MqttConnectScreen() {
         <View style={styles.centerArea}>
           <View style={styles.outerCircle}>
             <View style={styles.cloudCard}>
-              <Text style={styles.cloudIcon}>📡</Text>
+              <Ionicons name="radio-outline" size={28} color={COLORS.primary} />
             </View>
           </View>
           <Text style={styles.connectingTitle}>연결 중...</Text>
@@ -298,7 +299,7 @@ export default function MqttConnectScreen() {
       <View style={styles.centerArea}>
         <View style={styles.outerCircle}>
           <View style={styles.keyCard}>
-            <Text style={styles.keyIcon}>🔑</Text>
+            <Ionicons name="key-outline" size={32} color={COLORS.primary} />
           </View>
         </View>
 
@@ -320,7 +321,7 @@ export default function MqttConnectScreen() {
         </View>
 
         <View style={styles.inputRow}>
-          <Text style={styles.inputIcon}>📱</Text>
+          <Ionicons name="phone-portrait-outline" size={18} color={COLORS.textSecondary} style={{ marginRight: SPACING.sm }} />
           <Input
             value={deviceId}
             onChangeText={setDeviceId}
@@ -366,12 +367,10 @@ const styles = StyleSheet.create({
     width: 72, height: 72, borderRadius: RADIUS.xl,
     backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', ...SHADOWS.md,
   },
-  keyIcon: { fontSize: 32 },
   cloudCard: {
     width: 72, height: 72, borderRadius: RADIUS.xl,
     backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', ...SHADOWS.md,
   },
-  cloudIcon: { fontSize: 28 },
   syncLabel: { fontSize: 9, fontWeight: '700', color: COLORS.accent, letterSpacing: 0.5, marginTop: 2 },
 
   dot: { position: 'absolute', width: 10, height: 10, borderRadius: 5 },
@@ -386,7 +385,6 @@ const styles = StyleSheet.create({
   dividerText: { fontSize: FONTS.sizes.xs, color: COLORS.textMuted, marginHorizontal: SPACING.sm },
 
   inputRow: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: SPACING.sm },
-  inputIcon: { fontSize: 18, marginRight: SPACING.sm },
   deviceInput: { flex: 1 },
 
   connectBtn: { width: '100%', marginTop: SPACING.sm },

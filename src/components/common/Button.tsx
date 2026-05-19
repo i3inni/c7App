@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle,
+  TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle, View,
 } from 'react-native';
 import { COLORS, FONTS, RADIUS, SPACING } from '../../constants/theme';
 
@@ -13,11 +13,12 @@ interface Props {
   style?: ViewStyle;
   textStyle?: TextStyle;
   rightIcon?: string;
+  leftIcon?: React.ReactNode;
 }
 
 export default function Button({
   label, onPress, variant = 'primary',
-  disabled, loading, style, textStyle, rightIcon,
+  disabled, loading, style, textStyle, rightIcon, leftIcon,
 }: Props) {
   const btnStyle = [
     styles.base,
@@ -36,6 +37,11 @@ export default function Button({
     >
       {loading ? (
         <ActivityIndicator color={variant === 'secondary' ? COLORS.primary : '#fff'} />
+      ) : leftIcon ? (
+        <View style={styles.row}>
+          {leftIcon}
+          <Text style={[txtStyle, { marginLeft: 8 }]}>{label}</Text>
+        </View>
       ) : (
         <Text style={txtStyle}>
           {label}{rightIcon ? `  ${rightIcon}` : ''}
@@ -60,6 +66,7 @@ const styles = StyleSheet.create({
   ghost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: COLORS.border },
   dark: { backgroundColor: COLORS.bgDark },
   disabled: { opacity: 0.4 },
+  row: { flexDirection: 'row', alignItems: 'center' },
 
   text: { fontSize: FONTS.sizes.base, fontWeight: FONTS.weights.bold },
   primaryText: { color: '#fff' },
