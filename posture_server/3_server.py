@@ -100,6 +100,9 @@ class CalibrateRequest(BaseModel):
 
 POSE_LABELS  = ["normal", "forward_head", "kyphosis", "lateral_tilt"]
 COLLECT_SEC  = 300  # 자세당 수집 시간 (초)
+INTENSITY_VALUES = ["none", "mild", "medium", "strong"]
+QUALITY_VALUES   = ["approved", "ambiguous", "rejected"]
+SAMPLE_SOURCES   = ["guided", "admin"]
 
 
 class PoseCollectRequest(BaseModel):
@@ -109,12 +112,39 @@ class PoseCollectRequest(BaseModel):
     baseline_p:  list[float]   # 캘리브레이션 baseline pitch [C7, T3, T7]
     baseline_r:  list[float]   # 캘리브레이션 baseline roll  [C7, T3, T7]
     duration_sec: int = COLLECT_SEC
+    intensity:   str = "none"       # "none" | "mild" | "medium" | "strong"
+    quality:     str = "approved"   # "approved" | "ambiguous" | "rejected"
+    source:      str = "guided"     # "guided" | "admin"
+    notes:       str | None = None
+    collected_by: str | None = None
+    session_id:  str | None = None
 
     @field_validator("label")
     @classmethod
     def check_label(cls, v):
         if v not in POSE_LABELS:
             raise ValueError(f"label은 {POSE_LABELS} 중 하나여야 합니다")
+        return v
+
+    @field_validator("intensity")
+    @classmethod
+    def check_intensity(cls, v):
+        if v not in INTENSITY_VALUES:
+            raise ValueError(f"intensity는 {INTENSITY_VALUES} 중 하나여야 합니다")
+        return v
+
+    @field_validator("quality")
+    @classmethod
+    def check_quality(cls, v):
+        if v not in QUALITY_VALUES:
+            raise ValueError(f"quality는 {QUALITY_VALUES} 중 하나여야 합니다")
+        return v
+
+    @field_validator("source")
+    @classmethod
+    def check_source(cls, v):
+        if v not in SAMPLE_SOURCES:
+            raise ValueError(f"source는 {SAMPLE_SOURCES} 중 하나여야 합니다")
         return v
 
     @field_validator("baseline_p", "baseline_r")
@@ -358,32 +388,46 @@ async def pose_calibration_collect(req: PoseCollectRequest):
     if not frames:
         raise HTTPException(422, "센서 데이터를 수신하지 못했습니다. 기기가 연결됐는지 확인하세요.")
 
-    # baseline diff 계산 → 피처 생성 → Firestore 저장 (guided: 사람이 직접 수집)
+    # baseline diff 계산 → 피처 생성 → Firestore 저장
+    # label은 기존 4클래스를 유지하고, 강도/품질은 데이터셋 관리용 메타데이터로만 저장합니다.
     saved = 0
+    approved_for_training = req.quality == "approved"
     for p, r in frames:
         dp = [p[i] - req.baseline_p[i] for i in range(3)]
         dr = [r[i] - req.baseline_r[i] for i in range(3)]
         features = [v for pair in zip(dp, dr) for v in pair]
         await save_training_sample(
             req.user_id, req.label, features,
-            source="guided",
+            source=req.source,
             label_source="human",
             confidence=1.0,
             device_id=req.device_id,
-            approved_for_training=True,
+            approved_for_training=approved_for_training,
+            intensity=req.intensity,
+            quality=req.quality,
+            notes=req.notes,
+            collected_by=req.collected_by,
+            session_id=req.session_id,
         )
         saved += 1
 
-    return {"status": "ok", "label": req.label, "collected": saved}
+    return {
+        "status": "ok",
+        "label": req.label,
+        "intensity": req.intensity,
+        "quality": req.quality,
+        "approved_for_training": approved_for_training,
+        "collected": saved,
+    }
 
 
 @app.post("/pose-calibration/train")
 async def pose_calibration_train():
     """
-    guided 샘플(사람이 직접 수집, approved=True)로만 모델을 재학습하고 핫 리로드합니다.
+    사람이 직접 수집하고 approved=True인 샘플로만 모델을 재학습하고 핫 리로드합니다.
     캘리브레이션 마지막 단계에서 한 번만 호출합니다.
     """
-    rows = await fetch_training_samples(sources=["guided"], approved_only=True)
+    rows = await fetch_training_samples(sources=["guided", "admin"], approved_only=True)
     if not rows:
         raise HTTPException(422, "학습 데이터가 없습니다. 먼저 /pose-calibration/collect를 실행하세요.")
 
