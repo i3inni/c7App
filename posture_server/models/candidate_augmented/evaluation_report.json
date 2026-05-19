@@ -1,0 +1,293 @@
+{
+  "model": "candidate_augmented",
+  "csv_path": "data/training_data_augmented.csv",
+  "dry_run": false,
+  "eval_a_mixed_holdout": {
+    "train_accuracy_pct": 99.19,
+    "test_accuracy_pct": 97.5,
+    "bad_posture_recall_pct": 97.5,
+    "normal_false_positive_pct": 2.5,
+    "cv_mean_pct": 98.05,
+    "cv_std_pct": 0.54,
+    "per_label": {
+      "normal": {
+        "precision": 0.9653465346534653,
+        "recall": 0.975,
+        "f1": 0.9701492537313433,
+        "support": 200
+      },
+      "forward_head": {
+        "precision": 0.9692307692307692,
+        "recall": 0.945,
+        "f1": 0.9569620253164557,
+        "support": 200
+      },
+      "kyphosis": {
+        "precision": 0.9660194174757282,
+        "recall": 0.995,
+        "f1": 0.9802955665024631,
+        "support": 200
+      },
+      "lateral_tilt": {
+        "precision": 1.0,
+        "recall": 0.985,
+        "f1": 0.9924433249370277,
+        "support": 200
+      }
+    },
+    "miss_rates": {
+      "forward_head": {
+        "missed": 11,
+        "total": 200,
+        "miss_rate_pct": 5.5
+      },
+      "kyphosis": {
+        "missed": 1,
+        "total": 200,
+        "miss_rate_pct": 0.5
+      },
+      "lateral_tilt": {
+        "missed": 3,
+        "total": 200,
+        "miss_rate_pct": 1.5
+      }
+    },
+    "normal_fp": 5,
+    "normal_total": 200,
+    "feature_importances": {
+      "diff_C7_pitch": 0.13187089522531067,
+      "diff_C7_roll": 0.08623598605469018,
+      "diff_T3_pitch": 0.11393578796016371,
+      "diff_T3_roll": 0.052784414923253274,
+      "diff_T7_pitch": 0.18566666954884514,
+      "diff_T7_roll": 0.04086277425348693
+    },
+    "issues": [],
+    "confusion_matrix": {
+      "labels": [
+        "normal",
+        "forward_head",
+        "kyphosis",
+        "lateral_tilt"
+      ],
+      "matrix": [
+        [
+          195,
+          4,
+          1,
+          0
+        ],
+        [
+          5,
+          189,
+          6,
+          0
+        ],
+        [
+          0,
+          1,
+          199,
+          0
+        ],
+        [
+          2,
+          1,
+          0,
+          197
+        ]
+      ]
+    }
+  },
+  "eval_b_real_holdout": {
+    "train_accuracy_pct": 99.19,
+    "test_accuracy_pct": 96.5,
+    "bad_posture_recall_pct": 97.0,
+    "normal_false_positive_pct": 5.0,
+    "cv_mean_pct": 98.03,
+    "cv_std_pct": 0.9,
+    "per_label": {
+      "normal": {
+        "precision": 0.979381443298969,
+        "recall": 0.95,
+        "f1": 0.9644670050761421,
+        "support": 100
+      },
+      "forward_head": {
+        "precision": 0.9494949494949495,
+        "recall": 0.94,
+        "f1": 0.9447236180904522,
+        "support": 100
+      },
+      "kyphosis": {
+        "precision": 0.941747572815534,
+        "recall": 0.97,
+        "f1": 0.9556650246305419,
+        "support": 100
+      },
+      "lateral_tilt": {
+        "precision": 0.9900990099009901,
+        "recall": 1.0,
+        "f1": 0.9950248756218906,
+        "support": 100
+      }
+    },
+    "miss_rates": {
+      "forward_head": {
+        "missed": 6,
+        "total": 100,
+        "miss_rate_pct": 6.0
+      },
+      "kyphosis": {
+        "missed": 3,
+        "total": 100,
+        "miss_rate_pct": 3.0
+      },
+      "lateral_tilt": {
+        "missed": 0,
+        "total": 100,
+        "miss_rate_pct": 0.0
+      }
+    },
+    "normal_fp": 5,
+    "normal_total": 100,
+    "feature_importances": {
+      "diff_C7_pitch": 0.13187089522531067,
+      "diff_C7_roll": 0.08623598605469018,
+      "diff_T3_pitch": 0.11393578796016371,
+      "diff_T3_roll": 0.052784414923253274,
+      "diff_T7_pitch": 0.18566666954884514,
+      "diff_T7_roll": 0.04086277425348693
+    },
+    "issues": [],
+    "confusion_matrix": {
+      "labels": [
+        "normal",
+        "forward_head",
+        "kyphosis",
+        "lateral_tilt"
+      ],
+      "matrix": [
+        [
+          95,
+          3,
+          1,
+          1
+        ],
+        [
+          1,
+          94,
+          5,
+          0
+        ],
+        [
+          1,
+          2,
+          97,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          100
+        ]
+      ]
+    }
+  },
+  "eval_c_default_model": {
+    "train_accuracy_pct": 97.09,
+    "test_accuracy_pct": 95.5,
+    "bad_posture_recall_pct": 96.33,
+    "normal_false_positive_pct": 7.0,
+    "cv_mean_pct": 97.64,
+    "cv_std_pct": 1.44,
+    "per_label": {
+      "normal": {
+        "precision": 0.9893617021276596,
+        "recall": 0.93,
+        "f1": 0.9587628865979382,
+        "support": 100
+      },
+      "forward_head": {
+        "precision": 0.9047619047619048,
+        "recall": 0.95,
+        "f1": 0.926829268292683,
+        "support": 100
+      },
+      "kyphosis": {
+        "precision": 0.95,
+        "recall": 0.95,
+        "f1": 0.95,
+        "support": 100
+      },
+      "lateral_tilt": {
+        "precision": 0.9801980198019802,
+        "recall": 0.99,
+        "f1": 0.9850746268656716,
+        "support": 100
+      }
+    },
+    "miss_rates": {
+      "forward_head": {
+        "missed": 5,
+        "total": 100,
+        "miss_rate_pct": 5.0
+      },
+      "kyphosis": {
+        "missed": 5,
+        "total": 100,
+        "miss_rate_pct": 5.0
+      },
+      "lateral_tilt": {
+        "missed": 1,
+        "total": 100,
+        "miss_rate_pct": 1.0
+      }
+    },
+    "normal_fp": 7,
+    "normal_total": 100,
+    "feature_importances": {
+      "diff_C7_pitch": 0.15298874494226958,
+      "diff_C7_roll": 0.08420244034531339,
+      "diff_T3_pitch": 0.12463873267765749,
+      "diff_T3_roll": 0.0523865212758869,
+      "diff_T7_pitch": 0.22279442731724317,
+      "diff_T7_roll": 0.0354347059410617
+    },
+    "issues": [],
+    "confusion_matrix": {
+      "labels": [
+        "normal",
+        "forward_head",
+        "kyphosis",
+        "lateral_tilt"
+      ],
+      "matrix": [
+        [
+          93,
+          5,
+          0,
+          2
+        ],
+        [
+          0,
+          95,
+          5,
+          0
+        ],
+        [
+          0,
+          5,
+          95,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          99
+        ]
+      ]
+    }
+  }
+}
