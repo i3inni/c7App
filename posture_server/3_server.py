@@ -36,7 +36,7 @@ from posture_engine import (
 )
 from mqtt_client import mqtt_listener, register_collection_session, unregister_collection_session
 from firestore_writer import (
-    save_calibration, save_training_sample, fetch_training_samples,
+    save_calibration, load_calibration, save_training_sample, fetch_training_samples,
     aggregate_weekly_stats, cleanup_rejected_auto_samples,
 )
 from auto_trainer import retrain
@@ -326,6 +326,30 @@ async def calibrate(req: CalibrateRequest):
         "age_adj":   age_adj,
         "total_adj": total_adj,
         "message":   f"BMI {bmi} / {req.age}세 → threshold 조정량: {total_adj:+.1f}°",
+    }
+
+
+@app.get("/calibration")
+async def get_calibration(device_id: str, user_id: str):
+    """
+    저장된 사용자별 캘리브레이션 조회.
+    모바일 클라이언트가 Firestore rules에 막히지 않도록 서버 Admin SDK로 읽습니다.
+    """
+    cleaned_device_id = device_id.replace(":", "").lower()
+    if len(cleaned_device_id) != 12 or not all(c in "0123456789abcdef" for c in cleaned_device_id):
+        raise HTTPException(400, "device_id는 12자리 hex 문자열이어야 합니다.")
+    if not user_id or len(user_id) > 128:
+        raise HTTPException(400, "user_id가 비어 있거나 너무 깁니다.")
+
+    cal = await load_calibration(cleaned_device_id, user_id)
+    if not cal:
+        raise HTTPException(404, "저장된 캘리브레이션이 없습니다.")
+
+    return {
+        "status": "ok",
+        "device_id": cleaned_device_id,
+        "user_id": user_id,
+        **cal,
     }
 
 

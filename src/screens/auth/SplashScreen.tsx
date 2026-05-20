@@ -5,10 +5,12 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../lib/firebase';
 import { useStore } from '../../store';
+import { ADMIN_EMAILS } from '../../constants/adminConfig';
 
 export default function SplashScreen() {
   const nav = useNavigation();
   const setUser = useStore((s) => s.setUser);
+  const logoutStore = useStore((s) => s.logout);
 
   useEffect(() => {
     const startedAt = Date.now();
@@ -26,8 +28,18 @@ export default function SplashScreen() {
         return;
       }
 
-      if (!firebaseUser.emailVerified) {
+      // 앱 로컬 세션은 persist하지 않으므로, 재빌드/재시작 후 남아있는
+      // Firebase Auth 세션만으로 메인/관리자 탭에 자동 진입하지 않게 한다.
+      if (!useStore.getState().user) {
         await signOut(auth);
+        logoutStore();
+        goTo('Login');
+        return;
+      }
+
+      if (!firebaseUser.emailVerified && !ADMIN_EMAILS.includes(firebaseUser.email ?? '')) {
+        await signOut(auth);
+        logoutStore();
         goTo('Login');
         return;
       }
@@ -38,6 +50,7 @@ export default function SplashScreen() {
         if (data?.account?.isActive === false) {
           // 탈퇴 계정이면 로그인 화면으로 (재활성화 여부는 LoginScreen에서 처리)
           await signOut(auth);
+          logoutStore();
           goTo('Login');
           return;
         }
@@ -53,7 +66,7 @@ export default function SplashScreen() {
         const hasBodyInfo = data?.bodyInfo?.height && data?.bodyInfo?.weight;
         if (!hasBodyInfo) { goTo('InitBodyInfo'); return; }
         const hasDevice = !!useStore.getState().device.deviceId;
-        if (!hasDevice) { await signOut(auth); goTo('Login'); return; }
+        if (!hasDevice) { await signOut(auth); logoutStore(); goTo('Login'); return; }
         goTo('MainTabs');
       } catch {
         goTo('Login');
