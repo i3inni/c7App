@@ -47,8 +47,11 @@ MQTT_HOST = os.getenv("MQTT_SERVER", "").strip()
 MQTT_PORT = int(os.getenv("MQTT_PORT", "8883").strip())
 MQTT_USER = os.getenv("MQTT_USER", "").strip()
 MQTT_PASS = os.getenv("MQTT_PASS", "").strip()
+SENSOR_DEBUG = os.getenv("SENSOR_DEBUG", "0").strip().lower() in ("1", "true", "yes", "on")
 
 print(f"MQTT 설정: host={repr(MQTT_HOST)} port={MQTT_PORT} user={repr(MQTT_USER)}")
+if SENSOR_DEBUG:
+    print("🧪 SENSOR_DEBUG=ON — MQTT raw/parsed/frame/baseline/diff 로그를 자세히 출력합니다.")
 
 SUB_TOPIC = "posture/+/raw"
 
@@ -82,6 +85,15 @@ _recent_labels: dict[tuple[str, str], deque] = {}
 CANDIDATE_MIN_CONFIDENCE  = 0.80  # 모델 확신도
 CANDIDATE_MIN_STABILITY   = 0.70  # 센서 안정성 (0~1)
 CANDIDATE_MIN_HOLD_SEC    = 3.0   # 자세 유지 시간 (초)
+
+
+def _fmt(values: list[float]) -> str:
+    return "[" + ", ".join(f"{v:+.2f}" for v in values) + "]"
+
+
+def _debug_sensor(stage: str, device_id: str, user_id: str, message: str) -> None:
+    if SENSOR_DEBUG:
+        print(f"🧪 [{stage}] device={device_id} user={user_id} | {message}")
 
 
 def _compute_stability(feature_window: deque) -> float:
@@ -213,8 +225,30 @@ async def _handle_complete_frame(
     await _ensure_calibration(device_id, user_id)
 
     key = (device_id, user_id)
+    if SENSOR_DEBUG:
+        try:
+            from posture_engine import get_state
+            ml_state = get_state(device_id, user_id)
+            _debug_sensor(
+                "BASELINE",
+                device_id,
+                user_id,
+                f"raw_p={_fmt(p)} raw_r={_fmt(r)} "
+                f"base_p={_fmt(ml_state.baseline_pitch)} base_r={_fmt(ml_state.baseline_roll)}",
+            )
+        except Exception as e:
+            _debug_sensor("BASELINE_ERR", device_id, user_id, f"{type(e).__name__}: {e}")
+
     prev_sev  = _prev_severity.get(key, "normal")
     result    = run_inference(device_id, user_id, p, r)
+    _debug_sensor(
+        "INFERENCE",
+        device_id,
+        user_id,
+        f"diff_p={_fmt(result['diff_pitch'])} diff_r={_fmt(result['diff_roll'])} "
+        f"pose={result['pose_en']} conf={result['confidence']} severity={result['severity']} "
+        f"score={result['score']}",
+    )
     score     = result["score"]
     angle     = result["diff_pitch"][0]
     is_bad    = result["is_bad_posture"]
@@ -328,6 +362,13 @@ async def mqtt_listener() -> None:
                         pitch   = float(data["pitch"])
                         roll    = float(data["roll"])
                         user_id = data.get("userId", "unknown")
+                        _debug_sensor(
+                            "MQTT_PARSED",
+                            device_id,
+                            user_id,
+                            f"topic={msg.topic} sensor={sensor} pitch={pitch:+.2f} roll={roll:+.2f} "
+                            f"payload={msg.payload!r}",
+                        )
 
                         if sensor not in ("C7", "T3", "T7"):
                             print(f"⚠️  [{device_id}] 알 수 없는 센서: {sensor}")
@@ -356,6 +397,12 @@ async def mqtt_listener() -> None:
                             p, r = buf.extract()
                             buf.clear()
                             print(f"✅ 완성 프레임 → 추론: device={device_id} user={user_id} pitch={[round(x,1) for x in p]}")
+                            _debug_sensor(
+                                "FRAME",
+                                device_id,
+                                user_id,
+                                f"frame_p={_fmt(p)} frame_r={_fmt(r)} order=[C7,T3,T7]",
+                            )
 
                             # 수집 세션 활성화 중이면 프레임 전달
                             if device_id in _collection_sessions:

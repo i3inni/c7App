@@ -28,6 +28,7 @@ from pydantic import BaseModel, field_validator
 from dotenv import load_dotenv
 
 load_dotenv()
+SENSOR_DEBUG = os.getenv("SENSOR_DEBUG", "0").strip().lower() in ("1", "true", "yes", "on")
 
 from posture_engine import (
     ml, get_state, calc_bmi, bmi_adjustment, age_adjustment,
@@ -48,6 +49,21 @@ DEFAULT_MODEL_PATH  = os.path.join(BASE_DIR, "models", "default", "posture_model
 DEFAULT_SCALER_PATH = os.path.join(BASE_DIR, "models", "default", "scaler.pkl")
 LEGACY_MODEL_PATH   = os.path.join(BASE_DIR, "models", "posture_model.pkl")
 LEGACY_SCALER_PATH  = os.path.join(BASE_DIR, "models", "scaler.pkl")
+
+
+def _fmt(values: list[float]) -> str:
+    return "[" + ", ".join(f"{v:+.2f}" for v in values) + "]"
+
+
+def _mean(values: list[list[float]]) -> list[float]:
+    if not values:
+        return [0.0, 0.0, 0.0]
+    return [sum(row[i] for row in values) / len(values) for i in range(3)]
+
+
+def _debug_sensor(stage: str, message: str) -> None:
+    if SENSOR_DEBUG:
+        print(f"🧪 [{stage}] {message}")
 
 
 def resolve_model_paths() -> tuple[str, str, str] | None:
@@ -370,6 +386,10 @@ async def pose_calibration_baseline(body: dict):
     n  = len(frames)
     bp = [sum(f[0][i] for f in frames) / n for i in range(3)]
     br = [sum(f[1][i] for f in frames) / n for i in range(3)]
+    _debug_sensor(
+        "CALIBRATION_BASELINE",
+        f"device={device_id} frames={n} baseline_p={_fmt(bp)} baseline_r={_fmt(br)}",
+    )
     return {"baseline_p": bp, "baseline_r": br, "frames": n}
 
 
@@ -407,6 +427,18 @@ async def pose_calibration_collect(req: PoseCollectRequest):
     saved = 0
     is_validation = (req.split == "validation") or req.model_eval_only
     approved_for_training = (req.quality == "approved") and not is_validation
+    raw_p_mean = _mean([p for p, _ in frames])
+    raw_r_mean = _mean([r for _, r in frames])
+    dp_rows = [[p[i] - req.baseline_p[i] for i in range(3)] for p, _ in frames]
+    dr_rows = [[r[i] - req.baseline_r[i] for i in range(3)] for _, r in frames]
+    _debug_sensor(
+        "POSE_COLLECT",
+        f"device={req.device_id} label={req.label} frames={len(frames)} "
+        f"baseline_p={_fmt(req.baseline_p)} baseline_r={_fmt(req.baseline_r)} "
+        f"raw_p_mean={_fmt(raw_p_mean)} raw_r_mean={_fmt(raw_r_mean)} "
+        f"diff_p_mean={_fmt(_mean(dp_rows))} diff_r_mean={_fmt(_mean(dr_rows))} "
+        f"split={req.split} eval_only={req.model_eval_only} approved_for_training={approved_for_training}",
+    )
     for p, r in frames:
         dp = [p[i] - req.baseline_p[i] for i in range(3)]
         dr = [r[i] - req.baseline_r[i] for i in range(3)]
