@@ -30,7 +30,7 @@ import {
 import { COLORS, FONTS, SPACING, RADIUS } from '../constants/theme';
 import { useStore } from '../store';
 import { ADMIN_EMAILS } from '../constants/adminConfig';
-import { startPostureListener, getListenerDeviceId, stopPostureListener } from '../services/mqttService';
+import { startPostureListener, getListenerDeviceId } from '../services/mqttService';
 import { connectToDevice, sendUserId, subscribeWifiStatus } from '../services/bleService';
 import { initConnectionNotifications } from '../services/connectionNotificationService';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -227,11 +227,14 @@ function MainTabs() {
         unsubWifiStatus = subscribeWifiStatus(ble, (event) => {
           if (event.type === 'connected') {
             setDevice({ connectedSsid: event.ssid, wifiConnected: true });
+            // WiFi 재연결 시 Firestore 리스너 재시작
+            const { device: d, user: u } = useStore.getState();
+            if (d.deviceId && u?.id) startPostureListener(d.deviceId, u.id);
             return;
           }
           if (event.type === 'disconnected') {
             setDevice({ connectedSsid: null, wifiConnected: false, mqttStatus: 'disconnected' });
-            stopPostureListener();
+            // Firestore 리스너는 유지 — onSnapshot이 자동으로 재연결 처리
             return;
           }
           if (event.type === 'success') {
