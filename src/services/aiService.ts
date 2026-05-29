@@ -20,6 +20,8 @@ export interface LocalDiagnosis {
   badgeText: string;
   badgeColor: string;
   warningIcon: string;
+  warningIconName: string;
+  warningIconColor: string;
   description: string;
   improvementRate: string;
 }
@@ -86,7 +88,9 @@ export function levelToMeta(level: DiagnosisLevel) {
     levelText:  { normal: '정상', mild: '경증 거북목', moderate: '중등도 거북목', severe: '중증 거북목' }[level],
     badgeText:  { normal: '정상', mild: '경미', moderate: '주의', severe: '위험' }[level],
     badgeColor: { normal: COLORS.scoreExcellent, mild: COLORS.info, moderate: COLORS.warning, severe: COLORS.danger }[level],
-    warningIcon:{ normal: '✅', mild: 'ℹ️', moderate: '⚠️', severe: '🚨' }[level],
+    warningIcon:      { normal: '✅', mild: 'ℹ️', moderate: '⚠️', severe: '🚨' }[level],
+    warningIconName:  { normal: 'check-circle', mild: 'info', moderate: 'alert', severe: 'alert-circle' }[level] ?? 'alert',
+    warningIconColor: { normal: COLORS.scoreExcellent, mild: COLORS.info, moderate: COLORS.warning, severe: COLORS.danger }[level],
   };
 }
 

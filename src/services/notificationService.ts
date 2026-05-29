@@ -41,13 +41,14 @@ export const saveNotification = async (
   userId: string,
   notification: Pick<AppNotification, 'category' | 'title' | 'body'>,
 ) => {
-  await addDoc(collection(db, NOTIF_COL), {
+  const ref = await addDoc(collection(db, NOTIF_COL), {
     uid: userId,
     type: categoryToType(notification.category),
     title: notification.title,
     message: notification.body,
     timestamp: Timestamp.now(),
   });
+  return ref.id;
 };
 
 // ── 알림 목록 조회 ────────────────────────────────────

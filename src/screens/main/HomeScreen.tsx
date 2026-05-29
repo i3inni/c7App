@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect, G } from 'react-native-svg';
+import SpineVisualizer from '../../components/common/SpineVisualizer';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../../store';
 import Toggle from '../../components/common/Toggle';
@@ -11,6 +12,15 @@ import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import type { AppNotification } from '../../constants/types';
 import { getNotifications, deleteNotification, clearNotifications as clearNotifFS } from '../../services/notificationService';
 import { updateTargetScore } from '../../services/userService';
+import { connectToDevice, reconnectToSavedDevice, sendPowerMode, sendUserId } from '../../services/bleService';
+
+function scoreToLevel(score: number) {
+  if (score >= 90) return 'excellent';
+  if (score >= 80) return 'good';
+  if (score >= 70) return 'normal';
+  if (score >= 60) return 'caution';
+  return 'danger';
+}
 
 // ── SVG 아이콘 ────────────────────────────────────────
 function PersonIcon({ size = 22, color = COLORS.text }: { size?: number; color?: string }) {
@@ -40,6 +50,47 @@ function BellIcon({ size = 22, color = COLORS.text }: { size?: number; color?: s
   );
 }
 
+function WifiStatusIcon({
+  size = 18,
+  active = false,
+}: {
+  size?: number;
+  active?: boolean;
+}) {
+  const color = active ? COLORS.primary : '#C0C8D0';
+  const opacity = active ? 1 : 0.55;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" opacity={opacity}>
+      <Path d="M2 8.5C7.5 4 16.5 4 22 8.5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <Path d="M5 12c4-3 10-3 14 0" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <Path d="M8.5 15.5c2-1.5 5-1.5 7 0" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <Circle cx="12" cy="19" r="1.6" fill={color} />
+    </Svg>
+  );
+}
+
+function BluetoothStatusIcon({
+  size = 18,
+  active = false,
+}: {
+  size?: number;
+  active?: boolean;
+}) {
+  const color = active ? COLORS.primary : '#C0C8D0';
+  const opacity = active ? 1 : 0.55;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" opacity={opacity}>
+      <Path
+        d="M12 3v18l6-5-4.5-4L18 8l-6-5Zm0 9-6-5m6 5-6 5"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 // ── 배터리 인디케이터 ──────────────────────────────────
 function BatteryIndicator({ level }: { level: number }) {
   const W = 30;
@@ -58,7 +109,7 @@ function BatteryIndicator({ level }: { level: number }) {
         {/* 채우기 */}
         <Rect x="2.5" y="3.5" width={String(fillW)} height={String(H - 5)} rx="1.5" fill={fillColor} />
       </Svg>
-      <Text style={batteryStyles.pct}>{level}%</Text>
+      <Text style={batteryStyles.pct}>{level > 0 ? `${level}%` : '--'}</Text>
     </View>
   );
 }
@@ -66,82 +117,34 @@ const batteryStyles = StyleSheet.create({
   pct: { fontSize: FONTS.sizes.sm, fontWeight: '700', color: COLORS.text },
 });
 
-// ── 게이지 컴포넌트 ──────────────────────────────────
-// SVG arc(A) 명령을 완전히 사용하지 않음 — sweep/large-arc 렌더링 버그 우회
-// 삼각함수로 상단 반원 좌표를 직접 계산한 뒤 L(lineto)로 연결
+// ── 가로 막대 게이지 ──────────────────────────────────
 function PostureGauge({ score, targetScore = 85 }: { score: number; targetScore?: number }) {
-  const R = 76, CX = 100, CY = 90, SW = 15, STEPS = 180;
+  const W = 280, H = 30;
+  const BAR_Y = 12, BAR_H = 10, PAD = 8;
+  const INNER = W - PAD * 2;
 
-  const ratio  = Math.min(Math.max(score / 100, 0), 1);
-  const tRatio = Math.min(Math.max(targetScore / 100, 0), 1);
-
-  // 상단 반원 좌표: i=0 → 왼쪽(π), i=STEPS → 오른쪽(0)
-  const pts: { x: number; y: number }[] = [];
-  for (let i = 0; i <= STEPS; i++) {
-    const angle = Math.PI * (1 - i / STEPS);
-    pts.push({
-      x: parseFloat((CX + R * Math.cos(angle)).toFixed(2)),
-      y: parseFloat((CY - R * Math.sin(angle)).toFixed(2)),
-    });
-  }
-
-  const mkPath = (ps: { x: number; y: number }[]) =>
-    `M ${ps[0].x} ${ps[0].y}` + ps.slice(1).map(p => ` L ${p.x} ${p.y}`).join('');
-
-  const scoreIdx  = Math.min(Math.round(ratio  * STEPS), STEPS);
-  const targetIdx = Math.min(Math.round(tRatio * STEPS), STEPS);
-  const S = pts[Math.max(scoreIdx, 0)];
-  const T = pts[targetIdx];
+  const ratio   = Math.min(Math.max(score / 100, 0), 1);
+  const tRatio  = Math.min(Math.max(targetScore / 100, 0), 1);
+  const fillW   = Math.max(ratio * INNER, BAR_H);
+  const targetX = PAD + tRatio * INNER;
 
   return (
-    <Svg width={260} height={128} viewBox="0 0 200 100">
+    <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
       <Defs>
-        <LinearGradient
-          id="gGrad"
-          gradientUnits="userSpaceOnUse"
-          x1={String(pts[0].x)} y1="0"
-          x2={String(pts[STEPS].x)} y2="0"
-        >
-          <Stop offset="0%"   stopColor={COLORS.gaugeGreen} />
+        <LinearGradient id="barGrad" x1="0" y1="0" x2="1" y2="0">
+          <Stop offset="0%"   stopColor={COLORS.gaugeRed} />
           <Stop offset="50%"  stopColor={COLORS.gaugeYellow} />
-          <Stop offset="100%" stopColor={COLORS.gaugeRed} />
+          <Stop offset="100%" stopColor={COLORS.gaugeGreen} />
         </LinearGradient>
       </Defs>
-
-      {/* 배경 반원 (회색) */}
+      <Rect x={PAD} y={BAR_Y} width={INNER} height={BAR_H} rx={BAR_H / 2} fill="#EAECF0" />
+      <Rect x={PAD} y={BAR_Y} width={fillW} height={BAR_H} rx={BAR_H / 2} fill="url(#barGrad)" />
       <Path
-        d={mkPath(pts)}
-        fill="none"
-        stroke="#EAECF0"
-        strokeWidth={SW}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d={`M ${targetX} ${BAR_Y - 2} L ${targetX - 3} ${BAR_Y - 7} L ${targetX + 3} ${BAR_Y - 7} Z`}
+        fill={COLORS.gaugeGreen}
       />
-
-      {/* 점수 아크 (그라디언트) */}
-      {scoreIdx > 0 && (
-        <Path
-          d={mkPath(pts.slice(0, scoreIdx + 1))}
-          fill="none"
-          stroke="url(#gGrad)"
-          strokeWidth={SW}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      )}
-
-      {/* 목표 마커 */}
-      <Circle cx={T.x} cy={T.y} r="5.5" fill="#fff" />
-      <Circle cx={T.x} cy={T.y} r="3.2" fill={COLORS.gaugeGreen} />
-
-      {/* 점수 마커 */}
-      {scoreIdx > 2 && (
-        <>
-          <Circle cx={S.x} cy={S.y} r="10"  fill="rgba(255,255,255,0.9)" />
-          <Circle cx={S.x} cy={S.y} r="6.5" fill="#D1D5DB" />
-          <Circle cx={S.x} cy={S.y} r="3.5" fill="#fff" />
-        </>
-      )}
+      <Circle cx={PAD + fillW - BAR_H / 2} cy={BAR_Y + BAR_H / 2} r={BAR_H / 2 + 2} fill="#fff" />
+      <Circle cx={PAD + fillW - BAR_H / 2} cy={BAR_Y + BAR_H / 2} r={BAR_H / 2 - 1} fill={COLORS.gaugeGreen} />
     </Svg>
   );
 }
@@ -204,17 +207,23 @@ function GoalModal({ visible, onClose }: { visible: boolean; onClose: () => void
   const { settings, updateSettings, user } = useStore();
   const [val, setVal] = useState(settings.targetScore);
   const trackWidthRef = useRef(1);
+  const pageXRef = useRef(0);
+  const sliderRef = useRef<View>(null);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => {
-        const r = Math.min(Math.max(e.nativeEvent.locationX / trackWidthRef.current, 0), 1);
-        setVal(Math.round(GOAL_MIN + r * (GOAL_MAX - GOAL_MIN)));
+      onPanResponderGrant: (_e, gestureState) => {
+        sliderRef.current?.measure((_x, _y, width, _h, pageX) => {
+          pageXRef.current = pageX;
+          trackWidthRef.current = width;
+          const r = Math.min(Math.max((gestureState.x0 - pageX) / width, 0), 1);
+          setVal(Math.round(GOAL_MIN + r * (GOAL_MAX - GOAL_MIN)));
+        });
       },
-      onPanResponderMove: (e) => {
-        const r = Math.min(Math.max(e.nativeEvent.locationX / trackWidthRef.current, 0), 1);
+      onPanResponderMove: (_e, gestureState) => {
+        const r = Math.min(Math.max((gestureState.moveX - pageXRef.current) / trackWidthRef.current, 0), 1);
         setVal(Math.round(GOAL_MIN + r * (GOAL_MAX - GOAL_MIN)));
       },
     })
@@ -251,8 +260,8 @@ function GoalModal({ visible, onClose }: { visible: boolean; onClose: () => void
 
           {/* 슬라이더 */}
           <View
+            ref={sliderRef}
             style={modalStyles.sliderOuter}
-            onLayout={e => { trackWidthRef.current = e.nativeEvent.layout.width; }}
             {...panResponder.panHandlers}
           >
             {/* 트랙 배경 */}
@@ -630,16 +639,34 @@ const nStyles = StyleSheet.create({
 });
 
 // ── 메인 홈 ──────────────────────────────────────────
+const SCREEN_H = Dimensions.get('window').height;
+
 export default function HomeScreen() {
   const nav = useNavigation();
-  const { user, device, currentScore, currentAngle, currentLevel, settings, setDevice, notifications, setNotifications } = useStore();
+  const { user, device, currentScore, currentAngle, currentAngles, currentRolls, currentLevel, currentPostureType, settings, setDevice, notifications, setNotifications, todayStats } = useStore();
   const [showGoal, setShowGoal] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
+
+
+  // 화면 높이의 52%를 척추에 할당 (viewBox 비율 1:2 → width = height/2)
+  const spineH = Math.round(SCREEN_H * 0.52);
+  const spineW = Math.round(spineH / 2);
 
   useEffect(() => {
     if (!user?.id) return;
     getNotifications(user.id).then(setNotifications).catch(() => {});
   }, [user?.id]);
+
+  const postureLabel: Record<string, string> = {
+    normal:        '바른 자세',
+    forward_head:  '거북목',
+    rounded_back:  '굽은등',
+    straight_neck: '일자목',
+    tilted:        '옆 기울어짐',
+    kyphosis:      '굽은등',
+    lateral_tilt:  '옆 기울어짐',
+    unknown:       '—',
+  };
 
   const levelLabel: Record<string, string> = {
     excellent: '우수',
@@ -655,12 +682,39 @@ export default function HomeScreen() {
     caution: COLORS.scoreCaution,
     danger: COLORS.scoreDanger,
   };
-  const color = levelColor[currentLevel] ?? COLORS.textSecondary;
+  const isLive = currentScore > 0;
+  const displayScore = isLive ? currentScore : (todayStats?.summary.dailyScore ?? 0);
+  const hasData = displayScore > 0;
+  const displayLevel = isLive ? currentLevel : scoreToLevel(displayScore);
+  const color = hasData ? (levelColor[displayLevel] ?? COLORS.textSecondary) : COLORS.textMuted;
   const unread = notifications.filter(n => !n.read).length;
   const isConnected = device.mqttStatus === 'connected';
+  const isBleConnected = device.bleConnected;
+  const isWifiConnected = device.wifiConnected || isConnected;
+
+  const handleReconnectBle = async () => {
+    if (isBleConnected) {
+      Alert.alert('블루투스 연결', '이미 기기와 연결되어 있어요.');
+      return;
+    }
+    if (!device.bleDeviceId) {
+      Alert.alert('블루투스 재연결', '저장된 기기 정보가 없어 다시 연결할 수 없어요.');
+      return;
+    }
+
+    try {
+      const ble = await reconnectToSavedDevice(device.bleDeviceId);
+      if (user?.id) {
+        await sendUserId(ble, user.id);
+      }
+      Alert.alert('블루투스 재연결', '기기와 다시 연결됐어요.');
+    } catch {
+      Alert.alert('블루투스 재연결 실패', '기기 전원과 거리를 확인한 뒤 다시 시도해 주세요.');
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
         {/* ── 상단 헤더 ── */}
@@ -671,12 +725,6 @@ export default function HomeScreen() {
 
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{user?.nickname ?? '사용자'} 님</Text>
-            <View style={styles.connRow}>
-              <View style={[styles.connDot, { backgroundColor: isConnected ? COLORS.connected : COLORS.disconnected }]} />
-              <Text style={[styles.connText, { color: isConnected ? COLORS.connected : COLORS.disconnected }]}>
-                {isConnected ? 'CONNECTED' : 'DISCONNECTED'}
-              </Text>
-            </View>
           </View>
 
           <TouchableOpacity onPress={() => setShowNotif(true)} style={styles.bellBtn}>
@@ -693,41 +741,61 @@ export default function HomeScreen() {
         <View style={styles.realtimeRow}>
           <View style={styles.realDot} />
           <Text style={styles.realtimeLabel}>REAL-TIME VISUAL</Text>
+          <View style={styles.statusIcons}>
+            <TouchableOpacity onPress={handleReconnectBle} activeOpacity={0.8} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <BluetoothStatusIcon active={isBleConnected} />
+            </TouchableOpacity>
+            <WifiStatusIcon active={isWifiConnected} />
+          </View>
           <BatteryIndicator level={device.battery} />
         </View>
 
         {/* ── 게이지 섹션 ── */}
         <View style={styles.gaugeSection}>
-          <TouchableOpacity onPress={() => setShowGoal(true)} activeOpacity={0.9}>
-            <PostureGauge score={currentScore} targetScore={settings.targetScore} />
-          </TouchableOpacity>
-
-          {/* 점수 오버레이 */}
+          {/* 점수 숫자 */}
           <View style={styles.scoreOverlay}>
-            <Text style={styles.scoreNum}>{currentScore}</Text>
+            <Text style={styles.scoreNum}>{hasData ? displayScore : '--'}</Text>
             <Text style={styles.scoreLabelText}>POSTURE SCORE</Text>
-            <TouchableOpacity onPress={() => setShowGoal(true)}>
-              <Text style={styles.targetText}>◎ Target: {settings.targetScore}+ 점</Text>
-            </TouchableOpacity>
           </View>
 
-          {/* 자세 피규어 */}
+          {/* 가로 막대 게이지 */}
+          <TouchableOpacity
+            onPress={() => setShowGoal(true)}
+            activeOpacity={0.85}
+            style={styles.barWrap}
+          >
+            <PostureGauge score={displayScore} targetScore={settings.targetScore} />
+            <TouchableOpacity onPress={() => setShowGoal(true)} style={styles.targetRow}>
+              <Text style={styles.targetText}>◎ Target: {settings.targetScore}+ 점</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+
+          {/* 척추 비주얼라이저 */}
           <View style={styles.figureWrap}>
-            <PostureFigure angle={currentAngle} />
+            <SpineVisualizer
+              angles={currentAngles}
+              rolls={currentRolls}
+              width={spineW}
+              height={spineH}
+              labelFontSize={16}
+              valueFontSize={14}
+            />
           </View>
         </View>
 
         {/* ── 각도 + 상태 ── */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statKey}>CURRENT ANGLE</Text>
-            <Text style={[styles.statVal, { color: COLORS.text }]}>{currentAngle.toFixed(1)}°</Text>
+            <Text style={styles.statKey}>POSTURE</Text>
+            <Text style={[styles.statStatus, { color }]}>
+              {hasData ? (postureLabel[currentPostureType] ?? '—') : '—'}
+            </Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.statBox}>
             <Text style={styles.statKey}>STATUS</Text>
             <Text style={[styles.statStatus, { color }]}>
-              ⚠ {levelLabel[currentLevel]}
+              {hasData ? `⚠ ${levelLabel[displayLevel]}` : '—'}
             </Text>
           </View>
         </View>
@@ -739,7 +807,7 @@ export default function HomeScreen() {
               <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <Path
                   d="M12 2v10M6.3 5.3A8 8 0 1 0 17.7 5.3"
-                  stroke={device.powerOn ? COLORS.primary : '#fff'}
+                  stroke={device.powerOn ? COLORS.primary : COLORS.textSecondary}
                   strokeWidth="2" strokeLinecap="round"
                 />
               </Svg>
@@ -751,7 +819,16 @@ export default function HomeScreen() {
           </View>
           <Toggle
             value={device.powerOn}
-            onToggle={(v) => setDevice({ powerOn: v })}
+            onToggle={async (v) => {
+              const mode = v ? 'on' : 'off';
+              setDevice({ powerOn: v, powerMode: mode });
+              if (device.bleDeviceId) {
+                try {
+                  const ble = await connectToDevice(device.bleDeviceId);
+                  await sendPowerMode(ble, mode);
+                } catch {}
+              }
+            }}
             activeColor={COLORS.primary}
           />
         </View>
@@ -766,14 +843,14 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#fff' },
-  scrollContent: { paddingBottom: SPACING.xl },
+  scrollContent: { paddingBottom: SPACING.sm },
 
   // 헤더
   topBar: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SPACING.base,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.xs,
+    paddingTop: SPACING.xs,
+    paddingBottom: 2,
   },
   profileBtn: {
     width: 40, height: 40, borderRadius: 20,
@@ -782,9 +859,6 @@ const styles = StyleSheet.create({
   },
   userInfo: { flex: 1, marginLeft: SPACING.sm, alignItems: 'center' },
   userName: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
-  connRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  connDot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
-  connText: { fontSize: FONTS.sizes.xs, fontWeight: '700', letterSpacing: 0.5 },
   bellBtn: {
     width: 40, height: 40, borderRadius: 12,
     backgroundColor: '#fff',
@@ -807,48 +881,57 @@ const styles = StyleSheet.create({
   realtimeRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SPACING.base,
-    marginBottom: SPACING.xs,
-    marginTop: SPACING.base,
+    marginBottom: 2,
+    marginTop: SPACING.sm,
   },
   realDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.accent, marginRight: 6 },
   realtimeLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, fontWeight: '600', flex: 1, letterSpacing: 0.5 },
+  statusIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginRight: 10,
+  },
 
   // 게이지 섹션
-  gaugeSection: { alignItems: 'center' },
-  scoreOverlay: { alignItems: 'center', marginTop: -30 },
-  scoreNum: { fontSize: FONTS.sizes['5xl'], fontWeight: '800', color: COLORS.text, lineHeight: 56 },
+  gaugeSection: { alignItems: 'center', paddingHorizontal: SPACING.base },
+  scoreOverlay: { alignItems: 'center', marginTop: SPACING.xs, marginBottom: 2 },
+  scoreNum: { fontSize: FONTS.sizes['2xl'], fontWeight: '800', color: COLORS.text, lineHeight: 32 },
   scoreLabelText: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, fontWeight: '600', letterSpacing: 1 },
-  targetText: { fontSize: FONTS.sizes.sm, color: COLORS.primary, fontWeight: '600', marginTop: 4 },
-  figureWrap: { marginTop: SPACING.sm },
+  barWrap: { width: '100%', alignItems: 'center', marginBottom: 0 },
+  targetRow: { marginTop: 1 },
+  targetText: { fontSize: FONTS.sizes.xs, color: COLORS.primary, fontWeight: '600' },
+  figureWrap: { marginTop: -28, alignItems: 'center' },
 
   // 통계 행
   statsRow: {
     flexDirection: 'row',
     marginHorizontal: SPACING.base,
-    marginTop: SPACING.lg,
-    marginBottom: SPACING.sm,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
   },
   statBox: { flex: 1, alignItems: 'center' },
   divider: { width: 1, backgroundColor: COLORS.border },
-  statKey: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, fontWeight: '600', letterSpacing: 0.5, marginBottom: 4 },
-  statVal: { fontSize: FONTS.sizes['2xl'], fontWeight: '800' },
+  statKey: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
+  statVal: { fontSize: FONTS.sizes.base, fontWeight: '800' },
   statStatus: { fontSize: FONTS.sizes.base, fontWeight: '700' },
 
   // 전원 카드
   powerCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: COLORS.bgDark, borderRadius: RADIUS.xl,
-    marginHorizontal: SPACING.base, marginTop: SPACING.base, padding: SPACING.base,
+    backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.xl,
+    borderWidth: 1, borderColor: COLORS.border,
+    marginHorizontal: SPACING.base, marginTop: SPACING.sm, padding: SPACING.sm,
   },
   powerLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   powerIconBox: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: COLORS.border,
     alignItems: 'center', justifyContent: 'center',
   },
   powerIconBoxOn: {
-    backgroundColor: 'rgba(29,179,142,0.2)',
+    backgroundColor: 'rgba(29,179,142,0.15)',
   },
-  powerTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: '#fff' },
-  powerSub: { fontSize: FONTS.sizes.xs, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  powerTitle: { fontSize: FONTS.sizes.md, fontWeight: '700', color: COLORS.text },
+  powerSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginTop: 2 },
 });

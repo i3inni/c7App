@@ -1,0 +1,5 @@
+actual_vs_predicted,normal,forward_head,kyphosis,lateral_tilt
+normal,95,3,1,1
+forward_head,1,94,5,0
+kyphosis,1,2,97,0
+lateral_tilt,0,0,0,100

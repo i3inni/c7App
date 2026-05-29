@@ -1,15 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Modal,
-  ActivityIndicator,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import Svg, { Polyline, Circle, Line, Text as SvgText, Path } from 'react-native-svg';
+import Icon from '../../components/Icon';
 import { useStore } from '../../store';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import { getTodayStats, getWeeklyStats } from '../../services/statsService';
 
 const { width } = Dimensions.get('window');
+
+function getLocalOffsetHours(): number {
+  return -new Date().getTimezoneOffset() / 60;
+}
+
+function formatKoreanHour(hour: number): string {
+  const period = hour < 12 ? '오전' : '오후';
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${period} ${displayHour}`;
+}
+
+function parseHourlyBucket(key: string): { start: number; end: number } | null {
+  const match = key.match(/^(\d{2})_(\d{2})$/);
+  if (!match) return null;
+  return { start: Number(match[1]), end: Number(match[2]) };
+}
+
+function formatHourlyBucketToKst(key: string): string {
+  const bucket = parseHourlyBucket(key);
+  if (!bucket) return key;
+  const offset = getLocalOffsetHours();
+  const start = (bucket.start + offset + 24) % 24;
+  const end = (bucket.end + offset + 24) % 24;
+  return `${formatKoreanHour(start)}-${formatKoreanHour(end)}시`;
+}
+
+function getHourlyBucketSortKey(key: string): number {
+  const bucket = parseHourlyBucket(key);
+  if (!bucket) return 999;
+  const offset = getLocalOffsetHours();
+  return (bucket.start + offset + 24) % 24;
+}
+
+function formatTimeToKst(time: string): string {
+  const match = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return time;
+  const hour = Number(match[1]);
+  const minute = match[2];
+  const offset = getLocalOffsetHours();
+  const localHour = (hour + offset + 24) % 24;
+  return `${String(localHour).padStart(2, '0')}:${minute}`;
+}
 
 // ── 미니 라인 차트 ───────────────────────────────────
 function LineChart({
@@ -54,23 +98,59 @@ function LineChart({
 }
 
 // ── 오늘 요약 상세 모달 ──────────────────────────────
+const BAD_PAGE_SIZE = 10;
+
 function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { todayStats } = useStore();
+  const insets = useSafeAreaInsets();
+  const [badPage, setBadPage] = useState(0);
+  const [filterHour, setFilterHour] = useState<number | null>(null);
+  const [showHourFilter, setShowHourFilter] = useState(false);
+
   if (!todayStats || !todayStats.summary) return null;
 
-  const hourlyLabels: Record<string, string> = {
-    '09_12': '오전 9-12시',
-    '12_15': '오후 12-3시',
-    '15_18': '오후 3-6시',
-    '18_21': '오후 6-9시',
+  const hourlyData = Object.entries(todayStats.hourlyScores ?? {})
+    .map(([key, score]) => ({
+      label: formatHourlyBucketToKst(key),
+      score,
+      sortKey: getHourlyBucketSortKey(key),
+    }))
+    .filter(h => h.score > 0)
+    .sort((a, b) => a.sortKey - b.sortKey);
+
+  const sortedBadLogs = (todayStats.badPostureLogs ?? [])
+    .map(b => {
+      const kstTime = formatTimeToKst(b.time);
+      const kstHour = Number(kstTime.split(':')[0]);
+      return { ...b, kstTime, kstHour };
+    })
+    .sort((a, b) => a.kstTime.localeCompare(b.kstTime));
+
+  const availableHours = Array.from(new Set(sortedBadLogs.map(b => b.kstHour))).sort((a, b) => a - b);
+  const filteredBadLogs = filterHour === null ? sortedBadLogs : sortedBadLogs.filter(b => b.kstHour === filterHour);
+
+  const totalBadPages = Math.ceil(filteredBadLogs.length / BAD_PAGE_SIZE);
+  const pagedBadLogs = filteredBadLogs.slice(badPage * BAD_PAGE_SIZE, (badPage + 1) * BAD_PAGE_SIZE);
+
+  const groupedBadLogs: { hour: number; logs: typeof pagedBadLogs }[] = [];
+  pagedBadLogs.forEach(log => {
+    const last = groupedBadLogs[groupedBadLogs.length - 1];
+    if (last && last.hour === log.kstHour) {
+      last.logs.push(log);
+    } else {
+      groupedBadLogs.push({ hour: log.kstHour, logs: [log] });
+    }
+  });
+
+  const handleFilterHour = (hour: number | null) => {
+    setFilterHour(hour);
+    setBadPage(0);
+    setShowHourFilter(false);
   };
-  const hourlyData = Object.entries(hourlyLabels)
-    .map(([key, label]) => ({ label, score: todayStats.hourlyScores?.[key] ?? 0 }))
-    .filter(h => h.score > 0);
 
   return (
     <Modal visible={visible} animationType="slide">
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+      <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: insets.top }}>
         <View style={dtStyles.header}>
           <Text style={dtStyles.title}>오늘의 상세 분석</Text>
           <TouchableOpacity onPress={onClose}><Text style={dtStyles.close}>✕</Text></TouchableOpacity>
@@ -86,7 +166,7 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
                 <Text style={dtStyles.improveText}>평균 각도 {todayStats.summary.avgAngle}°</Text>
               </View>
             </View>
-            <Text style={{ fontSize: 28 }}>📈</Text>
+            <Icon name="trending-up" size={28} color="#7EE8A2" />
           </View>
 
           {/* 시간대별 점수 */}
@@ -108,47 +188,121 @@ function TodayDetailModal({ visible, onClose }: { visible: boolean; onClose: () 
           )}
 
           {/* 불량 자세 기록 */}
-          <Text style={dtStyles.sectionTitle}>불량 자세 발생 기록</Text>
-          {(!todayStats.badPostureLogs || todayStats.badPostureLogs.length === 0) ? (
+          <View style={dtStyles.badHeaderRow}>
+            <Text style={dtStyles.sectionTitle}>불량 자세 발생 기록</Text>
+            {sortedBadLogs.length > 0 && (
+              <TouchableOpacity
+                style={[dtStyles.filterBtn, showHourFilter && dtStyles.filterBtnActive]}
+                onPress={() => setShowHourFilter(v => !v)}
+              >
+                <Icon name="clock" size={13} color={showHourFilter || filterHour !== null ? '#fff' : COLORS.textSecondary} />
+                <Text style={[dtStyles.filterBtnText, (showHourFilter || filterHour !== null) && dtStyles.filterBtnTextActive]}>
+                  {filterHour !== null ? `${formatKoreanHour(filterHour)}시` : '시간 필터'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {showHourFilter && availableHours.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={dtStyles.filterChipScroll} contentContainerStyle={{ paddingVertical: 4 }}>
+              <TouchableOpacity
+                style={[dtStyles.filterChip, filterHour === null && dtStyles.filterChipActive]}
+                onPress={() => handleFilterHour(null)}
+              >
+                <Text style={[dtStyles.filterChipText, filterHour === null && dtStyles.filterChipTextActive]}>전체</Text>
+              </TouchableOpacity>
+              {availableHours.map(hour => (
+                <TouchableOpacity
+                  key={hour}
+                  style={[dtStyles.filterChip, filterHour === hour && dtStyles.filterChipActive]}
+                  onPress={() => handleFilterHour(hour)}
+                >
+                  <Text style={[dtStyles.filterChipText, filterHour === hour && dtStyles.filterChipTextActive]}>
+                    {formatKoreanHour(hour)}시
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
+          {filteredBadLogs.length > 0 && (
+            <Text style={dtStyles.badPageInfo}>
+              {filterHour !== null ? `${formatKoreanHour(filterHour)}시 · ` : ''}
+              {badPage * BAD_PAGE_SIZE + 1}–{Math.min((badPage + 1) * BAD_PAGE_SIZE, filteredBadLogs.length)} / {filteredBadLogs.length}건
+            </Text>
+          )}
+
+          {filteredBadLogs.length === 0 ? (
             <View style={dtStyles.emptyBox}>
               <Text style={dtStyles.emptyText}>오늘 불량 자세 기록이 없습니다 👍</Text>
             </View>
           ) : (
-            todayStats.badPostureLogs.map((b, i) => {
-              const isDanger = b.angle >= 25;
-              return (
-                <View key={i} style={[dtStyles.badCard, { backgroundColor: isDanger ? '#FFF0F3' : '#FFF7EC' }]}>
-                  <View style={dtStyles.badLeft}>
-                    <Text style={{ fontSize: 14, marginRight: 6 }}>⏰</Text>
-                    <Text style={[dtStyles.badTime, { color: isDanger ? COLORS.accent : COLORS.warning }]}>{b.time}</Text>
+            <>
+              {groupedBadLogs.map(({ hour, logs }) => (
+                <View key={hour}>
+                  <View style={dtStyles.hourGroupHeader}>
+                    <Icon name="clock" size={13} color={COLORS.textSecondary} />
+                    <Text style={dtStyles.hourGroupText}>{formatKoreanHour(hour)}시</Text>
                   </View>
-                  <Text style={dtStyles.badDetail}>각도: {b.angle}°    지속시간: {b.duration}</Text>
-                  <View style={[dtStyles.levelBadge, { backgroundColor: isDanger ? COLORS.accent : COLORS.warning }]}>
-                    <Text style={dtStyles.levelText}>{isDanger ? '위험' : '주의'}</Text>
-                  </View>
+                  {logs.map((b, i) => {
+                    const isDanger = b.angle >= 25;
+                    return (
+                      <View key={i} style={[dtStyles.badCard, { backgroundColor: isDanger ? '#FFF0F3' : '#FFF7EC' }]}>
+                        <View style={dtStyles.badLeft}>
+                          <Text style={[dtStyles.badTime, { color: isDanger ? COLORS.accent : COLORS.warning }]}>
+                            {b.kstTime}
+                          </Text>
+                        </View>
+                        <Text style={dtStyles.badDetail}>각도: {b.angle}°    지속시간: {b.duration}</Text>
+                        <View style={[dtStyles.levelBadge, { backgroundColor: isDanger ? COLORS.accent : COLORS.warning }]}>
+                          <Text style={dtStyles.levelText}>{isDanger ? '위험' : '주의'}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
                 </View>
-              );
-            })
+              ))}
+
+              {totalBadPages > 1 && (
+                <View style={dtStyles.pageNav}>
+                  <TouchableOpacity
+                    style={[dtStyles.pageBtn, badPage === 0 && dtStyles.pageBtnDisabled]}
+                    onPress={() => setBadPage(p => Math.max(0, p - 1))}
+                    disabled={badPage === 0}
+                  >
+                    <Text style={[dtStyles.pageBtnText, badPage === 0 && dtStyles.pageBtnTextDisabled]}>‹ 이전</Text>
+                  </TouchableOpacity>
+                  <Text style={dtStyles.pageNumText}>{badPage + 1} / {totalBadPages}</Text>
+                  <TouchableOpacity
+                    style={[dtStyles.pageBtn, badPage === totalBadPages - 1 && dtStyles.pageBtnDisabled]}
+                    onPress={() => setBadPage(p => Math.min(totalBadPages - 1, p + 1))}
+                    disabled={badPage === totalBadPages - 1}
+                  >
+                    <Text style={[dtStyles.pageBtnText, badPage === totalBadPages - 1 && dtStyles.pageBtnTextDisabled]}>다음 ›</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
           )}
 
           {/* 활동 요약 */}
           <Text style={dtStyles.sectionTitle}>활동 요약</Text>
           <View style={dtStyles.summaryGrid}>
             {[
-              { icon: '📈', label: '교정 횟수', val: `${todayStats.summary.correctionCount}회` },
-              { icon: '⏰', label: '사용 시간', val: todayStats.summary.totalUsageTime },
-              { icon: '🔴', label: '평균 각도', val: `${todayStats.summary.avgAngle}°` },
-              { icon: '⚠️', label: '불량 자세', val: `${todayStats.summary.badPostureCount}회` },
+              { iconName: 'trending-up', iconColor: COLORS.primary,  label: '교정 횟수', val: `${todayStats.summary.correctionCount}회` },
+              { iconName: 'clock',       iconColor: COLORS.primary,  label: '사용 시간', val: todayStats.summary.totalUsageTime },
+              { iconName: 'target',      iconColor: COLORS.accent,   label: '평균 각도', val: `${todayStats.summary.avgAngle}°` },
+              { iconName: 'alert',       iconColor: COLORS.warning,  label: '불량 자세', val: `${todayStats.summary.badPostureCount}회` },
             ].map((s, i) => (
               <View key={i} style={dtStyles.summaryCard}>
-                <Text style={dtStyles.summaryIcon}>{s.icon}</Text>
+                <Icon name={s.iconName} size={24} color={s.iconColor} />
                 <Text style={dtStyles.summaryLabel}>{s.label}</Text>
                 <Text style={dtStyles.summaryVal}>{s.val}</Text>
               </View>
             ))}
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -193,14 +347,40 @@ const dtStyles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: RADIUS.lg, padding: SPACING.base,
     alignItems: 'center', ...SHADOWS.sm,
   },
-  summaryIcon: { fontSize: 24, marginBottom: SPACING.xs },
   summaryLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, textAlign: 'center' },
   summaryVal: { fontSize: FONTS.sizes.xl, fontWeight: '800', color: COLORS.text, marginTop: 4 },
+  badHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACING.base, marginBottom: SPACING.sm },
+  badPageInfo: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
+  hourGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: SPACING.xs, marginTop: SPACING.sm },
+  hourGroupText: { fontSize: FONTS.sizes.xs, fontWeight: '700', color: COLORS.textSecondary },
+  pageNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACING.sm, marginBottom: SPACING.xs },
+  pageBtn: { paddingVertical: SPACING.xs, paddingHorizontal: SPACING.base, backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md },
+  pageBtnDisabled: { opacity: 0.35 },
+  pageBtnText: { fontSize: FONTS.sizes.sm, fontWeight: '700', color: COLORS.text },
+  pageBtnTextDisabled: { color: COLORS.textMuted },
+  pageNumText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  filterBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: SPACING.sm, paddingVertical: 4,
+    backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.full,
+  },
+  filterBtnActive: { backgroundColor: COLORS.primary },
+  filterBtnText: { fontSize: FONTS.sizes.xs, fontWeight: '600', color: COLORS.textSecondary },
+  filterBtnTextActive: { color: '#fff' },
+  filterChipScroll: { marginBottom: SPACING.xs },
+  filterChip: {
+    paddingHorizontal: SPACING.md, paddingVertical: 6, marginRight: SPACING.xs,
+    backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.full,
+  },
+  filterChipActive: { backgroundColor: COLORS.primary },
+  filterChipText: { fontSize: FONTS.sizes.xs, fontWeight: '600', color: COLORS.textSecondary },
+  filterChipTextActive: { color: '#fff' },
 });
 
 // ── 주간 상세 모달 ────────────────────────────────────
 function WeekDetailModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { weeklyStats } = useStore();
+  const insets = useSafeAreaInsets();
 
   const avgScore = weeklyStats.length > 0
     ? (weeklyStats.reduce((s, w) => s + w.avgScore, 0) / weeklyStats.length).toFixed(1)
@@ -209,7 +389,7 @@ function WeekDetailModal({ visible, onClose }: { visible: boolean; onClose: () =
 
   return (
     <Modal visible={visible} animationType="slide">
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+      <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: insets.top }}>
         <View style={dtStyles.header}>
           <Text style={dtStyles.title}>주간 상세 분석</Text>
           <TouchableOpacity onPress={onClose}><Text style={dtStyles.close}>✕</Text></TouchableOpacity>
@@ -225,7 +405,7 @@ function WeekDetailModal({ visible, onClose }: { visible: boolean; onClose: () =
                 </Text>
               </View>
             </View>
-            <Text style={{ fontSize: 28 }}>📊</Text>
+            <Icon name="bar-chart" size={28} color="#FCD34D" />
           </View>
 
           <Text style={dtStyles.sectionTitle}>주차별 점수</Text>
@@ -288,7 +468,7 @@ function WeekDetailModal({ visible, onClose }: { visible: boolean; onClose: () =
             </>
           )}
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -326,38 +506,69 @@ function scoreToBadgeColor(score: number): string {
 
 // ── 메인 STATS 화면 ──────────────────────────────────
 export default function StatsScreen() {
+  const nav = useNavigation();
   const { user, todayStats, weeklyStats, settings, setTodayStats, setWeeklyStats } = useStore();
   const [tab, setTab] = useState<'weekly' | 'monthly'>('monthly');
   const [showTodayDetail, setShowTodayDetail] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const chartData = weeklyStats.map(w => ({ label: w.weekLabel, score: w.avgScore }));
+  const latestWeek = weeklyStats.length > 0 ? weeklyStats[weeklyStats.length - 1] : null;
+  const weeklyChartData = (latestWeek?.dailyBreakdown ?? []).map(d => ({ label: d.day, score: d.score }));
+  const monthlyChartData = weeklyStats.map(w => ({ label: w.weekLabel, score: w.avgScore }));
+  const chartData = tab === 'weekly' ? weeklyChartData : monthlyChartData;
   const dailyScore = todayStats?.summary?.dailyScore ?? 0;
   const todayLabel = todayStats?.summary ? scoreToLabel(dailyScore) : '--';
   const todayBadgeColor = scoreToBadgeColor(dailyScore);
 
-  useEffect(() => {
+  const fetchAll = async (isRefresh = false) => {
     if (!user || user.isGuest) return;
-    setLoading(true);
-    Promise.all([getTodayStats(user.id), getWeeklyStats(user.id)])
-      .then(([today, weekly]) => {
-        if (today) setTodayStats(today);
-        setWeeklyStats(weekly);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [user?.id]);
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    try {
+      const [today, weekly] = await Promise.all([
+        getTodayStats(user.id),
+        getWeeklyStats(user.id, monthOffset),
+      ]);
+      if (today) setTodayStats(today);
+      setWeeklyStats(weekly);
+    } catch {}
+    if (isRefresh) setRefreshing(false); else setLoading(false);
+  };
+
+  useEffect(() => { fetchAll(); }, [user?.id, monthOffset]);
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={['top', 'left', 'right']}>
       <View style={s.topBar}>
-        <Text style={s.pageTitle}>활동 기록</Text>
-        {loading && <ActivityIndicator size="small" color={COLORS.primary} />}
+        <TouchableOpacity onPress={() => nav.navigate('HOME' as never)} style={s.backBtn}>
+          <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+            <Path d="M19 12H5" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M12 19l-7-7 7-7" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
+        <View style={s.headerCenter}>
+          <Text style={s.pageTitle}>활동 기록</Text>
+          <Text style={s.pageSub}>Posture Statistics</Text>
+        </View>
+        <View style={{ width: 36, alignItems: 'center', justifyContent: 'center' }}>
+          {loading && <ActivityIndicator size="small" color={COLORS.primary} />}
+        </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: SPACING.base, paddingBottom: 32 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: SPACING.base, paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchAll(true)}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
         {/* 오늘 요약 */}
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>오늘의 요약</Text>
@@ -372,7 +583,7 @@ export default function StatsScreen() {
             <>
               <View style={s.todayScoreRow}>
                 <View style={[s.todayIconBox, { backgroundColor: todayBadgeColor }]}>
-                  <Text style={s.todayIcon}>◉</Text>
+                  <Icon name="activity" size={22} color="#fff" />
                 </View>
                 <View style={{ flex: 1, marginLeft: SPACING.sm }}>
                   <Text style={s.todayScoreSub}>오늘 점수</Text>
@@ -387,7 +598,7 @@ export default function StatsScreen() {
               <View style={s.todayMiniRow}>
                 <View style={s.todayMiniBox}>
                   <View style={[s.miniIconCircle, { backgroundColor: '#FEF3C7' }]}>
-                    <Text style={s.miniIcon}>⚠️</Text>
+                    <Icon name="alert" size={18} color={COLORS.warning} />
                   </View>
                   <View>
                     <Text style={s.miniLabel}>불량 자세</Text>
@@ -396,7 +607,7 @@ export default function StatsScreen() {
                 </View>
                 <View style={s.todayMiniBox}>
                   <View style={[s.miniIconCircle, { backgroundColor: '#D1FAE5' }]}>
-                    <Text style={s.miniIcon}>⏰</Text>
+                    <Icon name="clock" size={18} color={COLORS.primary} />
                   </View>
                   <View>
                     <Text style={s.miniLabel}>교정 횟수</Text>
@@ -428,7 +639,9 @@ export default function StatsScreen() {
           </View>
 
           <View style={{ marginTop: SPACING.sm }}>
-            <Text style={s.chartSub}>평균 점수의 주별 추이</Text>
+            <Text style={s.chartSub}>
+              {tab === 'weekly' ? '이번 주 요일별 점수' : '평균 점수의 주별 추이'}
+            </Text>
             {chartData.length >= 2 ? (
               <LineChart data={chartData} targetScore={settings.targetScore} width={width - SPACING.base * 4} height={160} />
             ) : (
@@ -438,17 +651,19 @@ export default function StatsScreen() {
             )}
           </View>
 
-          <View style={s.monthNav}>
-            <TouchableOpacity onPress={() => setMonthOffset(p => p + 1)}>
-              <Text style={s.navArrow}>‹</Text>
-            </TouchableOpacity>
-            <View style={{ alignItems: 'center' }}>
-              <Text style={s.monthLabel}>{monthOffset === 0 ? '이번 달' : `${monthOffset}개월 전`}</Text>
+          {tab === 'monthly' && (
+            <View style={s.monthNav}>
+              <TouchableOpacity onPress={() => setMonthOffset(p => p + 1)}>
+                <Text style={s.navArrow}>‹</Text>
+              </TouchableOpacity>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={s.monthLabel}>{monthOffset === 0 ? '이번 달' : `${monthOffset}개월 전`}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setMonthOffset(p => Math.max(0, p - 1))}>
+                <Text style={s.navArrow}>›</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => setMonthOffset(p => Math.max(0, p - 1))}>
-              <Text style={s.navArrow}>›</Text>
-            </TouchableOpacity>
-          </View>
+          )}
 
           <TouchableOpacity onPress={() => setShowWeekDetail(true)} style={s.weekMoreBtn}>
             <Text style={s.moreBtnText}>자세 측정 지표 더보기  ›</Text>
@@ -468,14 +683,17 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.base, paddingVertical: SPACING.md,
   },
-  pageTitle: { fontSize: FONTS.sizes.xl, fontWeight: '700', color: COLORS.text },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  pageTitle: { fontSize: FONTS.sizes.lg, fontWeight: '700', color: COLORS.text },
+  pageSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
+  backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', ...SHADOWS.sm },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm },
   sectionTitle: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
   targetLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
   todayCard: { backgroundColor: '#fff', borderRadius: RADIUS.xl, padding: SPACING.base, ...SHADOWS.md },
   todayScoreRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.base },
   todayIconBox: { width: 48, height: 48, borderRadius: RADIUS.lg, alignItems: 'center', justifyContent: 'center' },
-  todayIcon: { fontSize: 22, color: '#fff' },
+
   todayScoreSub: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary },
   todayScoreNum: { fontSize: FONTS.sizes['3xl'], fontWeight: '800', color: COLORS.text },
   goodBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -487,10 +705,10 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md, padding: SPACING.sm,
   },
   miniIconCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  miniIcon: { fontSize: 16 },
+
   miniLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginBottom: 2 },
-  miniVal: { fontSize: FONTS.sizes.lg, fontWeight: '800', color: COLORS.text },
-  miniUnit: { fontSize: FONTS.sizes.sm, fontWeight: '400', color: COLORS.textSecondary },
+  miniVal:   { fontSize: FONTS.sizes.lg, fontWeight: '800', color: COLORS.text },
+  miniUnit:  { fontSize: FONTS.sizes.sm, fontWeight: '400', color: COLORS.textSecondary },
   moreBtn: { alignSelf: 'center', paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm },
   moreBtnText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, fontWeight: '600' },
   weekMoreBtn: { alignSelf: 'center', marginTop: SPACING.sm, paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm },

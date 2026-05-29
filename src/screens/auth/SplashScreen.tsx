@@ -1,25 +1,19 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { StyleSheet, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../lib/firebase';
 import { useStore } from '../../store';
-import { COLORS, FONTS } from '../../constants/theme';
+import { ADMIN_EMAILS } from '../../constants/adminConfig';
 
 export default function SplashScreen() {
   const nav = useNavigation();
   const setUser = useStore((s) => s.setUser);
-  const scale = new Animated.Value(0.8);
-  const opacity = new Animated.Value(0);
+  const logoutStore = useStore((s) => s.logout);
 
   useEffect(() => {
     const startedAt = Date.now();
-
-    Animated.parallel([
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 12 }),
-      Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
-    ]).start();
 
     const goTo = (screen: string) => {
       const remaining = Math.max(0, 2000 - (Date.now() - startedAt));
@@ -34,8 +28,18 @@ export default function SplashScreen() {
         return;
       }
 
-      if (!firebaseUser.emailVerified) {
+      // 앱 로컬 세션은 persist하지 않으므로, 재빌드/재시작 후 남아있는
+      // Firebase Auth 세션만으로 메인/관리자 탭에 자동 진입하지 않게 한다.
+      if (!useStore.getState().user) {
         await signOut(auth);
+        logoutStore();
+        goTo('Login');
+        return;
+      }
+
+      if (!firebaseUser.emailVerified && !ADMIN_EMAILS.includes(firebaseUser.email ?? '')) {
+        await signOut(auth);
+        logoutStore();
         goTo('Login');
         return;
       }
@@ -46,6 +50,7 @@ export default function SplashScreen() {
         if (data?.account?.isActive === false) {
           // 탈퇴 계정이면 로그인 화면으로 (재활성화 여부는 LoginScreen에서 처리)
           await signOut(auth);
+          logoutStore();
           goTo('Login');
           return;
         }
@@ -59,7 +64,10 @@ export default function SplashScreen() {
           isGuest: false,
         });
         const hasBodyInfo = data?.bodyInfo?.height && data?.bodyInfo?.weight;
-        goTo(hasBodyInfo ? 'MainTabs' : 'InitBodyInfo');
+        if (!hasBodyInfo) { goTo('InitBodyInfo'); return; }
+        const hasDevice = !!useStore.getState().device.deviceId;
+        if (!hasDevice) { await signOut(auth); logoutStore(); goTo('Login'); return; }
+        goTo('MainTabs');
       } catch {
         goTo('Login');
       }
@@ -69,27 +77,14 @@ export default function SplashScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
-      <Animated.View style={[styles.logoWrap, { transform: [{ scale }], opacity }]}>
-        <View style={styles.iconCircle}>
-          <Text style={styles.iconText}>⚡</Text>
-        </View>
-        <Text style={styles.appName}>C7 AI</Text>
-        <Text style={styles.tagline}>Smart Posture Intelligence</Text>
-      </Animated.View>
-    </View>
+    <Image
+      source={require('../../../assets/splash.png')}
+      style={styles.splash}
+      resizeMode="cover"
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  logoWrap: { alignItems: 'center' },
-  iconCircle: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: '#FFE8ED',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-  },
-  iconText: { fontSize: 36 },
-  appName: { fontSize: 32, fontWeight: '800', color: COLORS.text, fontStyle: 'italic' },
-  tagline: { fontSize: FONTS.sizes.md, color: COLORS.textSecondary, marginTop: 6 },
+  splash: { flex: 1, width: '100%', height: '100%' },
 });

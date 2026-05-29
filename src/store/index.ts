@@ -28,6 +28,8 @@ interface AppState {
   // Posture
   currentScore: number;
   currentAngle: number;
+  currentAngles: { c7: number; t3: number; t7: number };
+  currentRolls:  { c7: number; t3: number; t7: number };
   currentLevel: PostureLevel;
   currentPostureType: PostureType;
   currentDiagnosisLevel: DiagnosisLevel | null; // ML 모델 직접 출력 (null이면 각도 기반 폴백)
@@ -60,6 +62,8 @@ interface AppState {
   disconnectMqtt: () => void;
 
   updatePosture: (score: number, angle: number, postureType?: PostureType) => void;
+  setAngles: (angles: { c7: number; t3: number; t7: number }) => void;
+  setRolls:  (rolls:  { c7: number; t3: number; t7: number }) => void;
   setPostureType: (type: PostureType) => void;
   setDiagnosisLevel: (level: DiagnosisLevel | null) => void;
   setTodayStats: (stats: DayStats) => void;
@@ -88,19 +92,26 @@ export const useStore = create<AppState>()(
 
       device: {
         deviceId: null,
+        bleDeviceId: null,
+        bleConnected: false,
+        wifiConnected: false,
         mqttStatus: 'idle',
-        battery: 75,
+        battery: 0,
         powerOn: true,
+        powerMode: 'on' as const,
         vibrationEnabled: true,
         vibrationIntensity: 66,
         sensorAngle: 30,
         powerSaveMode: false,
+        connectedSsid: null,
       },
 
-      currentScore: 84,
-      currentAngle: 18.5,
-      currentLevel: 'good',
-      currentPostureType: 'forward_head',
+      currentScore: 0,
+      currentAngle: 0,
+      currentAngles: { c7: 0, t3: 0, t7: 0 },
+      currentRolls:  { c7: 0, t3: 0, t7: 0 },
+      currentLevel: 'normal',
+      currentPostureType: 'unknown',
       currentDiagnosisLevel: null,
       todayStats: null,
       weeklyStats: [],
@@ -116,7 +127,19 @@ export const useStore = create<AppState>()(
 
       // Auth
       setUser: (user) => set({ user, isLoggedIn: !!user }),
-      logout: () => set({ user: null, isLoggedIn: false }),
+      logout: () => set((s) => ({
+        user: null,
+        isLoggedIn: false,
+        device: {
+          ...s.device,
+          deviceId: null,
+          bleDeviceId: null,
+          bleConnected: false,
+          wifiConnected: false,
+          mqttStatus: 'idle',
+          connectedSsid: null,
+        },
+      })),
       updateUser: (partial) =>
         set((s) => ({ user: s.user ? { ...s.user, ...partial } : null })),
 
@@ -135,6 +158,8 @@ export const useStore = create<AppState>()(
       // Posture
       updatePosture: (score, angle, postureType) =>
         set({ currentScore: score, currentAngle: angle, currentLevel: scoreToLevel(score), ...(postureType ? { currentPostureType: postureType } : {}) }),
+      setAngles: (angles) => set({ currentAngles: angles }),
+      setRolls:  (rolls)  => set({ currentRolls: rolls }),
       setPostureType: (type) => set({ currentPostureType: type }),
       setDiagnosisLevel: (level) => set({ currentDiagnosisLevel: level }),
       setTodayStats: (stats) => set({ todayStats: stats }),
@@ -185,7 +210,7 @@ export const useStore = create<AppState>()(
       onRehydrateStorage: () => (state) => {
         if (state) {
           // 앱 재시작 시 MQTT 연결 상태는 초기화 (기기 설정값은 유지)
-          state.device = { ...state.device, mqttStatus: 'idle' };
+          state.device = { ...state.device, mqttStatus: 'idle', bleConnected: false };
         }
       },
     }

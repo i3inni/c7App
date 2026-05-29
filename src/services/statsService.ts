@@ -1,21 +1,29 @@
 import { db } from '../lib/firebase';
 import {
   collection, doc, getDoc, getDocs, setDoc,
-  query, where, orderBy, limit, writeBatch,
+  query, where, orderBy, limit, writeBatch, documentId,
+  startAt, endAt,
 } from 'firebase/firestore';
 import { DayStats, WeekStats } from '../constants/types';
 
 // ── 날짜 헬퍼 ─────────────────────────────────────────
+
 function toYYYYMMDD(date: Date): string {
-  return date.toISOString().split('T')[0].replace(/-/g, '');
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}${m}${d}`;
 }
 
-function getISOWeekNumber(date: Date): number {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
-  const yearStart = new Date(d.getFullYear(), 0, 1);
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+/**
+ * monthOffset=0 → "2026-05", monthOffset=1 → "2026-04"
+ * weekly_stats 문서 ID 접두사로 사용합니다.
+ */
+function toPeriodMonth(monthOffset: number): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - monthOffset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 // ── 오늘 통계 저장 ─────────────────────────────────────
@@ -33,19 +41,39 @@ export const getTodayStats = async (userId: string): Promise<DayStats | null> =>
 };
 
 // ── 주간 통계 저장 ─────────────────────────────────────
-export const saveWeeklyStats = async (userId: string, stats: Omit<WeekStats, 'weekLabel'>) => {
-  const now = new Date();
-  const weekNum = getISOWeekNumber(now);
-  const docId = `${userId}_${now.getFullYear()}_${String(weekNum).padStart(2, '0')}`;
-  await setDoc(doc(db, 'weekly_stats', docId), { ...stats, uid: userId });
+// 문서 ID: {userId}_{YYYY-MM}_{weekIndex}  (예: uid_2026-05_3)
+export const saveWeeklyStats = async (
+  userId: string,
+  stats: Omit<WeekStats, 'weekLabel'>,
+  weekIndex: number,       // 해당 월의 몇 번째 주 (1~5)
+  monthOffset = 0,
+) => {
+  const periodMonth = toPeriodMonth(monthOffset);
+  const docId = `${userId}_${periodMonth}_${weekIndex}`;
+  await setDoc(doc(db, 'weekly_stats', docId), {
+    ...stats,
+    uid: userId,
+    periodMonth,
+    weekIndex,
+  });
 };
 
-// ── 주간 통계 조회 (최근 5주) ──────────────────────────
-export const getWeeklyStats = async (userId: string): Promise<WeekStats[]> => {
+// ── 주간 통계 조회 — 월별 분리 ─────────────────────────
+// 문서 ID 범위 쿼리: {userId}_{YYYY-MM}_1 ~ {userId}_{YYYY-MM}_~
+// 인덱스 불필요 (documentId() 정렬)
+export const getWeeklyStats = async (
+  userId: string,
+  monthOffset = 0,
+): Promise<WeekStats[]> => {
+  const periodMonth = toPeriodMonth(monthOffset);
+  const prefix    = `${userId}_${periodMonth}_`;
+  const prefixEnd = `${userId}_${periodMonth}_~`; // '~'(0x7E) > '9' → 범위 끝
+
   const q = query(
     collection(db, 'weekly_stats'),
-    where('uid', '==', userId),
-    orderBy('uid'),
+    orderBy(documentId()),
+    startAt(prefix),
+    endAt(prefixEnd),
     limit(5),
   );
   const snap = await getDocs(q);

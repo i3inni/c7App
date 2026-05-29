@@ -11,16 +11,22 @@ export interface User {
 
 // ─── Device / MQTT ────────────────────────────────
 export type MqttStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+export type PowerMode = 'on' | 'eco' | 'off';
 
 export interface DeviceState {
   deviceId: string | null;
+  bleDeviceId: string | null;  // BLE 연결용 peripheral ID
+  bleConnected: boolean;
+  wifiConnected: boolean;
   mqttStatus: MqttStatus;
   battery: number;           // 0-100
   powerOn: boolean;
+  powerMode: PowerMode;
   vibrationEnabled: boolean;
   vibrationIntensity: number; // 0-100
   sensorAngle: number;        // calibration angle
   powerSaveMode: boolean;
+  connectedSsid: string | null;
 }
 
 // ─── Posture / Sensor ─────────────────────────────

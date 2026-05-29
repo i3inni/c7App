@@ -1,4 +1,5 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
+import { Device } from 'react-native-ble-plx';
 
 // ── BottomTab 파라미터 ────────────────────────────────
 export type MainTabParamList = {
@@ -6,6 +7,7 @@ export type MainTabParamList = {
   STATS: undefined;
   AI: undefined;
   CONFIG: undefined;
+  TRAINING: undefined;
 };
 
 // ── Stack 파라미터 ────────────────────────────────────
@@ -17,7 +19,9 @@ export type RootStackParamList = {
   SignUpStep3: { userId: string; password: string };
   SignUpComplete: { userId: string; password: string; nickname: string };
   MqttConnect: undefined;
+  WifiProvision: { device: Device; mode?: 'setup' | 'manage' };
   InitBodyInfo: undefined;
+  PoseCalibration: { deviceId: string; mode?: 'setup' | 'training' };
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   MyInfo: undefined;
   BodyInfo: undefined;

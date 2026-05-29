@@ -1,0 +1,422 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "sensors": ["C7", "T3", "T7"],
+    "feature_columns": [
+      "diff_C7_pitch", "diff_C7_roll",
+      "diff_T3_pitch", "diff_T3_roll",
+      "diff_T7_pitch", "diff_T7_roll",
+      "label"
+    ],
+    "labels": ["normal", "forward_head", "kyphosis", "lateral_tilt"],
+    "sign_convention": {
+      "positive_pitch": "forward flexion (head/spine tilting forward)",
+      "positive_roll": "lateral tilt to one side (consistent direction)",
+      "diff": "current_orientation - baseline_calibration",
+      "observed_from_csv": {
+        "forward_head": "C7_pitch > T3_pitch > T7_pitch, all positive",
+        "kyphosis":     "T7_pitch > T3_pitch > C7_pitch, all positive",
+        "lateral_tilt": "C7_roll > T3_roll > T7_roll, all positive",
+        "normal":       "all near zero, sd ~2.4 deg"
+      }
+    }
+  },
+
+  "evidence": {
+
+    "B": {
+      "id": "B",
+      "title": "CVA/FHP C7 theta relation",
+      "label_scope": ["forward_head"],
+      "directness": "direct",
+      "use_for": ["c7_pitch_shift", "cva_to_c7_theta_relation"],
+      "do_not_use_for": ["t3_pitch", "t7_pitch", "roll_values", "kyphosis", "lateral_tilt"],
+      "direct_values": {
+        "cva_formula": "CVA = theta_C7 + 89",
+        "theta_formula": "theta_C7 = CVA - 89",
+        "good_theta_c7_mean_deg": -40.0,
+        "good_cva_mean_deg": 49.9,
+        "fhp_theta_c7_mean_deg": -59.2,
+        "fhp_cva_mean_deg": 30.5,
+        "good_to_fhp_theta_shift_deg": -19.2,
+        "practical_forward_tilt_shift_deg": 20.0
+      },
+      "simulation_guidance": {
+        "c7_pitch_abs_ranges_deg": {
+          "mild":   [5, 12],
+          "medium": [12, 18],
+          "strong": [18, 25]
+        },
+        "sign_note": "diff_C7_pitch = -(theta_C7 - baseline_theta); positive in project convention means forward flexion"
+      }
+    },
+
+    "C": {
+      "id": "C",
+      "title": "CVA distribution (young adults, photogrammetry)",
+      "label_scope": ["normal", "forward_head"],
+      "directness": "indirect_latent",
+      "use_for": ["target_cva_distribution", "forward_head_intensity", "cva_validation_constraint"],
+      "do_not_use_for": ["direct_pitch_roll_csv_values", "kyphosis", "lateral_tilt"],
+      "direct_values": {
+        "population": {"age_range": [18,29], "n": 98},
+        "cva_criteria": {
+          "normal_threshold_deg": 53,
+          "severe_fhp_threshold_deg": 45,
+          "intermediate_range_deg": [45, 53]
+        },
+        "cva_distributions": {
+          "normal":        {"standing": {"mean": 56.6, "sd": 2.7}},
+          "severe_fhp":    {"standing": {"mean": 41.2, "sd": 3.2}}
+        }
+      },
+      "label_mapping": {
+        "cva_gt_53":    {"label": "normal",        "intensity": "none",   "quality": "approved"},
+        "cva_45_to_53": {"label": "forward_head",  "intensity": "mild",   "quality": "ambiguous"},
+        "cva_lt_45":    {"label": "forward_head",  "intensity": "strong", "quality": "approved"}
+      },
+      "workflow": "Sample CVA from this evidence, convert to theta_C7 via Evidence B"
+    },
+
+    "D": {
+      "id": "D",
+      "title": "IMU sensor noise and session drift",
+      "label_scope": ["normal", "forward_head", "kyphosis", "lateral_tilt"],
+      "directness": "direct",
+      "use_for": ["sensor_noise_pitch", "sensor_noise_roll", "session_drift"],
+      "do_not_use_for": ["label_specific_offsets"],
+      "direct_values": {
+        "sensor_noise": {
+          "pitch": {"distribution": "normal", "mean": 0.0, "sd": 0.8},
+          "roll":  {"distribution": "normal", "mean": 0.0, "sd": 1.0}
+        },
+        "session_drift": {
+          "pitch": {"distribution": "normal", "mean": 0.0, "sd": 2.0, "clip": [-4.0, 4.0]},
+          "roll":  {"distribution": "normal", "mean": 0.0, "sd": 1.5, "clip": [-3.0, 3.0]}
+        }
+      },
+      "note": "Apply sensor noise AFTER computing posture offsets. Apply session drift per subject."
+    },
+
+    "E": {
+      "id": "E",
+      "title": "IT-worker CVA/FHP ergonomics profile",
+      "label_scope": ["normal", "forward_head"],
+      "directness": "indirect_domain_profile",
+      "use_for": ["it_worker_user_profile", "target_cva_sampling", "forward_head_intensity"],
+      "do_not_use_for": ["direct_pitch_values", "roll_values", "kyphosis", "lateral_tilt"],
+      "direct_values": {
+        "population": {
+          "age":             {"distribution": "normal", "mean": 32.56, "sd": 5.46, "clip": [23, 45]},
+          "work_years":      {"distribution": "normal", "mean":  9.32, "sd": 5.56, "clip": [0, 20]}
+        },
+        "cva": {
+          "distribution": "normal", "mean": 32.01, "sd": 11.46, "clip": [10, 65],
+          "normal_threshold_deg": 50,
+          "mild_fhp_range_deg": [30, 50],
+          "severe_fhp_threshold_deg": 30
+        },
+        "ndi": {"mean": 8.19, "sd": 7.51}
+      },
+      "metadata_only_fields": ["age", "work_years", "ndi_score", "ndi_grade", "fhp_grade"],
+      "intensity_mapping": {
+        "cva_gt_50":    {"label": "normal",       "intensity": "none"},
+        "cva_40_to_50": {"label": "forward_head", "intensity": "mild"},
+        "cva_30_to_40": {"label": "forward_head", "intensity": "medium"},
+        "cva_lt_30":    {"label": "forward_head", "intensity": "strong"}
+      }
+    },
+
+    "F": {
+      "id": "F",
+      "title": "Multi-IMU spine curvature pitch-diff framework",
+      "label_scope": ["kyphosis"],
+      "directness": "inferred",
+      "use_for": ["segmental_pitch_difference_as_curvature_proxy", "kyphosis_synthetic_generation", "spine_curvature_noise"],
+      "do_not_use_for": ["exact_c7_t3_t7_pitch_means", "roll_values", "forward_head_cva"],
+      "direct_values": {
+        "measurement_error": {
+          "mimu_vs_mocap_rmse_deg": [3.0, 5.6],
+          "kyphosis_mean_bias_deg": -3.0
+        },
+        "recommended_noise": {
+          "segment_curvature_sd_deg": [3.0, 5.0],
+          "individual_sensor_pitch_sd_deg": [2.0, 3.0]
+        }
+      },
+      "inferred_values": {
+        "kyphosis_pattern": "C7 smallest pitch offset, T3 medium, T7 largest (sagittal dominant)",
+        "segment_contribution_prior": {
+          "c7_percent": [20, 30],
+          "t3_percent": [30, 40],
+          "t7_percent": [40, 50]
+        },
+        "project_pitch_ranges_deg": {
+          "mild":   {"t7": [5,10],  "t3": [3,8],   "c7": [1,6]},
+          "medium": {"t7": [10,18], "t3": [6,12],  "c7": [2,8]},
+          "strong": {"t7": [18,30], "t3": [10,20], "c7": [4,12]}
+        },
+        "alpha_from_csv": {
+          "note": "Inferred from existing CSV means (T7≈11, T3≈7.1, C7≈4) at assumed Cobb≈50",
+          "alpha_T7": 0.733,
+          "alpha_T3": 0.473,
+          "alpha_C7": 0.267,
+          "thoracic_excess_assumed_deg": 15
+        }
+      },
+      "note": "Inferred column; do not treat alpha values as ground truth. Use range jitter."
+    },
+
+    "G": {
+      "id": "G",
+      "title": "Hyperkyphosis Cobb angle thresholds",
+      "label_scope": ["normal", "kyphosis"],
+      "directness": "indirect_latent",
+      "use_for": ["latent_cobb_angle", "kyphosis_intensity", "hyperkyphosis_threshold"],
+      "do_not_use_for": ["direct_pitch_values", "roll_values", "forward_head", "lateral_tilt"],
+      "direct_values": {
+        "cobb_thresholds_deg": {
+          "normal_upper": 40,
+          "pre_hyper_range": [40, 50],
+          "hyperkyphosis_min": 50
+        },
+        "synthetic_cobb": {
+          "normal":       {"distribution": "normal",           "mean": 38, "sd": 5,  "range": [25, 40]},
+          "pre_hyper":    {"distribution": "truncated_normal", "mean": 45, "sd": 3,  "range": [40, 50]},
+          "hyperkyphosis":{"distribution": "truncated_normal", "mean": 57, "sd": 5,  "range": [50, 70]}
+        },
+        "thoracic_excess_formula": "thoracic_excess = Cobb - 35",
+        "cobb_variability_deg": [3, 5]
+      },
+      "label_mapping": {
+        "cobb_lt_40":    {"label": "normal",    "intensity": "none",   "quality": "approved"},
+        "cobb_40_to_50": {"label": "kyphosis",  "intensity": "mild",   "quality": "ambiguous"},
+        "cobb_50_to_60": {"label": "kyphosis",  "intensity": "medium", "quality": "approved"},
+        "cobb_gte_60":   {"label": "kyphosis",  "intensity": "strong", "quality": "approved"}
+      }
+    },
+
+    "H": {
+      "id": "H",
+      "title": "Normal thoracic kyphosis Cobb range",
+      "label_scope": ["normal", "kyphosis"],
+      "directness": "indirect_latent",
+      "use_for": ["normal_cobb_range", "age_conditioned_cobb_prior"],
+      "do_not_use_for": ["direct_pitch_values", "exact_imu_to_xray_mapping"],
+      "direct_values": {
+        "normal_cobb_range_deg": [20, 40],
+        "upper_normal_boundary_deg": [40, 45],
+        "population_sd_deg": [6, 8],
+        "adult_cobb_prior": {
+          "age_18_40": {"mean_range": [35, 42], "sd": [6, 8]}
+        }
+      },
+      "label_mapping": {
+        "cobb_20_to_40": {"label": "normal",   "quality": "approved"},
+        "cobb_40_to_45": {"label": "ambiguous","quality": "ambiguous"},
+        "cobb_45_to_50": {"label": "kyphosis", "intensity": "mild",   "quality": "ambiguous"},
+        "cobb_gte_50":   {"label": "kyphosis", "intensity": "medium+","quality": "approved"}
+      }
+    },
+
+    "I": {
+      "id": "I",
+      "title": "ATI/Cobb/AVR trunk asymmetry distribution (scoliosis cohort)",
+      "label_scope": ["normal", "lateral_tilt"],
+      "directness": "inferred_latent",
+      "use_for": ["latent_ati", "trunk_asymmetry_distribution", "lateral_tilt_intensity"],
+      "do_not_use_for": ["direct_roll_values", "natural_standing_tilt_distribution", "forward_head", "kyphosis"],
+      "direct_values": {
+        "ati_distribution": {
+          "distribution": "truncated_normal",
+          "mean": 6.76, "sd": 3.35, "range": [2, 25]
+        },
+        "screening_cutoffs_deg": {
+          "sensitive": 5.0,
+          "standard":  7.0,
+          "roc_optimal_approx": 5.5
+        },
+        "roll_proxy_formula": "0.35*|C7_roll| + 0.35*|T3_roll| + 0.30*|T7_roll| ≈ ATI",
+        "roll_proxy_weights": {"C7": 0.35, "T3": 0.35, "T7": 0.30},
+        "correlations": {
+          "ati_cobb": [0.25, 0.56],
+          "ati_avr":  [0.29, 0.40],
+          "avr_cobb": [0.83, 0.91]
+        }
+      },
+      "inferred_values": {
+        "roll_distribution_from_csv_ratios": {
+          "note": "Inferred by solving proxy formula with CSV-observed C7:T3:T7 roll ratio (1.0:0.815:0.777)",
+          "scale_factor_formula": "ATI / (0.35 + 0.35*0.815 + 0.30*0.777) = ATI / 0.868",
+          "C7_roll_multiplier": 1.152,
+          "T3_roll_multiplier": 0.939,
+          "T7_roll_multiplier": 0.895
+        }
+      },
+      "intensity_mapping": {
+        "ati_lt_5":      {"label": "normal",       "quality": "approved"},
+        "ati_5_to_7":    {"label": "lateral_tilt", "intensity": "mild",   "quality": "ambiguous"},
+        "ati_7_to_12":   {"label": "lateral_tilt", "intensity": "medium", "quality": "approved"},
+        "ati_gte_12":    {"label": "lateral_tilt", "intensity": "strong", "quality": "approved"}
+      }
+    },
+
+    "K": {
+      "id": "K",
+      "title": "Multi-segment IMU proxy label framework",
+      "label_scope": ["normal", "forward_head", "kyphosis", "lateral_tilt"],
+      "directness": "structural_reference",
+      "use_for": ["pitch_roll_segment_proxy", "lateral_deviation_threshold_context"],
+      "do_not_use_for": ["exact_c7_t3_t7_numeric_distribution"],
+      "direct_values": {
+        "lateral_deviation_abnormal_threshold_deg": 10,
+        "reference_ranges": {
+          "thoracic_kyphosis_deg": [20, 40],
+          "cervical_lordosis_deg": [35, 45]
+        },
+        "processing_pipeline": {
+          "feature": "relaxed posture delta angle (current - baseline)"
+        }
+      },
+      "note": "C1-C7 ≠ C7-T3; C7-T12 ≠ T3-T7. Use for structural validation only."
+    },
+
+    "L": {
+      "id": "L",
+      "title": "3-IMU wearable posture collection protocol",
+      "label_scope": ["normal", "forward_head", "kyphosis"],
+      "directness": "protocol_reference",
+      "use_for": ["validation_policy", "mild_ambiguity_handling", "data_diversity_requirement"],
+      "do_not_use_for": ["numeric_offsets"],
+      "direct_values": {
+        "posture_hold_duration_sec": 30,
+        "subject_wise_validation": true,
+        "mild_boundary_handling": "mark as ambiguous or low-confidence",
+        "subject_wise_kfold": {"mean": 0.85, "lowest": 0.34, "highest": 1.0},
+        "warning": "Subject-wise split required; random split is insufficient"
+      }
+    },
+
+    "M": {
+      "id": "M",
+      "title": "Multibody spine skin-curve geometric backbone",
+      "label_scope": ["normal", "forward_head", "kyphosis", "lateral_tilt"],
+      "directness": "geometric_reference",
+      "use_for": ["sensor_point_extraction", "orientation_interpolation", "skin_position_error_scale"],
+      "do_not_use_for": ["exact_c7_orientation", "direct_pitch_roll_distribution", "posture_label_thresholds"],
+      "direct_values": {
+        "interpolation": {
+          "method": "PCHIP",
+          "source_points": ["T1", "T4", "T7", "T10", "L1", "L5"]
+        },
+        "sensor_mapping": {
+          "C7": "approximate as T1",
+          "T3": "interpolate between T1 and T4",
+          "T7": "direct"
+        },
+        "error": {
+          "mean_position_error_mm": 11.6,
+          "inferred_orientation_noise_deg": [1, 2]
+        },
+        "skin_soft_tissue_cm": 1.35
+      },
+      "note": "C7 ≈ T1 approximation must be explicit in metadata."
+    },
+
+    "N": {
+      "id": "N",
+      "title": "Global wearable IMU posture review",
+      "label_scope": ["normal", "forward_head", "kyphosis", "lateral_tilt"],
+      "directness": "review_reference",
+      "use_for": ["angle_error_guideline", "sensor_misalignment_variation", "synthetic_augmentation_policy"],
+      "do_not_use_for": ["direct_numeric_distribution", "label_specific_offsets"],
+      "direct_values": {
+        "typical_rms_error_deg": [2, 5],
+        "acceptable_error_bound_deg": 5,
+        "placement_rotation_bias_deg": [-2, 2],
+        "synthetic_policy": {
+          "should_augment_or_pretrain": true,
+          "should_replace_real_data": false,
+          "recommendation": "Validate or fine-tune on real admin-collected C7/T3/T7 data"
+        }
+      }
+    }
+  },
+
+  "generator_params": {
+    "normal": {
+      "evidence_ids": ["D", "K", "N"],
+      "noise": {
+        "pitch_sd": 0.8,
+        "roll_sd": 1.0,
+        "drift_pitch_sd": 2.0, "drift_pitch_clip": [-4.0, 4.0],
+        "drift_roll_sd": 1.5,  "drift_roll_clip": [-3.0, 3.0]
+      },
+      "clamp": {"pitch": [-8.0, 8.0], "roll": [-8.0, 8.0]}
+    },
+    "forward_head": {
+      "evidence_ids": ["B", "C", "D", "E", "K", "M", "N"],
+      "cva_baseline_deg": 49.9,
+      "theta_baseline_deg": -40.0,
+      "cva_to_theta": "theta = CVA - 89",
+      "diff_c7_sign_note": "positive diff_C7_pitch = forward flexion, matching project convention",
+      "intensity_targets": {
+        "mild":   {"cva_mean": 46.0, "cva_sd": 3.0, "cva_clip": [40, 52], "quality": "ambiguous",
+                   "note": "Evidence C intermediate zone 45-53; near-threshold, ambiguous"},
+        "medium": {"cva_mean": 35.0, "cva_sd": 4.0, "cva_clip": [28, 42], "quality": "approved",
+                   "note": "Evidence E IT-worker mild-medium FHP range 30-40; theta_shift≈14deg"},
+        "strong": {"cva_mean": 27.0, "cva_sd": 4.0, "cva_clip": [18, 33], "quality": "approved",
+                   "note": "Evidence E IT-worker severe FHP <30; theta_shift≈22deg, matches Ev.B 20deg shift"}
+      },
+      "intensity_weights": {"mild": 0.20, "medium": 0.50, "strong": 0.30},
+      "t3_t7_ratios": {
+        "directness": "inferred",
+        "note": "Ratios from CSV sign convention and Evidence F segment contribution",
+        "t3_ratio_range": [0.50, 0.65],
+        "t7_ratio_range": [0.20, 0.38]
+      },
+      "clamp": {"c7_pitch": [3.0, 28.0]},
+      "noise_sources": ["D_sensor", "M_placement"]
+    },
+    "kyphosis": {
+      "evidence_ids": ["F", "G", "H", "D", "K", "M", "N"],
+      "thoracic_excess_formula": "Cobb - 35",
+      "alpha_values": {
+        "directness": "inferred",
+        "note": "Derived from CSV observed means (T7≈11,T3≈7.1,C7≈4) at assumed Cobb≈50",
+        "alpha_T7_range": [0.65, 0.82],
+        "alpha_T3_range": [0.40, 0.55],
+        "alpha_C7_range": [0.22, 0.35]
+      },
+      "intensity_targets": {
+        "mild":   {"cobb_mean": 45.0, "cobb_sd": 3.0, "cobb_clip": [40, 50], "quality": "ambiguous"},
+        "medium": {"cobb_mean": 55.0, "cobb_sd": 4.0, "cobb_clip": [50, 62], "quality": "approved"},
+        "strong": {"cobb_mean": 63.0, "cobb_sd": 5.0, "cobb_clip": [60, 75], "quality": "approved"}
+      },
+      "intensity_weights": {"mild": 0.35, "medium": 0.40, "strong": 0.25},
+      "curvature_noise_sd": 2.0,
+      "roll_noise_sd": 1.0
+    },
+    "lateral_tilt": {
+      "evidence_ids": ["I", "D", "K", "N"],
+      "ati_to_roll_proxy": {
+        "directness": "inferred",
+        "note": "Derived from Evidence I proxy formula and CSV roll ratio (C7:T3:T7=1.0:0.815:0.777)",
+        "proxy_formula": "0.35*|C7_roll| + 0.35*|T3_roll| + 0.30*|T7_roll| = ATI",
+        "scale_denominator": 0.868,
+        "C7_roll_multiplier": 1.152,
+        "T3_roll_multiplier": 0.939,
+        "T7_roll_multiplier": 0.895,
+        "multiplier_jitter": 0.10
+      },
+      "intensity_targets": {
+        "mild":   {"ati_mean": 6.0,  "ati_sd": 0.5, "ati_clip": [5.0, 7.0],  "quality": "ambiguous"},
+        "medium": {"ati_mean": 9.0,  "ati_sd": 1.5, "ati_clip": [7.0, 12.0], "quality": "approved"},
+        "strong": {"ati_mean": 14.0, "ati_sd": 2.5, "ati_clip": [12.0, 22.0],"quality": "approved"}
+      },
+      "intensity_weights": {"mild": 0.25, "medium": 0.45, "strong": 0.30},
+      "pitch_noise_sd": 0.8,
+      "roll_noise_sd": 1.0
+    }
+  }
+}

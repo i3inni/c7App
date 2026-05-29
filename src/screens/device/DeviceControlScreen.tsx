@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,8 +15,10 @@ import Toggle from "../../components/common/Toggle";
 import ConfirmModal from "../../components/common/ConfirmModal";
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from "../../constants/theme";
 import { saveDeviceSettings, updateDeviceConnection } from '../../services/deviceService';
+import { connectToDevice, sendPowerMode, subscribePowerStatus, PowerStatus } from '../../services/bleService';
+import { PowerMode } from '../../constants/types';
 
-type Tab = "battery" | "power" | "sensor" | "vibration";
+type Tab = "battery" | "power";
 
 // ── C7 기기 SVG 일러스트 ─────────────────────────────
 function DeviceIllustration({
@@ -26,9 +28,12 @@ function DeviceIllustration({
   highlight: Tab;
   onTabChange: (tab: Tab) => void;
 }) {
-  const hl = (tab: Tab) => (highlight === tab ? COLORS.primary : "#9CA3AF");
-  const hlFill = (tab: Tab) =>
-    highlight === tab ? COLORS.primaryLight : "#F3F4F6";
+  const hl = (tab: Tab) => {
+    return highlight === tab ? COLORS.primary : "#9CA3AF";
+  };
+  const hlFill = (tab: Tab) => {
+    return highlight === tab ? COLORS.primaryLight : "#F3F4F6";
+  };
 
   return (
     <View style={illStyles.wrap}>
@@ -43,27 +48,12 @@ function DeviceIllustration({
         <Rect x={50} y={10} width={6} height={28} rx={3} fill="#D1D5DB" transform="rotate(-15 53 24)" />
         <Rect x={104} y={10} width={6} height={28} rx={3} fill="#D1D5DB" transform="rotate(15 107 24)" />
 
-        {/* 센서 (상단) — 클릭 시 sensor 탭 */}
-        <G onPress={() => onTabChange("sensor")}>
-          <Circle cx={80} cy={65} r={16} fill="transparent" />
-          <Circle cx={80} cy={65} r={12} fill={hl("sensor")} opacity={0.9} />
-          <Circle cx={80} cy={65} r={7} fill={hlFill("sensor")} />
-        </G>
-
-        {/* 진동 모듈 좌 — 클릭 시 vibration 탭 */}
-        <G onPress={() => onTabChange("vibration")}>
-          <Rect x={34} y={91} width={38} height={38} rx={8} fill="transparent" />
-          <Rect x={38} y={95} width={30} height={30} rx={8} fill={hlFill("vibration")} stroke={hl("vibration")} strokeWidth={1.5} />
-          <Circle cx={53} cy={110} r={8} fill={hl("vibration")} opacity={0.3} />
-          <Circle cx={53} cy={110} r={5} fill={hl("vibration")} />
-        </G>
-
-        {/* 전원 버튼 우 — 클릭 시 power 탭 */}
+        {/* 전원 버튼 중앙 상단 — 클릭 시 power 탭 */}
         <G onPress={() => onTabChange("power")}>
-          <Rect x={88} y={91} width={38} height={38} rx={8} fill="transparent" />
-          <Rect x={92} y={95} width={30} height={30} rx={8} fill={hlFill("power")} stroke={hl("power")} strokeWidth={1.5} />
-          <Circle cx={107} cy={110} r={8} fill={hl("power")} opacity={0.3} />
-          <Circle cx={107} cy={110} r={5} fill={hl("power")} />
+          <Rect x={61} y={70} width={38} height={38} rx={8} fill="transparent" />
+          <Rect x={65} y={74} width={30} height={30} rx={8} fill={hlFill("power")} stroke={hl("power")} strokeWidth={1.5} />
+          <Circle cx={80} cy={89} r={8} fill={hl("power")} opacity={0.3} />
+          <Circle cx={80} cy={89} r={5} fill={hl("power")} />
         </G>
 
         {/* 배터리 하단 — 클릭 시 battery 탭 */}
@@ -113,6 +103,8 @@ function DraggableSlider({
   color?: string;
 }) {
   const widthRef = useRef(0);
+  const pageXRef = useRef(0); // 슬라이더 트랙의 화면상 절대 x 좌표
+  const viewRef = useRef<View>(null);
   const ratio = Math.max(0, Math.min(1, (value - min) / (max - min)));
 
   const panResponder = useRef(
@@ -120,13 +112,20 @@ function DraggableSlider({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
-        if (widthRef.current === 0) return;
-        const r = Math.max(0, Math.min(1, evt.nativeEvent.locationX / widthRef.current));
+        // 터치 시작 시 트랙의 절대 위치 측정
+        viewRef.current?.measure((_x, _y, width, _h, pageX) => {
+          pageXRef.current = pageX;
+          widthRef.current = width;
+        });
+        const x = evt.nativeEvent.pageX - pageXRef.current;
+        const r = Math.max(0, Math.min(1, x / widthRef.current));
         onChange(Math.round(min + r * (max - min)));
       },
-      onPanResponderMove: (evt) => {
+      onPanResponderMove: (_evt, gestureState) => {
         if (widthRef.current === 0) return;
-        const r = Math.max(0, Math.min(1, evt.nativeEvent.locationX / widthRef.current));
+        // gestureState.moveX: 절대 화면 좌표 → 트랙 밖으로 나가도 안정적
+        const x = gestureState.moveX - pageXRef.current;
+        const r = Math.max(0, Math.min(1, x / widthRef.current));
         onChange(Math.round(min + r * (max - min)));
       },
     })
@@ -134,6 +133,7 @@ function DraggableSlider({
 
   return (
     <View
+      ref={viewRef}
       onLayout={(e) => { widthRef.current = e.nativeEvent.layout.width; }}
       style={dsStyles.track}
       {...panResponder.panHandlers}
@@ -310,8 +310,43 @@ export default function DeviceControlScreen() {
   const isGuest = user?.isGuest ?? false;
   const [activeTab, setActiveTab] = useState<Tab>("battery");
   const [showDisconnect, setShowDisconnect] = useState(false);
-  const [sensorAngle, setSensorAngle] = useState(device.sensorAngle);
-  const [vibIntensity, setVibIntensity] = useState(device.vibrationIntensity);
+  const [powerSending, setPowerSending] = useState(false);
+  const [powerFeedback, setPowerFeedback] = useState<{ cpu: number; interval: number } | null>(null);
+
+  const handlePowerMode = async (mode: PowerMode) => {
+    if (!device.bleDeviceId || powerSending) return;
+    setPowerSending(true);
+    setPowerFeedback(null);
+    try {
+      const connected = await connectToDevice(device.bleDeviceId);
+      const unsub = subscribePowerStatus(connected, (status: PowerStatus) => {
+        unsub();
+        setPowerFeedback({ cpu: status.cpu, interval: status.interval });
+        saveDevice({
+          powerMode: status.mode,
+          powerOn: status.mode !== 'off',
+          powerSaveMode: status.mode === 'eco',
+        });
+        setPowerSending(false);
+      });
+      await sendPowerMode(connected, mode);
+    } catch {
+      setPowerSending(false);
+    }
+  };
+
+  const handleChangeWifi = async () => {
+    if (!device.bleDeviceId) {
+      (nav as any).replace('MqttConnect');
+      return;
+    }
+    try {
+      const connected = await connectToDevice(device.bleDeviceId);
+      (nav as any).navigate('WifiProvision', { device: connected, mode: 'manage' });
+    } catch {
+      (nav as any).replace('MqttConnect');
+    }
+  };
 
   // 로컬 상태 + Firestore 동시 저장 헬퍼
   const saveDevice = (partial: Parameters<typeof setDevice>[0]) => {
@@ -322,20 +357,21 @@ export default function DeviceControlScreen() {
   const tabs: { key: Tab; label: string }[] = [
     { key: "battery", label: "배터리" },
     { key: "power", label: "전원 관리" },
-    { key: "sensor", label: "센서 설정" },
-    { key: "vibration", label: "진동 설정" },
   ];
 
   const batteryColor =
     device.battery > 30 ? COLORS.warning : COLORS.accent;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       {/* 헤더 */}
       <View style={styles.header}>
         {!isGuest && (
           <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
-            <Text style={styles.backIcon}>‹</Text>
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+              <Path d="M19 12H5" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M12 19l-7-7 7-7" stroke={COLORS.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
           </TouchableOpacity>
         )}
         <View style={styles.headerCenter}>
@@ -353,25 +389,28 @@ export default function DeviceControlScreen() {
         />
         {/* 하단 탭 네비게이션 역할 (4개 탭 선택) */}
         <View style={styles.tabBar}>
-          {tabs.map((t) => (
-            <TouchableOpacity
-              key={t.key}
-              style={[
-                styles.tabItem,
-                activeTab === t.key && styles.tabItemActive,
-              ]}
-              onPress={() => setActiveTab(t.key)}
-            >
-              <Text
+          {tabs.map((t) => {
+            return (
+              <TouchableOpacity
+                key={t.key}
                 style={[
-                  styles.tabText,
-                  activeTab === t.key && styles.tabTextActive,
+                  styles.tabItem,
+                  activeTab === t.key && styles.tabItemActive,
                 ]}
+                onPress={() => setActiveTab(t.key)}
+                activeOpacity={0.7}
               >
-                {t.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === t.key && styles.tabTextActive,
+                  ]}
+                >
+                  {t.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
         {/* 기기 일러스트 */}
         <DeviceIllustration highlight={activeTab} onTabChange={setActiveTab} />
@@ -404,15 +443,6 @@ export default function DeviceControlScreen() {
                   />
                 </View>
               </View>
-              <View style={styles.rowItem}>
-                <Text style={styles.rowLabel}>절전 모드</Text>
-                <Toggle
-                  value={device.powerSaveMode}
-                  onToggle={(v) => saveDevice({ powerSaveMode: v })}
-                  activeColor={COLORS.primary}
-                  size="sm"
-                />
-              </View>
             </>
           )}
 
@@ -420,133 +450,72 @@ export default function DeviceControlScreen() {
           {activeTab === "power" && (
             <>
               <Text style={styles.cardTitle}>전원 관리</Text>
-              <Text style={styles.cardSub}>디바이스 on/off 제어</Text>
-              <View style={styles.rowItem}>
-                <Text style={styles.rowLabel}>디바이스 전원</Text>
-                <Toggle
-                  value={device.powerOn}
-                  onToggle={(v) => saveDevice({ powerOn: v })}
-                  activeColor="#3B82F6"
-                />
+              <Text style={styles.cardSub}>디바이스 모드 제어</Text>
+              <View style={styles.powerModeRow}>
+                {([
+                  { mode: 'on'  as PowerMode, label: '일반', desc: '5초 / 240MHz', color: '#3B82F6' },
+                  { mode: 'eco' as PowerMode, label: '절전', desc: '15초 / 80MHz', color: COLORS.primary },
+                  { mode: 'off' as PowerMode, label: '끄기', desc: '전송 중단',    color: COLORS.accent },
+                ] as const).map(({ mode, label, desc, color }) => {
+                  const isActive = device.powerMode === mode;
+                  return (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[styles.powerModeBtn, isActive && { borderColor: color, backgroundColor: color + '15' }]}
+                      onPress={() => handlePowerMode(mode)}
+                      disabled={powerSending}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.powerModeBtnLabel, isActive && { color }]}>{label}</Text>
+                      <Text style={styles.powerModeBtnDesc}>{desc}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-              <View style={styles.powerNote}>
-                <Text style={styles.powerNoteText}>
-                  {device.powerOn
-                    ? '↓ 디바이스 셧다운 시 모든 센서와 모듈 동작이 종료됩니다'
-                    : '디바이스가 꺼진 상태입니다. 전원을 켜서 측정을 시작하세요.'}
-                </Text>
-              </View>
-            </>
-          )}
-
-          {/* ─ 센서 설정 ─ */}
-          {activeTab === "sensor" && (
-            <>
-              <Text style={styles.cardTitle}>센서 설정</Text>
-              <Text style={styles.cardSub}>각도 조정 및 캘리브레이션</Text>
-              <View style={styles.angleRow}>
-                <Text style={styles.rowLabel}>감지 각도</Text>
-                <Text style={[styles.angleVal, { color: COLORS.primary }]}>
-                  {sensorAngle}°
-                </Text>
-              </View>
-              <View style={styles.sliderRow}>
-                <TouchableOpacity
-                  style={styles.angleStepBtn}
-                  onPress={() => { const v = Math.max(5, sensorAngle - 5); setSensorAngle(v); saveDevice({ sensorAngle: v }); }}
-                >
-                  <Text style={styles.angleStepText}>−</Text>
-                </TouchableOpacity>
-                <View style={{ flex: 1 }}>
-                  <DraggableSlider
-                    value={sensorAngle}
-                    onChange={(v) => { setSensorAngle(v); saveDevice({ sensorAngle: v }); }}
-                    min={5}
-                    max={90}
-                    color={COLORS.primary}
-                  />
+              {powerSending && (
+                <View style={styles.powerNote}>
+                  <Text style={styles.powerNoteText}>ESP32에 명령 전송 중...</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.angleStepBtn}
-                  onPress={() => { const v = Math.min(90, sensorAngle + 5); setSensorAngle(v); saveDevice({ sensorAngle: v }); }}
-                >
-                  <Text style={styles.angleStepText}>+</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.vibRow}>
-                {(["약", "중", "강"] as const).map((l, i) => {
-                  const v = [20, 30, 45][i];
-                  return (
-                    <TouchableOpacity
-                      key={l}
-                      style={[styles.vibBtn, sensorAngle === v && styles.sensorBtnActive]}
-                      onPress={() => { setSensorAngle(v); saveDevice({ sensorAngle: v }); }}
-                    >
-                      <Text style={[styles.vibBtnText, sensorAngle === v && styles.sensorBtnTextActive]}>
-                        {l}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <TouchableOpacity style={[styles.calibBtn, { marginTop: SPACING.lg }]}>
-                <Text style={styles.calibBtnText}>캘리브레이션 시작</Text>
-              </TouchableOpacity>
+              )}
+              {powerFeedback && !powerSending && (
+                <View style={styles.powerNote}>
+                  <Text style={styles.powerNoteText}>
+                    적용됨 — CPU {powerFeedback.cpu}MHz / {powerFeedback.interval}초 간격
+                  </Text>
+                </View>
+              )}
+              {!powerSending && !powerFeedback && (
+                <View style={styles.powerNote}>
+                  <Text style={styles.powerNoteText}>
+                    {device.powerMode === 'off'
+                      ? '데이터 전송이 중단된 상태입니다.'
+                      : device.powerMode === 'eco'
+                      ? '절전 모드: 배터리를 아끼며 측정 중입니다.'
+                      : '일반 모드: 실시간 자세 측정 중입니다.'}
+                  </Text>
+                </View>
+              )}
             </>
           )}
 
-          {/* ─ 진동 설정 ─ */}
-          {activeTab === "vibration" && (
-            <>
-              <Text style={styles.cardTitle}>진동 모듈</Text>
-              <Text style={styles.cardSub}>피드백 강도 조절</Text>
-              <View style={styles.rowItem}>
-                <Text style={styles.rowLabel}>진동 활성화</Text>
-                <Toggle
-                  value={device.vibrationEnabled}
-                  onToggle={(v) => saveDevice({ vibrationEnabled: v })}
-                  activeColor="#8B5CF6"
-                />
-              </View>
-              <View style={styles.angleRow}>
-                <Text style={styles.rowLabel}>진동 세기</Text>
-                <Text style={[styles.angleVal, { color: "#8B5CF6" }]}>
-                  {vibIntensity}%
-                </Text>
-              </View>
-              <DraggableSlider
-                value={vibIntensity}
-                onChange={(v) => { setVibIntensity(v); saveDevice({ vibrationIntensity: v }); }}
-                min={0}
-                max={100}
-                color="#8B5CF6"
-              />
-              <View style={styles.vibRow}>
-                {(["약", "중", "강"] as const).map((l, i) => {
-                  const v = [33, 66, 100][i];
-                  return (
-                    <TouchableOpacity
-                      key={l}
-                      style={[
-                        styles.vibBtn,
-                        vibIntensity === v && styles.vibBtnActive,
-                      ]}
-                      onPress={() => { setVibIntensity(v); saveDevice({ vibrationIntensity: v }); }}
-                    >
-                      <Text
-                        style={[
-                          styles.vibBtnText,
-                          vibIntensity === v && styles.vibBtnTextActive,
-                        ]}
-                      >
-                        {l}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </>
-          )}
+        </View>
+
+        {/* WiFi 카드 */}
+        <View style={styles.wifiCard}>
+          <View style={styles.wifiRow}>
+            <View>
+              <Text style={styles.wifiLabel}>연결된 WiFi</Text>
+              <Text style={styles.wifiSsid}>
+                {device.connectedSsid ?? '정보 없음'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.wifiChangeBtn}
+              onPress={handleChangeWifi}
+            >
+              <Text style={styles.wifiChangeBtnText}>WiFi 변경</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* MQTT 카드 */}
@@ -594,15 +563,14 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
     ...SHADOWS.sm,
   },
-  backIcon: { fontSize: 22, color: COLORS.text },
   headerCenter: { flex: 1, alignItems: "center" },
   headerTitle: {
     fontSize: FONTS.sizes.lg,
@@ -777,4 +745,50 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   tabTextActive: { color: COLORS.text },
+  tabItemDisabled: { opacity: 0.35 },
+  tabTextDisabled: { color: COLORS.textMuted },
+
+  powerModeRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.base,
+  },
+  powerModeBtn: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.base,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  powerModeBtnLabel: {
+    fontSize: FONTS.sizes.base,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  powerModeBtnDesc: {
+    fontSize: FONTS.sizes.xs,
+    color: COLORS.textMuted,
+  },
+
+  wifiCard: {
+    backgroundColor: '#fff',
+    borderRadius: RADIUS.xl,
+    marginHorizontal: SPACING.base,
+    marginBottom: SPACING.sm,
+    padding: SPACING.base,
+    ...SHADOWS.sm,
+  },
+  wifiRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  wifiLabel: { fontSize: FONTS.sizes.xs, color: COLORS.textSecondary, marginBottom: 2 },
+  wifiSsid: { fontSize: FONTS.sizes.base, fontWeight: '700', color: COLORS.text },
+  wifiChangeBtn: {
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.base,
+    paddingVertical: SPACING.xs,
+  },
+  wifiChangeBtnText: { fontSize: FONTS.sizes.sm, fontWeight: '700', color: COLORS.primary },
 });

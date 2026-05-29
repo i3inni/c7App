@@ -1,13 +1,64 @@
 import { BleManager, Device, BleError } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid } from 'react-native';
-import { toByteArray } from 'base64-js';
+import { toByteArray, fromByteArray } from 'base64-js';
+import { useStore } from '../store';
+import { markManualBleDisconnect } from './connectionNotificationService';
 
-// ─── 기기 UUID 설정 (하드웨어팀에게 받아서 채울 것) ───────────────────────
-export const C7_SERVICE_UUID = 'XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX';
-export const C7_CHARACTERISTIC_UUID = 'XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX';
+// ─── C7AI BLE UUID (esp32/main.ino 과 반드시 일치) ───────────────────────────
+export const C7_SERVICE_UUID     = '4FAFC201-1FB5-459E-8FCC-C5C9C331914B';
+
+// MAC 주소 (read) → deviceId 확정에 사용. WiFi MAC과 동일한 값.
+export const C7_MAC_CHAR_UUID    = 'BEB5483E-36E1-4688-B7F5-EA07361B26A8';
+
+// userId (write) → 앱이 ESP32로 현재 사용자 ID를 전달. ESP32는 MQTT payload에 포함.
+export const C7_USERID_CHAR_UUID = 'BEB5483D-36E1-4688-B7F5-EA07361B26A8';
+
+// 자세 데이터 (notify) → WiFi fallback 시 ESP32가 실시간으로 앱으로 전송.
+export const C7_DATA_CHAR_UUID   = 'BEB5483F-36E1-4688-B7F5-EA07361B26A8';
+
+// WiFi Provisioning
+export const C7_WIFI_LIST_CHAR_UUID   = 'BEB54840-36E1-4688-B7F5-EA07361B26A8';
+export const C7_WIFI_CRED_CHAR_UUID   = 'BEB54841-36E1-4688-B7F5-EA07361B26A8';
+export const C7_WIFI_STATUS_CHAR_UUID = 'BEB54842-36E1-4688-B7F5-EA07361B26A8';
+export const C7_WIFI_SCAN_CHAR_UUID   = 'BEB54843-36E1-4688-B7F5-EA07361B26A8';
+export const C7_POWER_CHAR_UUID       = 'BEB54844-36E1-4688-B7F5-EA07361B26A8';
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface PostureFrame {
+  sensor: 'C7' | 'T3' | 'T7';
+  pitch: number;
+  roll: number;
+  userId: string;
+}
+
+export interface WifiNetwork {
+  ssid: string;
+  secured: boolean;
+}
+
 const manager = new BleManager();
+const disconnectSubscriptions = new Map<string, { remove: () => void }>();
+
+const base64ToUtf8 = (base64Value: string): string => {
+  const bytes = toByteArray(base64Value);
+  let encoded = '';
+  for (const byte of bytes) {
+    encoded += `%${byte.toString(16).padStart(2, '0')}`;
+  }
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return Array.from(bytes).map((b) => String.fromCharCode(b)).join('');
+  }
+};
+
+const watchDisconnection = (deviceId: string) => {
+  disconnectSubscriptions.get(deviceId)?.remove();
+  const sub = manager.onDeviceDisconnected(deviceId, () => {
+    useStore.getState().setDevice({ bleConnected: false });
+  });
+  if (sub) disconnectSubscriptions.set(deviceId, sub);
+};
 
 // 안드로이드 블루투스 권한 요청
 export const requestBluetoothPermissions = async (): Promise<boolean> => {
@@ -24,73 +75,315 @@ export const requestBluetoothPermissions = async (): Promise<boolean> => {
   );
 };
 
-// 주변 BLE 기기 스캔
-// onDeviceFound: 기기 발견 시 콜백
-// onError: 에러 시 콜백
+// C7AI 서비스 UUID로 필터링해 스캔 (C7AI 기기만 보임)
 export const startScan = (
   onDeviceFound: (device: Device) => void,
   onError: (error: BleError) => void
 ) => {
-  manager.startDeviceScan(null, null, (error, device) => {
-    if (error) {
-      onError(error);
-      return;
-    }
-    if (device) {
-      onDeviceFound(device);
-    }
-  });
-};
-
-// 스캔 중단
-export const stopScan = () => {
-  manager.stopDeviceScan();
-};
-
-// 기기 연결
-export const connectToDevice = async (deviceId: string): Promise<Device> => {
-  const device = await manager.connectToDevice(deviceId);
-  await device.discoverAllServicesAndCharacteristics();
-  return device;
-};
-
-// 기기 연결 해제
-export const disconnectDevice = async (deviceId: string) => {
-  await manager.cancelDeviceConnection(deviceId);
-};
-
-// 자세 데이터 실시간 구독
-// onData: 각도값 수신 시 콜백
-export const subscribePostureData = (
-  device: Device,
-  onData: (angle: number) => void,
-  onError: (error: BleError) => void
-) => {
-  device.monitorCharacteristicForService(
-    C7_SERVICE_UUID,
-    C7_CHARACTERISTIC_UUID,
-    (error, characteristic) => {
-      if (error) {
-        onError(error);
-        return;
-      }
-      if (characteristic?.value) {
-        const angle = parsePostureData(characteristic.value);
-        onData(angle);
-      }
+  manager.startDeviceScan(
+    [C7_SERVICE_UUID],
+    { allowDuplicates: false },
+    (error, device) => {
+      if (error) { onError(error); return; }
+      if (device) onDeviceFound(device);
     }
   );
 };
 
-// 기기에서 받은 raw 데이터 → 각도값 변환
-// TODO: 하드웨어팀에게 데이터 포맷 확인 후 파싱 로직 구현
-const parsePostureData = (base64Value: string): number => {
-  const bytes = toByteArray(base64Value);
-  // TODO: 실제 데이터 포맷에 맞게 수정
-  return bytes[0];
+export const stopScan = () => {
+  manager.stopDeviceScan();
 };
 
-// BleManager 정리 (앱 종료 시 호출)
+export const connectToDevice = async (deviceId: string): Promise<Device> => {
+  const device = await manager.connectToDevice(deviceId, { requestMTU: 512 });
+  await device.discoverAllServicesAndCharacteristics();
+  useStore.getState().setDevice({ bleConnected: true });
+  watchDisconnection(deviceId);
+  return device;
+};
+
+const scanForReconnectTarget = (savedDeviceId: string, timeoutMs = 8_000): Promise<Device> =>
+  new Promise((resolve, reject) => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
+
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      manager.stopDeviceScan();
+      if (timeout) clearTimeout(timeout);
+      fn();
+    };
+
+    timeout = setTimeout(() => {
+      finish(() => reject(new Error('BLE reconnect scan timeout')));
+    }, timeoutMs);
+
+    manager.startDeviceScan(
+      [C7_SERVICE_UUID],
+      { allowDuplicates: false },
+      (error, device) => {
+        if (error) {
+          finish(() => reject(error));
+          return;
+        }
+        if (!device) return;
+
+        const matchesSavedId = device.id === savedDeviceId;
+        const matchesKnownName = (device.name ?? device.localName ?? '').toUpperCase().includes('C7AI');
+
+        if (!matchesSavedId && !matchesKnownName) return;
+
+        finish(() => resolve(device));
+      }
+    );
+  });
+
+export const reconnectToSavedDevice = async (savedDeviceId: string): Promise<Device> => {
+  try {
+    return await connectToDevice(savedDeviceId);
+  } catch {
+    const scanned = await scanForReconnectTarget(savedDeviceId);
+    const connected = await connectToDevice(scanned.id);
+    useStore.getState().setDevice({ bleDeviceId: scanned.id });
+    return connected;
+  }
+};
+
+export const disconnectDevice = async (deviceId: string) => {
+  markManualBleDisconnect();
+  await manager.cancelDeviceConnection(deviceId);
+  disconnectSubscriptions.get(deviceId)?.remove();
+  disconnectSubscriptions.delete(deviceId);
+  useStore.getState().setDevice({ bleConnected: false });
+};
+
+/**
+ * ESP32에서 WiFi MAC 주소를 읽어 deviceId로 반환합니다.
+ * 반환값 예시: "a4cf12987711" (소문자, 콜론 없음)
+ *
+ * 로그인 없이도 deviceId를 확정할 수 있어 비회원 지원의 핵심입니다.
+ */
+export const readDeviceId = async (device: Device): Promise<string> => {
+  const char = await device.readCharacteristicForService(
+    C7_SERVICE_UUID,
+    C7_MAC_CHAR_UUID,
+  );
+  if (!char.value) throw new Error('MAC characteristic 값 없음');
+  return base64ToUtf8(char.value);
+};
+
+/**
+ * 현재 사용자 ID를 ESP32로 전달합니다.
+ * ESP32는 이 값을 MQTT payload의 userId 필드에 포함해 전송합니다.
+ * BLE 연결 직후 그리고 userId 변경 시(로그인/로그아웃) 호출합니다.
+ */
+const strToBase64 = (str: string): string => {
+  const encoded = encodeURIComponent(str);
+  const bytes: number[] = [];
+  for (let i = 0; i < encoded.length; i++) {
+    const ch = encoded[i];
+    if (ch === '%') {
+      bytes.push(parseInt(encoded.slice(i + 1, i + 3), 16));
+      i += 2;
+    } else {
+      bytes.push(ch.charCodeAt(0));
+    }
+  }
+  const byteArray = new Uint8Array(bytes);
+  return fromByteArray(byteArray);
+};
+
+export const sendUserId = async (device: Device, userId: string): Promise<void> => {
+  await device.writeCharacteristicWithResponseForService(
+    C7_SERVICE_UUID,
+    C7_USERID_CHAR_UUID,
+    strToBase64(userId),
+  );
+};
+
+/**
+ * BLE fallback 모드에서 실시간 자세 프레임을 구독합니다.
+ * WiFi/MQTT 연결 실패 시 ESP32가 이 characteristic으로 데이터를 notify합니다.
+ * 각 notify는 단일 센서 JSON: { sensor, pitch, roll, userId }
+ *
+ * 반환값: 구독 해제 함수 (컴포넌트 unmount 시 호출)
+ */
+export const subscribeFallbackData = (
+  device: Device,
+  onFrame: (frame: PostureFrame) => void,
+  onError: (error: BleError) => void
+): (() => void) => {
+  const subscription = device.monitorCharacteristicForService(
+    C7_SERVICE_UUID,
+    C7_DATA_CHAR_UUID,
+    (error, characteristic) => {
+      if (error) { onError(error); return; }
+      if (characteristic?.value) {
+        const frame = parseFallbackFrame(characteristic.value);
+        if (frame) onFrame(frame);
+      }
+    }
+  );
+  return () => subscription.remove();
+};
+
+const parseFallbackFrame = (base64Value: string): PostureFrame | null => {
+  try {
+    const json = base64ToUtf8(base64Value);
+    const data = JSON.parse(json);
+    if (
+      (data.sensor === 'C7' || data.sensor === 'T3' || data.sensor === 'T7') &&
+      typeof data.pitch === 'number' &&
+      typeof data.roll === 'number'
+    ) {
+      return {
+        sensor:  data.sensor,
+        pitch:   data.pitch,
+        roll:    data.roll,
+        userId:  data.userId ?? 'unknown',
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export const destroyBleManager = () => {
   manager.destroy();
+};
+
+// ─── WiFi Provisioning ────────────────────────────────────────────────────────
+
+export const readWifiList = async (device: Device): Promise<string[]> => {
+  const char = await device.readCharacteristicForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_LIST_CHAR_UUID,
+  );
+  if (!char.value) throw new Error('WiFi list 값 없음(null)');
+  const json = base64ToUtf8(char.value);
+  const parsed = JSON.parse(json); // parse 실패 시 에러 전파 → 폴링에서 에러 메시지로 표시됨
+  return Array.isArray(parsed) ? parsed : [];
+};
+
+// Arduino 프로토콜: "SCAN_START" → "SSID:<name>:<0|1>" × N → "SCAN_END"
+// 0 = 오픈 네트워크, 1 = 비밀번호 필요
+// lastIndexOf(':') 로 파싱해서 SSID에 ':' 포함돼도 안전
+export const subscribeWifiList = (
+  device: Device,
+  onList: (networks: WifiNetwork[]) => void,
+): (() => void) => {
+  let buffer: WifiNetwork[] = [];
+  const sub = device.monitorCharacteristicForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_LIST_CHAR_UUID,
+    (err, char) => {
+      if (err || !char?.value) return;
+      const msg = base64ToUtf8(char.value);
+      if (msg === 'SCAN_START') { buffer = []; return; }
+      if (msg === 'SCAN_END')   { onList([...buffer]); buffer = []; return; }
+      if (msg.startsWith('SSID:')) {
+        const content   = msg.slice(5);                          // "MyNetwork:1"
+        const lastColon = content.lastIndexOf(':');
+        if (lastColon === -1) return;
+        const ssid    = content.slice(0, lastColon);
+        const secured = content.slice(lastColon + 1) !== '0';
+        buffer.push({ ssid, secured });
+      }
+    }
+  );
+  return () => sub.remove();
+};
+
+export const sendWifiCredentials = async (
+  device: Device,
+  ssid: string,
+  password: string,
+): Promise<void> => {
+  await device.writeCharacteristicWithResponseForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_CRED_CHAR_UUID,
+    strToBase64(JSON.stringify({ ssid, password })),
+  );
+};
+
+export type WifiStatusEvent =
+  | { type: 'success' }
+  | { type: 'fail' }
+  | { type: 'disconnected' }
+  | { type: 'connected'; ssid: string };
+
+export const subscribeWifiStatus = (
+  device: Device,
+  onStatus: (event: WifiStatusEvent) => void,
+): (() => void) => {
+  const sub = device.monitorCharacteristicForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_STATUS_CHAR_UUID,
+    (err, char) => {
+      if (err || !char?.value) return;
+      const msg = base64ToUtf8(char.value);
+      if (msg === 'success')      onStatus({ type: 'success' });
+      else if (msg === 'fail')    onStatus({ type: 'fail' });
+      else if (msg === 'disconnected') onStatus({ type: 'disconnected' });
+      else if (msg.startsWith('connected:')) onStatus({ type: 'connected', ssid: msg.slice(10) });
+    }
+  );
+  return () => sub.remove();
+};
+
+export const triggerWifiScan = async (device: Device): Promise<void> => {
+  await device.writeCharacteristicWithResponseForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_SCAN_CHAR_UUID,
+    strToBase64('scan'),
+  );
+};
+
+export interface PowerStatus {
+  mode: 'on' | 'eco' | 'off';
+  cpu: number;
+  interval: number;
+}
+
+export const sendPowerMode = async (
+  device: Device,
+  mode: 'on' | 'eco' | 'off',
+): Promise<void> => {
+  if (mode === 'off') {
+    markManualBleDisconnect();
+  }
+  await device.writeCharacteristicWithResponseForService(
+    C7_SERVICE_UUID,
+    C7_POWER_CHAR_UUID,
+    strToBase64(mode),
+  );
+};
+
+export const subscribePowerStatus = (
+  device: Device,
+  onStatus: (status: PowerStatus) => void,
+): (() => void) => {
+  const sub = device.monitorCharacteristicForService(
+    C7_SERVICE_UUID,
+    C7_POWER_CHAR_UUID,
+    (err, char) => {
+      if (err || !char?.value) return;
+      try {
+        const json = base64ToUtf8(char.value);
+        const data = JSON.parse(json);
+        if (data.mode && data.cpu && data.interval) onStatus(data as PowerStatus);
+      } catch {}
+    }
+  );
+  return () => sub.remove();
+};
+
+export const sendDisconnectCommand = async (device: Device): Promise<void> => {
+  await device.writeCharacteristicWithResponseForService(
+    C7_SERVICE_UUID,
+    C7_WIFI_SCAN_CHAR_UUID,
+    strToBase64('disconnect'),
+  );
 };
